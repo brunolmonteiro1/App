@@ -15,6 +15,14 @@ antifraude. **A tecnologia é o meio. O produto é a campanha. O cliente é a em
 | [`norton_app/`](norton_app/) | Protótipo Flutter navegável (dados mock) — gera APK de teste |
 | [`.github/workflows/build-apk.yml`](.github/workflows/build-apk.yml) | CI que compila o APK a cada push |
 
+## Outros projetos avaliados neste workspace
+
+| Caminho | Conteúdo |
+|---|---|
+| [`mission-control/01-avaliacao-tecnica.md`](mission-control/01-avaliacao-tecnica.md) | AI Mission Control: avaliação de arquitetura, OpenClaw/Hermes vs. n8n, riscos |
+| [`mission-control/02-blueprint-claude-code.md`](mission-control/02-blueprint-claude-code.md) | Blueprint spec-driven para desenvolver com Claude Code (modelo de dados, gateway, FSM) |
+| [`mission-control/03-fases-prazos-precos.md`](mission-control/03-fases-prazos-precos.md) | Escopo, cronograma e preço por fase (piloto → plataforma) |
+
 ## Rodando o protótipo
 
 ```bash
