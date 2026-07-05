@@ -1,0 +1,250 @@
+{
+  "name": "Piloto Mission Control — 3 jobs (read-only)",
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Sao_Paulo"
+  },
+  "nodes": [
+    {
+      "id": "sticky-setup",
+      "name": "Sticky Note — Setup",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-620, -420],
+      "parameters": {
+        "width": 460,
+        "height": 300,
+        "content": "## Setup (uma vez)\n1. Selecione a credencial Google Sheets nos 4 nós de planilha e cole a URL da planilha do piloto em cada um;\n2. Selecione a credencial Telegram e o chat_id do grupo interno no nó final;\n3. Rode manualmente (Execute Workflow) com os dados de exemplo;\n4. Ative o workflow (roda todo dia às 08:00, America/Sao_Paulo).\n\n**Read-only por design:** este workflow só lê as abas de relatório coladas pela equipe. Não loga em sistema nenhum e não envia nada a cliente."
+      }
+    },
+    {
+      "id": "schedule-0800",
+      "name": "Agenda 08:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-560, 0],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "read-inadimplencia",
+      "name": "Ler Inadimplencia",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [-320, -120],
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "mode": "url",
+          "value": "COLE_A_URL_DA_PLANILHA_AQUI"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Relatorio_Inadimplencia"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "read-renovacoes",
+      "name": "Ler Renovacoes",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [-320, 120],
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "mode": "url",
+          "value": "COLE_A_URL_DA_PLANILHA_AQUI"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Relatorio_Renovacoes"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "code-inadimplencia",
+      "name": "Analisar Inadimplencia",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-80, -120],
+      "parameters": {
+        "jsCode": "// JOB 1 — inadimplência: dias de atraso, faixas 1-30/31-60/61-90/90+ e rascunho de mensagem.\nconst OBRIGATORIAS = ['Cliente', 'Vencimento'];\nconst hoje = new Date();\nhoje.setHours(0, 0, 0, 0);\n\nfunction parseData(s) {\n  if (s == null || s === '') return null;\n  s = String(s).trim();\n  let m = s.match(/^(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})/);\n  if (m) return new Date(+m[3], +m[2] - 1, +m[1]);\n  m = s.match(/^(\\d{4})-(\\d{2})-(\\d{2})/);\n  if (m) return new Date(+m[1], +m[2] - 1, +m[3]);\n  return null;\n}\n\nfunction parseValor(v) {\n  if (typeof v === 'number') return v;\n  if (v == null) return 0;\n  let s = String(v).replace(/[^0-9.,-]/g, '');\n  if (s.includes('.') && s.includes(',')) s = s.replace(/\\./g, '').replace(',', '.');\n  else if (s.includes(',')) s = s.replace(',', '.');\n  const n = parseFloat(s);\n  return isNaN(n) ? 0 : n;\n}\n\nconst linhas = $input.all().map((i) => i.json);\nif (linhas.length) {\n  const faltando = OBRIGATORIAS.filter((c) => !(c in linhas[0]));\n  if (faltando.length) {\n    throw new Error(`Aba Relatorio_Inadimplencia sem as colunas: ${faltando.join(', ')}. Confira o cabeçalho (ver planilhas-modelo.md).`);\n  }\n}\n\nconst out = [];\nfor (const l of linhas) {\n  if (!l.Cliente) continue;\n  const venc = parseData(l.Vencimento);\n  if (!venc) continue;\n  const diasAtraso = Math.floor((hoje - venc) / 86400000);\n  if (diasAtraso <= 0) continue; // ainda não venceu\n  const faixa = diasAtraso <= 30 ? '1-30' : diasAtraso <= 60 ? '31-60' : diasAtraso <= 90 ? '61-90' : '90+';\n  const valor = parseValor(l.Valor);\n  out.push({\n    json: {\n      Tipo: 'inadimplencia',\n      Cliente: String(l.Cliente).trim(),\n      Telefone: String(l.Telefone || '').trim(),\n      Placa: String(l.Placa || '').trim(),\n      Contrato: String(l.Contrato || '').trim(),\n      Valor: valor,\n      Vencimento: String(l.Vencimento).trim(),\n      DiasAtraso: diasAtraso,\n      Faixa: faixa,\n      Detalhe: `${diasAtraso}d de atraso · R$ ${valor.toFixed(2)}`,\n      Mensagem: `Olá ${String(l.Cliente).trim().split(' ')[0]}, tudo bem? Identificamos uma parcela do contrato ${l.Contrato || ''} (placa ${l.Placa || ''}) em aberto desde ${String(l.Vencimento).trim()}, no valor de R$ ${valor.toFixed(2)}. Podemos te ajudar a regularizar? Qualquer dúvida estamos à disposição.`,\n    },\n  });\n}\nreturn out;"
+      }
+    },
+    {
+      "id": "code-renovacoes",
+      "name": "Analisar Renovacoes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-80, 120],
+      "parameters": {
+        "jsCode": "// JOB 2 — renovações: dias até o fim de vigência, janelas ≤30 / 31-60 / 61-90.\nconst OBRIGATORIAS = ['Cliente', 'FimVigencia'];\nconst hoje = new Date();\nhoje.setHours(0, 0, 0, 0);\n\nfunction parseData(s) {\n  if (s == null || s === '') return null;\n  s = String(s).trim();\n  let m = s.match(/^(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})/);\n  if (m) return new Date(+m[3], +m[2] - 1, +m[1]);\n  m = s.match(/^(\\d{4})-(\\d{2})-(\\d{2})/);\n  if (m) return new Date(+m[1], +m[2] - 1, +m[3]);\n  return null;\n}\n\nconst linhas = $input.all().map((i) => i.json);\nif (linhas.length) {\n  const faltando = OBRIGATORIAS.filter((c) => !(c in linhas[0]));\n  if (faltando.length) {\n    throw new Error(`Aba Relatorio_Renovacoes sem as colunas: ${faltando.join(', ')}. Confira o cabeçalho (ver planilhas-modelo.md).`);\n  }\n}\n\nconst out = [];\nfor (const l of linhas) {\n  if (!l.Cliente) continue;\n  const fim = parseData(l.FimVigencia);\n  if (!fim) continue;\n  const dias = Math.floor((fim - hoje) / 86400000);\n  if (dias > 90) continue; // fora do radar do piloto\n  const janela = dias < 0 ? 'vencido' : dias <= 30 ? '<=30' : dias <= 60 ? '31-60' : '61-90';\n  const primeiroNome = String(l.Cliente).trim().split(' ')[0];\n  out.push({\n    json: {\n      Tipo: 'renovacao',\n      Cliente: String(l.Cliente).trim(),\n      Telefone: String(l.Telefone || '').trim(),\n      Placa: String(l.Placa || '').trim(),\n      Contrato: String(l.Contrato || '').trim(),\n      FimVigencia: String(l.FimVigencia).trim(),\n      DiasParaVencer: dias,\n      Janela: janela,\n      Detalhe: dias < 0 ? `vencido há ${-dias}d` : `vence em ${dias}d`,\n      Mensagem: dias < 0\n        ? `Olá ${primeiroNome}! Seu contrato ${l.Contrato || ''} (placa ${l.Placa || ''}) venceu em ${String(l.FimVigencia).trim()}. Vamos reativar sua proteção?`\n        : `Olá ${primeiroNome}! Seu contrato ${l.Contrato || ''} (placa ${l.Placa || ''}) vence em ${dias} dias, em ${String(l.FimVigencia).trim()}. Vamos garantir a renovação e manter seu veículo protegido?`,\n    },\n  });\n}\nreturn out;"
+      }
+    },
+    {
+      "id": "merge-jobs",
+      "name": "Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [160, 0],
+      "parameters": {
+        "mode": "append"
+      }
+    },
+    {
+      "id": "code-consolidar",
+      "name": "Consolidar Resumo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [380, 0],
+      "parameters": {
+        "jsCode": "// Consolida os dois jobs numa linha de resumo diário + texto do Telegram.\nconst itens = $input.all().map((i) => i.json);\nconst inad = itens.filter((x) => x.Tipo === 'inadimplencia');\nconst ren = itens.filter((x) => x.Tipo === 'renovacao');\n\nconst porFaixa = (f) => inad.filter((x) => x.Faixa === f).length;\nconst porJanela = (j) => ren.filter((x) => x.Janela === j).length;\nconst valorTotal = inad.reduce((s, x) => s + (x.Valor || 0), 0);\nconst maisAntigo = inad.reduce((m, x) => Math.max(m, x.DiasAtraso || 0), 0);\n\nconst agora = new Date();\nconst data = `${String(agora.getDate()).padStart(2, '0')}/${String(agora.getMonth() + 1).padStart(2, '0')}/${agora.getFullYear()}`;\n\nconst resumo = {\n  Data: data,\n  InadimplentesTotal: inad.length,\n  ValorTotal: Number(valorTotal.toFixed(2)),\n  Faixa1a30: porFaixa('1-30'),\n  Faixa31a60: porFaixa('31-60'),\n  Faixa61a90: porFaixa('61-90'),\n  Faixa90mais: porFaixa('90+'),\n  MaisAntigoDias: maisAntigo,\n  RenovacoesTotal: ren.length,\n  Renov30: porJanela('<=30') + porJanela('vencido'),\n  Renov60: porJanela('31-60'),\n  Renov90: porJanela('61-90'),\n};\n\nconst linhasTelegram = [\n  `📋 *Resumo operacional — ${data}*`,\n  '',\n  `💰 *Inadimplência:* ${inad.length} casos · R$ ${valorTotal.toFixed(2)}`,\n  `   1-30: ${resumo.Faixa1a30} · 31-60: ${resumo.Faixa31a60} · 61-90: ${resumo.Faixa61a90} · 90+: ${resumo.Faixa90mais}` + (maisAntigo ? ` (mais antigo: ${maisAntigo}d)` : ''),\n  '',\n  `🔄 *Renovações (≤90d):* ${ren.length}`,\n  `   ≤30: ${resumo.Renov30} · 31-60: ${resumo.Renov60} · 61-90: ${resumo.Renov90}`,\n  '',\n  `✉️ ${itens.length} rascunhos aguardando revisão na aba Message Queue.`,\n  '_Nada foi enviado a clientes. Robô read-only._',\n];\n\nresumo.TelegramText = linhasTelegram.join('\\n');\nreturn [{ json: resumo }];"
+      }
+    },
+    {
+      "id": "sheets-summary",
+      "name": "Gravar Daily Summary",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [600, 0],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "url",
+          "value": "COLE_A_URL_DA_PLANILHA_AQUI"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Daily Summary"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": []
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "code-fila",
+      "name": "Montar Fila",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [820, 120],
+      "parameters": {
+        "jsCode": "// JOB 3 — fila de rascunhos: um por caso, status pending. Humano revisa e envia manualmente.\nconst data = $('Consolidar Resumo').first().json.Data;\nconst casos = $('Merge').all().map((i) => i.json);\n\nreturn casos.map((x) => ({\n  json: {\n    Data: data,\n    Tipo: x.Tipo,\n    Cliente: x.Cliente,\n    Telefone: x.Telefone,\n    Contrato: x.Contrato,\n    Placa: x.Placa,\n    Detalhe: x.Detalhe,\n    Mensagem: x.Mensagem,\n    Status: 'pending',\n    AprovadoPor: '',\n    Enviado: '',\n  },\n}));"
+      }
+    },
+    {
+      "id": "sheets-queue",
+      "name": "Gravar Message Queue",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1040, 120],
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "url",
+          "value": "COLE_A_URL_DA_PLANILHA_AQUI"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Message Queue"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": []
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "telegram-resumo",
+      "name": "Enviar Resumo Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [820, -120],
+      "parameters": {
+        "chatId": "COLE_O_CHAT_ID_DO_GRUPO_AQUI",
+        "text": "={{ $('Consolidar Resumo').first().json.TelegramText }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Agenda 08:00": {
+      "main": [
+        [
+          { "node": "Ler Inadimplencia", "type": "main", "index": 0 },
+          { "node": "Ler Renovacoes", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Ler Inadimplencia": {
+      "main": [
+        [ { "node": "Analisar Inadimplencia", "type": "main", "index": 0 } ]
+      ]
+    },
+    "Ler Renovacoes": {
+      "main": [
+        [ { "node": "Analisar Renovacoes", "type": "main", "index": 0 } ]
+      ]
+    },
+    "Analisar Inadimplencia": {
+      "main": [
+        [ { "node": "Merge", "type": "main", "index": 0 } ]
+      ]
+    },
+    "Analisar Renovacoes": {
+      "main": [
+        [ { "node": "Merge", "type": "main", "index": 1 } ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [ { "node": "Consolidar Resumo", "type": "main", "index": 0 } ]
+      ]
+    },
+    "Consolidar Resumo": {
+      "main": [
+        [ { "node": "Gravar Daily Summary", "type": "main", "index": 0 } ]
+      ]
+    },
+    "Gravar Daily Summary": {
+      "main": [
+        [
+          { "node": "Enviar Resumo Telegram", "type": "main", "index": 0 },
+          { "node": "Montar Fila", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Montar Fila": {
+      "main": [
+        [ { "node": "Gravar Message Queue", "type": "main", "index": 0 } ]
+      ]
+    }
+  },
+  "pinData": {}
+}
