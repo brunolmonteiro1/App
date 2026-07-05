@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../data/activity_source.dart';
+import '../../data/health_activity_source.dart';
 import '../../data/mock_data.dart';
 import '../../data/models.dart';
 
@@ -13,8 +14,10 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final ActivitySource _source = MockActivitySource();
+  final _healthSource = HealthConnectActivitySource();
+  final ActivitySource _mockSource = MockActivitySource();
   List<ActivityRecord> _today = const [];
+  String _sourceLabel = 'carregando…';
 
   @override
   void initState() {
@@ -22,11 +25,33 @@ class _HomeScreenState extends State<HomeScreen> {
     _load();
   }
 
+  /// Tenta a fonte real (Health Connect); sem ela, cai no mock com aviso claro.
   Future<void> _load() async {
     final now = DateTime.now();
-    final records = await _source.fetchActivities(
-        DateTime(now.year, now.month, now.day), now);
-    if (mounted) setState(() => _today = records);
+    final start = DateTime(now.year, now.month, now.day);
+    try {
+      final available =
+          await _healthSource.availability() == HealthAvailability.available;
+      if (available && await _healthSource.hasPermissions()) {
+        final records = await _healthSource.fetchActivities(start, now);
+        if (mounted) {
+          setState(() {
+            _today = records;
+            _sourceLabel = 'Health Connect';
+          });
+        }
+        return;
+      }
+    } catch (_) {
+      // Qualquer falha da fonte real cai no mock abaixo.
+    }
+    final records = await _mockSource.fetchActivities(start, now);
+    if (mounted) {
+      setState(() {
+        _today = records;
+        _sourceLabel = 'demonstração';
+      });
+    }
   }
 
   int get _steps => _today.fold(0, (sum, r) => sum + r.steps);
@@ -58,12 +83,32 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('HOJE',
-                        style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 1.2,
-                            color: scheme.primary)),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('HOJE',
+                            style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 1.2,
+                                color: scheme.primary)),
+                        // Selo da fonte ativa: Health Connect ou demonstração
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: _sourceLabel == 'Health Connect'
+                                ? scheme.primaryContainer
+                                : scheme.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(_sourceLabel,
+                              style: TextStyle(
+                                  fontSize: 11,
+                                  color: scheme.onSurfaceVariant)),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 12),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,

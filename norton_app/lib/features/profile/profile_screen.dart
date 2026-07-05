@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../data/mock_data.dart';
 
@@ -66,7 +67,8 @@ class ProfileScreen extends StatelessWidget {
                 _SettingsTile(
                     icon: Icons.favorite_outline,
                     title: 'Permissões de saúde',
-                    subtitle: 'Health Connect · concedido (demo)'),
+                    subtitle: 'Health Connect · diagnóstico e conexão',
+                    onTap: () => context.push('/health')),
                 _SettingsTile(
                     icon: Icons.notifications_outlined,
                     title: 'Notificações',
@@ -116,11 +118,15 @@ class _Stat extends StatelessWidget {
 
 class _SettingsTile extends StatelessWidget {
   const _SettingsTile(
-      {required this.icon, required this.title, required this.subtitle});
+      {required this.icon,
+      required this.title,
+      required this.subtitle,
+      this.onTap});
 
   final IconData icon;
   final String title;
   final String subtitle;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -129,7 +135,7 @@ class _SettingsTile extends StatelessWidget {
       title: Text(title),
       subtitle: Text(subtitle),
       trailing: const Icon(Icons.chevron_right),
-      onTap: () {},
+      onTap: onTap ?? () {},
     );
   }
 }

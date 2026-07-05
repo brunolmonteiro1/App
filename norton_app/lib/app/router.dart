@@ -1,6 +1,7 @@
 import 'package:go_router/go_router.dart';
 
 import '../features/causes/cause_detail_screen.dart';
+import '../features/health/health_status_screen.dart';
 import '../features/causes/causes_screen.dart';
 import '../features/challenges/challenges_screen.dart';
 import '../features/home/home_screen.dart';
@@ -15,6 +16,10 @@ final router = GoRouter(
     GoRoute(
       path: '/onboarding',
       builder: (context, state) => const OnboardingScreen(),
+    ),
+    GoRoute(
+      path: '/health',
+      builder: (context, state) => const HealthStatusScreen(),
     ),
     StatefulShellRoute.indexedStack(
       builder: (context, state, shell) => AppShell(shell: shell),
