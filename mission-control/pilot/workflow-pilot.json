@@ -221,7 +221,7 @@
         -120
       ],
       "parameters": {
-        "chatId": "COLE_O_CHAT_ID_DO_GRUPO_AQUI",
+        "chatId": "5270013520",
         "text": "={{ $('Consolidar Resumo').first().json.TelegramText }}",
         "additionalFields": {
           "parse_mode": "Markdown"
