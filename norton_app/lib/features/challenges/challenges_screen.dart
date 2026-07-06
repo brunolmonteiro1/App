@@ -1,23 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../data/app_state.dart';
 import '../../data/mock_data.dart';
 
-class ChallengesScreen extends StatefulWidget {
+class ChallengesScreen extends StatelessWidget {
   const ChallengesScreen({super.key});
-
-  @override
-  State<ChallengesScreen> createState() => _ChallengesScreenState();
-}
-
-class _ChallengesScreenState extends State<ChallengesScreen> {
-  final Set<String> _joined = {
-    for (final c in challenges)
-      if (c.joined) c.id
-  };
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final app = context.watch<AppState>();
+    final joinedSet = app.joinedChallenges;
     return Scaffold(
       appBar: AppBar(title: const Text('Desafios')),
       body: ListView.separated(
@@ -26,7 +20,7 @@ class _ChallengesScreenState extends State<ChallengesScreen> {
         separatorBuilder: (context, i) => const SizedBox(height: 12),
         itemBuilder: (context, i) {
           final ch = challenges[i];
-          final joined = _joined.contains(ch.id);
+          final joined = joinedSet.contains(ch.id);
           return Card(
             child: Padding(
               padding: const EdgeInsets.all(20),
@@ -71,13 +65,14 @@ class _ChallengesScreenState extends State<ChallengesScreen> {
                     width: double.infinity,
                     child: joined
                         ? OutlinedButton.icon(
-                            onPressed: null,
+                            onPressed: () =>
+                                context.read<AppState>().toggleChallenge(ch.id),
                             icon: const Icon(Icons.check),
-                            label: const Text('Inscrito'),
+                            label: const Text('Inscrito · toque para sair'),
                           )
                         : FilledButton.tonal(
                             onPressed: () =>
-                                setState(() => _joined.add(ch.id)),
+                                context.read<AppState>().toggleChallenge(ch.id),
                             child: const Text('Participar'),
                           ),
                   ),

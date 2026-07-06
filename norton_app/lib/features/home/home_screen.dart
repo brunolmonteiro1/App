@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 
-import '../../data/activity_source.dart';
+import '../../data/app_state.dart';
 import '../../data/health_activity_source.dart';
 import '../../data/mock_data.dart';
 import '../../data/models.dart';
@@ -15,68 +16,70 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final _healthSource = HealthConnectActivitySource();
-  final ActivitySource _mockSource = MockActivitySource();
-  List<ActivityRecord> _today = const [];
-  String _sourceLabel = 'carregando…';
+  List<ActivityRecord> _healthToday = const [];
+  bool _healthActive = false;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _loadHealth();
   }
 
-  /// Tenta a fonte real (Health Connect); sem ela, cai no mock com aviso claro.
-  Future<void> _load() async {
-    final now = DateTime.now();
-    final start = DateTime(now.year, now.month, now.day);
+  /// Lê o Health Connect quando disponível; treinos in-app vêm do AppState.
+  Future<void> _loadHealth() async {
     try {
+      final now = DateTime.now();
+      final start = DateTime(now.year, now.month, now.day);
       final available =
           await _healthSource.availability() == HealthAvailability.available;
       if (available && await _healthSource.hasPermissions()) {
         final records = await _healthSource.fetchActivities(start, now);
         if (mounted) {
           setState(() {
-            _today = records;
-            _sourceLabel = 'Health Connect';
+            _healthToday = records;
+            _healthActive = true;
           });
         }
-        return;
       }
     } catch (_) {
-      // Qualquer falha da fonte real cai no mock abaixo.
-    }
-    final records = await _mockSource.fetchActivities(start, now);
-    if (mounted) {
-      setState(() {
-        _today = records;
-        _sourceLabel = 'demonstração';
-      });
+      // Sem Health Connect: os totais usam apenas treinos in-app.
     }
   }
-
-  int get _steps => _today.fold(0, (sum, r) => sum + r.steps);
-  double get _km =>
-      _today.fold(0.0, (sum, r) => sum + r.distanceKm);
-  double get _points =>
-      _today.fold(0.0, (sum, r) => sum + r.impactPoints);
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final cause = causes.first;
+    final app = context.watch<AppState>();
+
+    final steps =
+        app.todaySteps + _healthToday.fold<int>(0, (t, r) => t + r.steps);
+    final km =
+        app.todayKm + _healthToday.fold<double>(0, (t, r) => t + r.distanceKm);
+    final points = app.todayPoints +
+        _healthToday.fold<double>(0, (t, r) => t + r.impactPoints);
+
+    final cause = causes.firstWhere((c) => c.id == app.activeCauseId,
+        orElse: () => causes.first);
+    final hasActiveCause = app.activeCauseId != null;
+    final sourceLabel = _healthActive
+        ? 'Health Connect + treinos'
+        : (app.sessions.isEmpty ? 'sem dados ainda' : 'treinos no app');
+
     return Scaffold(
       appBar: AppBar(
-        title: Text('Olá, ${demoUser.name} 👋'),
+        title: Text('Olá, ${app.userName} 👋'),
         actions: [
-          IconButton(icon: const Icon(Icons.notifications_outlined), onPressed: () {}),
+          IconButton(
+              icon: const Icon(Icons.monitor_heart_outlined),
+              tooltip: 'Diagnóstico de saúde',
+              onPressed: () => context.push('/health')),
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: _load,
+        onRefresh: _loadHealth,
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // Progresso do dia
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(20),
@@ -92,17 +95,16 @@ class _HomeScreenState extends State<HomeScreen> {
                                 fontWeight: FontWeight.w700,
                                 letterSpacing: 1.2,
                                 color: scheme.primary)),
-                        // Selo da fonte ativa: Health Connect ou demonstração
                         Container(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(
-                            color: _sourceLabel == 'Health Connect'
+                            color: _healthActive
                                 ? scheme.primaryContainer
                                 : scheme.surfaceContainerHighest,
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          child: Text(_sourceLabel,
+                          child: Text(sourceLabel,
                               style: TextStyle(
                                   fontSize: 11,
                                   color: scheme.onSurfaceVariant)),
@@ -113,10 +115,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        _Metric(value: '$_steps', label: 'passos'),
-                        _Metric(value: _km.toStringAsFixed(1), label: 'km'),
+                        _Metric(value: '$steps', label: 'passos'),
+                        _Metric(value: km.toStringAsFixed(1), label: 'km'),
                         _Metric(
-                            value: _points.toStringAsFixed(1),
+                            value: points.toStringAsFixed(1),
                             label: 'pontos',
                             highlight: true),
                       ],
@@ -126,18 +128,24 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             const SizedBox(height: 12),
-            // Streak
             Card(
-              color: scheme.primaryContainer,
+              color: app.streakDays > 0
+                  ? scheme.primaryContainer
+                  : scheme.surfaceContainerHigh,
               child: ListTile(
-                leading: const Text('🔥', style: TextStyle(fontSize: 32)),
-                title: Text('${demoUser.streakDays} dias de ofensiva',
+                leading: Text(app.streakDays > 0 ? '🔥' : '💤',
+                    style: const TextStyle(fontSize: 32)),
+                title: Text(
+                    app.streakDays > 0
+                        ? '${app.streakDays} ${app.streakDays == 1 ? "dia" : "dias"} de ofensiva'
+                        : 'Nenhuma ofensiva ativa',
                     style: const TextStyle(fontWeight: FontWeight.w700)),
-                subtitle: const Text('Mova-se hoje para manter a sequência!'),
+                subtitle: Text(app.streakDays > 0
+                    ? 'Mova-se hoje para manter a sequência!'
+                    : 'Grave um treino para começar a sua sequência.'),
               ),
             ),
             const SizedBox(height: 12),
-            // Causa ativa
             Card(
               child: InkWell(
                 borderRadius: BorderRadius.circular(16),
@@ -155,7 +163,10 @@ class _HomeScreenState extends State<HomeScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('CAUSA ATIVA',
+                                Text(
+                                    hasActiveCause
+                                        ? 'SUA CAUSA ATIVA'
+                                        : 'CAUSA EM DESTAQUE',
                                     style: TextStyle(
                                         fontSize: 11,
                                         fontWeight: FontWeight.w700,
@@ -163,7 +174,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                         color: scheme.onSurfaceVariant)),
                                 Text(cause.name,
                                     style: const TextStyle(
-                                        fontSize: 16, fontWeight: FontWeight.w700)),
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w700)),
                               ],
                             ),
                           ),
@@ -183,6 +195,14 @@ class _HomeScreenState extends State<HomeScreen> {
                         style: TextStyle(
                             fontSize: 13, color: scheme.onSurfaceVariant),
                       ),
+                      if (!hasActiveCause) ...[
+                        const SizedBox(height: 8),
+                        Text('Toque para escolher a sua causa →',
+                            style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: scheme.primary)),
+                      ],
                     ],
                   ),
                 ),
@@ -200,6 +220,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  /// Abre a escolha de modalidade e navega para a sessão de treino REAL.
   void _showWorkoutSheet(BuildContext context) {
     showModalBottomSheet<void>(
       context: context,
@@ -208,10 +229,12 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            for (final (icon, label) in [
-              (Icons.directions_walk, 'Caminhada (indoor)'),
-              (Icons.directions_run, 'Corrida / caminhada ao ar livre'),
-              (Icons.directions_bike, 'Ciclismo'),
+            for (final (icon, label, type) in [
+              (Icons.directions_walk, 'Caminhada (indoor)',
+                  ActivityType.indoorWalk),
+              (Icons.directions_run, 'Corrida / caminhada ao ar livre',
+                  ActivityType.outdoorRun),
+              (Icons.directions_bike, 'Ciclismo', ActivityType.cycling),
             ])
               ListTile(
                 leading: Icon(icon),
@@ -219,9 +242,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () {
                   Navigator.of(sheetContext).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                      content: Text(
-                          'Protótipo: o treino com GPS entra na Fase 1a (ver roadmap).')));
+                  context.push('/workout/${type.name}');
                 },
               ),
             const SizedBox(height: 8),
