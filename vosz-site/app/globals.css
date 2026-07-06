@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --vosz-roxo: #4200ac;
+  --vosz-roxo-escuro: #25006d;
+  --vosz-rosa: #ff00a7;
+  --vosz-amarelo: #fcdd32;
+  --vosz-verde: #3ffc94;
+  --vosz-azul: #00e7e9;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-cream text-ink antialiased;
+    font-feature-settings: "kern";
+  }
+
+  /* Headings herdam Montserrat com peso forte por padrão */
+  h1, h2, h3, h4 {
+    @apply font-sans font-extrabold tracking-tight text-vosz-roxo-escuro;
+    text-wrap: balance;
+  }
+
+  /* Foco visível e acessível em toda a interface */
+  :focus-visible {
+    outline: 3px solid var(--vosz-rosa);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  ::selection {
+    background: var(--vosz-rosa);
+    color: #fff;
+  }
+}
+
+@layer components {
+  .container-vosz {
+    @apply mx-auto w-full max-w-6xl px-5 sm:px-8;
+  }
+
+  /* Link "pular para o conteúdo" para leitores de tela / teclado */
+  .skip-link {
+    @apply absolute left-4 top-4 z-[100] -translate-y-24 rounded-full bg-vosz-roxo px-5 py-3
+           text-sm font-bold text-white shadow-soft transition-transform focus:translate-y-0;
+  }
+
+  /* Texto com gradiente da marca (usar com moderação) */
+  .text-gradient-vosz {
+    @apply bg-gradient-to-r from-vosz-roxo via-vosz-rosa to-vosz-rosa bg-clip-text text-transparent;
+  }
+}
+
+/* Respeita a preferência de redução de movimento do sistema/navegador */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
