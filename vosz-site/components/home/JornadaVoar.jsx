@@ -5,11 +5,11 @@ import { Container, Section, SectionHeading } from "../ui/Section";
 import { voar } from "@/lib/content";
 
 // Momento visual #2 — Jornada VOAR.
-// Didático por padrão: as 4 etapas ficam TODAS visíveis, sem depender de
-// hover ou clique. Letras display coloridas + nome + descrição completa,
-// com setas marcando a sequência da jornada.
+// Fundo claro para contraste máximo de leitura. As 4 etapas ficam todas
+// visíveis: letra display na cor oficial, nome, descrição completa e setas
+// marcando a sequência. Nenhuma interação é necessária para ler o conteúdo.
 
-const cores = ["#a78bff", "#ff00a7", "#00e7e9", "#3ffc94"];
+const cores = ["#4200ac", "#ff00a7", "#00989a", "#0f9d63"];
 
 function Seta({ className = "" }) {
   return (
@@ -32,14 +32,14 @@ export default function JornadaVoar() {
   const reduce = useReducedMotion();
 
   return (
-    <Section id="voar" dark className="grain overflow-hidden">
-      <div aria-hidden className="pointer-events-none absolute -top-32 left-1/2 h-96 w-[40rem] -translate-x-1/2 rounded-full bg-vosz-rosa/10 blur-[130px]" />
-      <div aria-hidden className="pointer-events-none absolute -left-24 bottom-0 h-80 w-80 rounded-full bg-vosz-roxo/30 blur-[110px]" />
+    <Section id="voar" className="relative overflow-hidden bg-white">
+      {/* tinta suave da marca no fundo, sem comprometer contraste */}
+      <div aria-hidden className="pointer-events-none absolute -top-40 left-1/2 h-96 w-[42rem] -translate-x-1/2 rounded-full bg-vosz-roxo/[0.06] blur-[120px]" />
 
       <Container className="relative">
-        <SectionHeading eyebrow={voar.eyebrow} titulo={voar.titulo} subtitulo={voar.subtitulo} dark center />
+        <SectionHeading eyebrow={voar.eyebrow} titulo={voar.titulo} subtitulo={voar.subtitulo} center />
 
-        <ol className="mt-14 grid gap-10 sm:grid-cols-2 lg:grid-cols-4 lg:gap-6">
+        <ol className="mt-14 grid gap-10 sm:grid-cols-2 lg:grid-cols-4 lg:gap-8">
           {voar.etapas.map((e, i) => {
             const cor = cores[i];
             const ultima = i === voar.etapas.length - 1;
@@ -52,7 +52,7 @@ export default function JornadaVoar() {
                 transition={{ duration: 0.55, delay: i * 0.12, ease: [0.22, 1, 0.36, 1] }}
                 className="relative"
               >
-                {/* Letra + seta de sequência */}
+                {/* Letra + número + seta de sequência */}
                 <div className="flex items-center gap-3">
                   <span
                     aria-hidden
@@ -61,36 +61,25 @@ export default function JornadaVoar() {
                   >
                     {e.letra}
                   </span>
-                  <span
-                    className="text-xs font-bold tabular-nums tracking-[0.25em] text-white/30"
-                    aria-hidden
-                  >
+                  <span aria-hidden className="text-xs font-bold tabular-nums tracking-[0.25em] text-ink/35">
                     {String(i + 1).padStart(2, "0")}
                   </span>
-                  {!ultima && (
-                    <Seta className="ml-auto hidden h-6 w-6 text-white/25 lg:block" />
-                  )}
+                  {!ultima && <Seta className="ml-auto hidden h-6 w-6 text-ink/20 lg:block" />}
                 </div>
 
                 {/* traço na cor da etapa */}
-                <span
-                  aria-hidden
-                  className="mt-3 block h-1 w-12 rounded-full"
-                  style={{ backgroundColor: cor }}
-                />
+                <span aria-hidden className="mt-3 block h-1 w-12 rounded-full" style={{ backgroundColor: cor }} />
 
-                <h3 className="mt-4 text-lg font-extrabold uppercase tracking-wide text-white">
+                <h3 className="mt-4 text-lg font-extrabold uppercase tracking-wide text-vosz-roxo-escuro">
                   {e.nome}
                 </h3>
-                <p className="mt-2.5 text-[0.98rem] leading-relaxed text-white/80">
-                  {e.detalhe}
-                </p>
+                <p className="mt-2.5 text-[0.98rem] leading-relaxed text-ink/75">{e.detalhe}</p>
               </motion.li>
             );
           })}
         </ol>
 
-        <p className="mt-14 text-center text-sm italic text-white/50">
+        <p className="mt-14 text-center text-sm italic text-ink/50">
           Um caminho de transformação, vivido todos os dias.
         </p>
       </Container>
