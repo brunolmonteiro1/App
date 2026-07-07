@@ -1,140 +1,121 @@
 "use client";
 
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import {
   motion,
-  useMotionValue,
+  AnimatePresence,
   useReducedMotion,
   useScroll,
-  useSpring,
   useTransform,
 } from "framer-motion";
 import Button from "../ui/Button";
 import { Container } from "../ui/Section";
 import { hero } from "@/lib/content";
 
-// Momento visual #1 — Hero cinematográfico.
-// Cena escura em roxo profundo com colagem de fotos reais do Vosz flutuando em
-// perspectiva. O mouse desloca as camadas (parallax 3D leve); o scroll aprofunda
-// a cena. Fotos: material oficial do manual da marca. Respeita reduced-motion.
+// Momento visual #1 — Hero "cena de cinema".
+// Um único quadro com zoom lento (Ken Burns) e dissolve entre fotos reais,
+// como abertura de documentário. Tipografia contida: branco + um acento rosa.
+// Respeita prefers-reduced-motion (foto estática, sem zoom).
 
-// Cartões da colagem: foto real + rótulo + posição/profundidade na cena.
-const cartoes = [
+const cenas = [
   {
     src: "/fotos/estudo.jpg",
     alt: "Crianças escrevendo juntas durante atividade no contraturno",
     label: "Ensino personalizado",
-    className: "left-0 top-[4%] w-[42%] rotate-[-5deg]",
-    depth: 22,
-    delay: 0.15,
   },
   {
     src: "/fotos/bale.jpg",
     alt: "Meninas praticando balé no Instituto Vosz",
     label: "Arte e cultura",
-    className: "right-0 top-0 w-[36%] rotate-[4deg]",
-    depth: 42,
-    delay: 0.3,
-  },
-  {
-    src: "/fotos/criatividade.jpg",
-    alt: "Criança mostrando um origami amarelo",
-    label: "Criatividade",
-    className: "bottom-0 left-[6%] w-[34%] rotate-[3deg]",
-    depth: 60,
-    delay: 0.45,
   },
   {
     src: "/fotos/refeicao.jpg",
     alt: "Crianças fazendo refeição juntas no Instituto",
     label: "Alimentação",
-    className: "bottom-[6%] right-[2%] w-[44%] rotate-[-3deg]",
-    depth: 34,
-    delay: 0.6,
   },
 ];
 
-function Colagem() {
-  const reduce = useReducedMotion();
-  const areaRef = useRef(null);
+const DURACAO_CENA = 6000;
 
-  // Parallax guiado pelo mouse (suavizado com spring).
-  const mx = useMotionValue(0);
-  const my = useMotionValue(0);
-  const sx = useSpring(mx, { stiffness: 60, damping: 18 });
-  const sy = useSpring(my, { stiffness: 60, damping: 18 });
+function QuadroCinema({ reduce }) {
+  const [cena, setCena] = useState(0);
 
-  const onMove = (e) => {
-    if (reduce || !areaRef.current) return;
-    const r = areaRef.current.getBoundingClientRect();
-    mx.set((e.clientX - r.left) / r.width - 0.5);
-    my.set((e.clientY - r.top) / r.height - 0.5);
-  };
+  useEffect(() => {
+    if (reduce) return;
+    const t = setTimeout(() => setCena((c) => (c + 1) % cenas.length), DURACAO_CENA);
+    return () => clearTimeout(t);
+  }, [cena, reduce]);
+
+  const atual = cenas[cena];
 
   return (
-    <div
-      ref={areaRef}
-      onMouseMove={onMove}
-      onMouseLeave={() => {
-        mx.set(0);
-        my.set(0);
-      }}
-      className="relative mx-auto aspect-[10/11] w-full max-w-xl [perspective:1200px]"
-    >
-      {/* aura de luz atrás da cena */}
-      <div
-        aria-hidden
-        className="absolute left-1/2 top-1/2 h-[70%] w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-vosz-rosa/25 blur-[100px]"
-      />
+    <div className="relative">
+      <div className="relative h-[24rem] overflow-hidden rounded-[2.5rem] border border-white/10 shadow-[0_40px_100px_-30px_rgba(0,0,0,0.7)] sm:h-[28rem] lg:h-[34rem]">
+        <AnimatePresence mode="sync">
+          <motion.div
+            key={cena}
+            initial={reduce ? { opacity: 1 } : { opacity: 0, scale: 1 }}
+            animate={
+              reduce
+                ? { opacity: 1 }
+                : { opacity: 1, scale: 1.09 }
+            }
+            exit={{ opacity: 0 }}
+            transition={
+              reduce
+                ? { duration: 0 }
+                : {
+                    opacity: { duration: 1.4, ease: "easeInOut" },
+                    scale: { duration: DURACAO_CENA / 1000 + 1.6, ease: "linear" },
+                  }
+            }
+            className="absolute inset-0"
+          >
+            <Image
+              src={atual.src}
+              alt={atual.alt}
+              fill
+              priority={cena === 0}
+              className="object-cover"
+              sizes="(min-width: 1024px) 620px, 92vw"
+            />
+          </motion.div>
+        </AnimatePresence>
 
-      {cartoes.map((c) => (
-        <CartaoFoto key={c.src} {...c} sx={sx} sy={sy} reduce={reduce} />
-      ))}
+        {/* véu para unidade com o palco */}
+        <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-[#160040]/70 via-transparent to-[#160040]/20" />
 
-      {/* selo do símbolo no centro da composição */}
-      <motion.div
-        initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.6 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: 0.8, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-        className="absolute left-1/2 top-1/2 z-20 flex h-24 w-24 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white shadow-[0_20px_60px_-15px_rgba(255,0,167,0.5)] sm:h-28 sm:w-28"
-      >
-        <Image src="/simbolo-vosz.png" alt="" width={80} height={80} priority className="h-16 w-16 sm:h-[4.5rem] sm:w-[4.5rem]" aria-hidden />
-      </motion.div>
+        {/* legenda da cena */}
+        <AnimatePresence mode="wait">
+          <motion.p
+            key={cena}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.5 }}
+            className="absolute bottom-6 left-6 text-sm font-bold uppercase tracking-[0.2em] text-white/90"
+          >
+            {atual.label}
+          </motion.p>
+        </AnimatePresence>
+
+        {/* indicador de cenas */}
+        <div className="absolute bottom-6 right-6 flex gap-1.5" role="presentation">
+          {cenas.map((_, i) => (
+            <button
+              key={i}
+              type="button"
+              aria-label={`Ver cena ${i + 1}: ${cenas[i].label}`}
+              onClick={() => setCena(i)}
+              className={`h-1.5 rounded-full transition-all duration-500 ${
+                i === cena ? "w-7 bg-white" : "w-1.5 bg-white/40 hover:bg-white/70"
+              }`}
+            />
+          ))}
+        </div>
+      </div>
     </div>
-  );
-}
-
-function CartaoFoto({ src, alt, label, className, depth, delay, sx, sy, reduce }) {
-  // Quanto maior a profundidade, maior o deslocamento — sensação de camadas 3D.
-  const x = useTransform(sx, (v) => v * depth);
-  const y = useTransform(sy, (v) => v * depth);
-  const rx = useTransform(sy, (v) => v * -6);
-  const ry = useTransform(sx, (v) => v * 8);
-
-  return (
-    <motion.div
-      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 40, scale: 0.92 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ delay, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-      style={reduce ? undefined : { x, y, rotateX: rx, rotateY: ry, transformStyle: "preserve-3d" }}
-      className={`absolute z-10 ${className}`}
-    >
-      <figure className="overflow-hidden rounded-3xl border border-white/15 bg-white/5 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.6)]">
-        <Image
-          src={src}
-          alt={alt}
-          width={480}
-          height={560}
-          priority
-          className="h-auto w-full object-cover"
-          sizes="(min-width: 1024px) 280px, 45vw"
-        />
-        <figcaption className="absolute bottom-2 left-2 rounded-full bg-vosz-roxo-escuro/80 px-3 py-1 text-[0.65rem] font-bold uppercase tracking-wider text-white backdrop-blur-sm sm:text-xs">
-          {label}
-        </figcaption>
-      </figure>
-    </motion.div>
   );
 }
 
@@ -142,75 +123,71 @@ export default function Hero() {
   const reduce = useReducedMotion();
   const secRef = useRef(null);
 
-  // O scroll afasta suavemente a cena (profundidade cinematográfica).
+  // O scroll afasta a cena suavemente (profundidade de saída).
   const { scrollYProgress } = useScroll({
     target: secRef,
     offset: ["start start", "end start"],
   });
-  const cenaY = useTransform(scrollYProgress, [0, 1], [0, 80]);
-  const cenaOpacity = useTransform(scrollYProgress, [0, 0.85], [1, 0.2]);
+  const cenaY = useTransform(scrollYProgress, [0, 1], [0, 70]);
+  const cenaOpacity = useTransform(scrollYProgress, [0, 0.85], [1, 0.25]);
 
   return (
-    <section
-      ref={secRef}
-      className="grain relative -mt-16 overflow-hidden bg-[#160040] sm:-mt-20"
-    >
-      {/* iluminação da cena */}
+    <section ref={secRef} className="grain relative -mt-16 overflow-hidden bg-[#160040] sm:-mt-20">
+      {/* iluminação única e contida */}
       <div aria-hidden className="pointer-events-none absolute inset-0">
-        <div className="absolute -left-40 -top-40 h-[34rem] w-[34rem] rounded-full bg-vosz-roxo/50 blur-[120px]" />
-        <div className="absolute -right-40 top-1/3 h-[30rem] w-[30rem] rounded-full bg-vosz-rosa/20 blur-[130px]" />
+        <div className="absolute -left-48 top-0 h-[36rem] w-[36rem] rounded-full bg-vosz-roxo/40 blur-[140px]" />
         <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-[#160040] to-transparent" />
       </div>
 
-      {/* grafismo gigante como marca d'água */}
+      {/* símbolo gigante em marca d'água */}
       <Image
         src="/simbolo-vosz.png"
         alt=""
         aria-hidden
         width={900}
         height={1020}
-        className="pointer-events-none absolute -right-48 -top-48 w-[44rem] opacity-[0.05]"
+        className="pointer-events-none absolute -right-56 -top-40 w-[46rem] opacity-[0.04]"
       />
 
-      <Container className="relative grid min-h-[96svh] items-center gap-14 pb-20 pt-28 sm:pt-32 lg:grid-cols-[1.05fr_0.95fr] lg:gap-10 lg:pb-24">
+      <Container className="relative grid min-h-[96svh] items-center gap-12 pb-16 pt-28 sm:pt-32 lg:grid-cols-[1fr_0.92fr] lg:gap-14 lg:pb-20">
         {/* Texto */}
-        <motion.div style={reduce ? undefined : { y: cenaY, opacity: cenaOpacity }}>
-          <motion.span
-            initial={{ opacity: 0, y: 12 }}
+        <motion.div
+          style={reduce ? undefined : { y: cenaY, opacity: cenaOpacity }}
+          className="relative z-10"
+        >
+          <motion.p
+            initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.07] px-4 py-2 text-[0.65rem] font-bold uppercase tracking-[0.18em] text-white/80 backdrop-blur-sm sm:text-xs"
+            className="text-[0.7rem] font-bold uppercase tracking-[0.28em] text-white/55 sm:text-xs"
           >
-            <span className="h-1.5 w-1.5 rounded-full bg-vosz-verde" />
             {hero.eyebrow}
-          </motion.span>
+          </motion.p>
 
           <motion.h1
-            initial={{ opacity: 0, y: 24 }}
+            initial={{ opacity: 0, y: 26 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
-            className="mt-7 text-[2.5rem] font-black leading-[1.05] tracking-tight text-white sm:text-5xl lg:text-[3.6rem] xl:text-[4rem]"
+            transition={{ duration: 0.75, delay: 0.12, ease: [0.22, 1, 0.36, 1] }}
+            className="mt-6 text-[2.7rem] font-black leading-[1.03] tracking-tight text-white sm:text-6xl lg:text-[4.1rem]"
           >
             A escola ensina.
             <br />
-            <span className="text-gradient-quente">
-              Mas quem cuida do que impede a criança de aprender?
-            </span>
+            Mas quem <span className="text-vosz-rosa">cuida</span> do que impede a criança de aprender?
           </motion.h1>
 
           <motion.p
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.28 }}
-            className="mt-7 max-w-xl text-lg leading-relaxed text-white/70"
+            transition={{ duration: 0.6, delay: 0.3 }}
+            className="mt-7 max-w-xl text-lg leading-relaxed text-white/65"
           >
             {hero.subtitulo}
           </motion.p>
 
           <motion.div
-            initial={{ opacity: 0, y: 16 }}
+            initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.42 }}
+            transition={{ duration: 0.6, delay: 0.44 }}
             className="mt-9 flex flex-col gap-3 sm:flex-row"
           >
             <Button href={hero.ctaPrimario.href} variant="rosa" size="lg">
@@ -222,32 +199,26 @@ export default function Hero() {
           </motion.div>
         </motion.div>
 
-        {/* Colagem 3D de fotos reais */}
-        <motion.div style={reduce ? undefined : { y: cenaY, opacity: cenaOpacity }}>
-          <Colagem />
+        {/* Quadro cinematográfico */}
+        <motion.div
+          initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.96 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.9, delay: 0.25, ease: [0.22, 1, 0.36, 1] }}
+          style={reduce ? undefined : { y: cenaY, opacity: cenaOpacity }}
+          className="lg:-ml-8"
+        >
+          <QuadroCinema reduce={reduce} />
         </motion.div>
       </Container>
 
-      {/* Marquee das camadas de cuidado */}
-      <div className="relative border-t border-white/10 bg-white/[0.04] py-4 backdrop-blur-sm">
-        {/* Lista estática acessível para leitores de tela */}
-        <p className="sr-only">
-          Camadas de cuidado: {hero.camadas.join(", ")}.
-        </p>
-        <div aria-hidden className="marquee-track">
-          {[0, 1].map((rep) => (
-            <div key={rep} className="flex shrink-0 items-center">
-              {hero.camadas.map((c) => (
-                <span
-                  key={`${rep}-${c}`}
-                  className="mx-6 flex items-center gap-3 whitespace-nowrap text-sm font-bold uppercase tracking-[0.2em] text-white/60"
-                >
-                  <span className="text-vosz-rosa">✦</span> {c}
-                </span>
-              ))}
-            </div>
-          ))}
-        </div>
+      {/* linha-síntese discreta no rodapé do hero */}
+      <div className="relative border-t border-white/[0.08]">
+        <Container className="py-4">
+          <p className="text-center text-xs font-semibold uppercase tracking-[0.22em] text-white/40 sm:text-sm">
+            Assistência social · Contraturno socioeducativo · Cuidado integral —{" "}
+            <span className="text-white/70">Cambuci, São Paulo</span>
+          </p>
+        </Container>
       </div>
     </section>
   );
