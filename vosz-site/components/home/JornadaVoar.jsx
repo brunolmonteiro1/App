@@ -91,7 +91,7 @@ export default function JornadaVoar() {
         </ol>
 
         <p className="mt-14 text-center text-sm italic text-white/50">
-          Um caminho de transformação — do acolhimento à autonomia.
+          Um caminho de transformação, vivido todos os dias.
         </p>
       </Container>
     </Section>

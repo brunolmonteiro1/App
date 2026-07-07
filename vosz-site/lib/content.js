@@ -106,14 +106,14 @@ export const voar = {
 // Jornada do Beneficiário — como o cuidado funciona na prática (apresentação oficial).
 export const jornadaBeneficiario = {
   eyebrow: "Como funciona na prática",
-  titulo: "A jornada de cada família",
+  titulo: "Da chegada à autonomia, passo a passo",
   subtitulo:
-    "Aqui, não entregamos apenas atividades. Construímos jornadas transformadoras — com começo, acompanhamento e horizonte de autonomia.",
+    "Aqui, não entregamos apenas atividades. Construímos percursos que transformam — com começo, acompanhamento e horizonte de autonomia.",
   etapas: [
     {
       titulo: "Escuta e diagnóstico",
       texto:
-        "A jornada começa com uma anamnese multidisciplinar da situação da família, que gera um plano de atendimento individualizado.",
+        "Tudo começa com uma anamnese multidisciplinar da situação da família, que gera um plano de atendimento individualizado.",
     },
     {
       titulo: "A criança entra no contraturno",
@@ -133,7 +133,7 @@ export const jornadaBeneficiario = {
     {
       titulo: "O vínculo continua",
       texto:
-        "Após a saída formal da jornada, o atendimento à criança continua nos programas educativos. O cuidado não se rompe.",
+        "Após a saída formal do acompanhamento, o atendimento à criança continua nos programas educativos. O cuidado não se rompe.",
     },
   ],
 };
@@ -183,7 +183,7 @@ export const sustentabilidade = {
 
 export const timeline = {
   eyebrow: "Nossa história",
-  titulo: "De uma semente chamada Cultivar a uma jornada de cuidado integral",
+  titulo: "De uma semente chamada Cultivar a um ecossistema de cuidado integral",
   itens: [
     { ano: "2017", titulo: "Cultivar", texto: "Início do projeto social na igreja A Casa da Rocha, com aulas de Muay Thai para crianças." },
     { ano: "2020", titulo: "Pandemia", texto: "Atuação emergencial com entrega de cestas básicas e kits de Natal para famílias." },
@@ -196,7 +196,7 @@ export const timeline = {
 
 export const apoiar = {
   eyebrow: "Como apoiar",
-  titulo: "Faça parte dessa jornada",
+  titulo: "Faça parte dessa história",
   cards: [
     { titulo: "Doe", texto: "Sua doação ajuda a manter alimentação, professores, equipe técnica, materiais e acompanhamento familiar.", cta: "Quero Doar", href: "/como-apoiar", icon: "heart" },
     { titulo: "Seja voluntário", texto: "Compartilhe seu tempo, conhecimento e habilidades.", cta: "Quero ser Voluntário", href: "/como-apoiar#voluntariado", icon: "users" },
@@ -367,7 +367,7 @@ export const portaVosz = {
   acoes: [
     { titulo: "Mobilize sua rede", texto: "Leve a causa do Vosz para as pessoas ao seu redor." },
     { titulo: "Apresente o Vosz", texto: "Conecte o Instituto à sua igreja, empresa ou grupo." },
-    { titulo: "Doe tempo, talento ou recurso", texto: "Cada forma de contribuição fortalece a jornada." },
+    { titulo: "Doe tempo, talento ou recurso", texto: "Cada forma de contribuição fortalece a missão." },
   ],
 };
 

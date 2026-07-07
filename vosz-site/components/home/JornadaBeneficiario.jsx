@@ -193,7 +193,7 @@ export default function JornadaBeneficiario({ numero = null }) {
 
         {/* Destino da jornada */}
         <p className="mx-auto mt-12 max-w-2xl text-center text-lg font-extrabold text-vosz-roxo-escuro lg:mt-14">
-          Destino da jornada: <span className="text-gradient-vosz">a autonomia da família.</span>
+          O destino é um só: <span className="text-gradient-vosz">a autonomia da família.</span>
         </p>
       </Container>
     </Section>

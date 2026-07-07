@@ -27,7 +27,7 @@ export default function ComoApoiarPage() {
     <>
       <PageHero
         eyebrow="Como apoiar"
-        titulo="Faça parte dessa jornada de cuidado"
+        titulo="Faça parte dessa rede de cuidado"
         intro="O atendimento às famílias é gratuito. É o apoio de doadores, voluntários e empresas que sustenta a estrutura, a equipe e a continuidade do cuidado."
       />
 

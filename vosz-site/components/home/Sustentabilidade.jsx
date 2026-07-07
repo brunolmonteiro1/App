@@ -100,7 +100,7 @@ export default function Sustentabilidade() {
 
         <div className="mt-10 flex flex-col justify-center gap-3 sm:flex-row">
           <Button href="/como-apoiar" variant="branco" size="md">
-            Apoie essa jornada
+            Apoie essa causa
           </Button>
           <Button href="/como-apoiar#empresas" variant="fantasmaBranco" size="md">
             Seja empresa parceira
