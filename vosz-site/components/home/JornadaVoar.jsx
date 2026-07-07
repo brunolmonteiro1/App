@@ -1,18 +1,87 @@
 "use client";
 
-import { useState } from "react";
-import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { useRef, useState } from "react";
+import {
+  motion,
+  AnimatePresence,
+  useMotionValue,
+  useSpring,
+  useTransform,
+  useReducedMotion,
+} from "framer-motion";
 import { Container, Section, SectionHeading } from "../ui/Section";
 import { voar } from "@/lib/content";
 
 // Momento visual #2 — Jornada VOAR interativa.
-// Desktop: hover/foco nas letras revela o detalhe. Mobile: toque abre o card.
+// Cada letra é um cartão com tilt 3D real (a superfície acompanha o cursor).
+// Desktop: hover/foco revela o detalhe. Mobile: toque seleciona.
 const corMap = {
-  roxo: { bg: "bg-vosz-roxo", text: "text-vosz-roxo", ring: "ring-vosz-roxo", soft: "bg-vosz-roxo/10" },
-  rosa: { bg: "bg-vosz-rosa", text: "text-vosz-rosa", ring: "ring-vosz-rosa", soft: "bg-vosz-rosa/10" },
-  azul: { bg: "bg-[#00989a]", text: "text-[#00989a]", ring: "ring-[#00989a]", soft: "bg-vosz-azul/15" },
-  verde: { bg: "bg-[#0f9d63]", text: "text-[#0f9d63]", ring: "ring-[#0f9d63]", soft: "bg-vosz-verde/20" },
+  roxo: { bg: "bg-vosz-roxo", text: "text-vosz-roxo", soft: "bg-vosz-roxo/10", glow: "rgba(66,0,172,0.55)" },
+  rosa: { bg: "bg-vosz-rosa", text: "text-vosz-rosa", soft: "bg-vosz-rosa/10", glow: "rgba(255,0,167,0.5)" },
+  azul: { bg: "bg-[#00989a]", text: "text-[#00989a]", soft: "bg-vosz-azul/15", glow: "rgba(0,231,233,0.4)" },
+  verde: { bg: "bg-[#0f9d63]", text: "text-[#0f9d63]", soft: "bg-vosz-verde/20", glow: "rgba(63,252,148,0.4)" },
 };
+
+function CartaoLetra({ etapa, index, selecionado, onSelect, reduce }) {
+  const c = corMap[etapa.cor];
+  const ref = useRef(null);
+
+  // Tilt 3D: a superfície do cartão inclina seguindo o cursor.
+  const px = useMotionValue(0);
+  const py = useMotionValue(0);
+  const rx = useSpring(useTransform(py, [-0.5, 0.5], [10, -10]), { stiffness: 200, damping: 20 });
+  const ry = useSpring(useTransform(px, [-0.5, 0.5], [-10, 10]), { stiffness: 200, damping: 20 });
+
+  const onMove = (e) => {
+    if (reduce || !ref.current) return;
+    const r = ref.current.getBoundingClientRect();
+    px.set((e.clientX - r.left) / r.width - 0.5);
+    py.set((e.clientY - r.top) / r.height - 0.5);
+  };
+  const onLeave = () => {
+    px.set(0);
+    py.set(0);
+  };
+
+  return (
+    <div className="[perspective:800px]">
+      <motion.button
+        ref={ref}
+        type="button"
+        onMouseMove={onMove}
+        onMouseLeave={onLeave}
+        onMouseEnter={() => onSelect(index)}
+        onFocus={() => onSelect(index)}
+        onClick={() => onSelect(index)}
+        aria-pressed={selecionado}
+        style={{
+          boxShadow: selecionado ? `0 24px 70px -18px ${c.glow}` : "none",
+          ...(reduce ? {} : { rotateX: rx, rotateY: ry, transformStyle: "preserve-3d" }),
+        }}
+        className={`group relative w-full rounded-3xl p-5 text-left transition-colors duration-200 sm:p-6 ${
+          selecionado ? c.bg : "bg-white/[0.07] hover:bg-white/[0.12]"
+        }`}
+      >
+        <span
+          style={reduce ? undefined : { transform: "translateZ(30px)" }}
+          className={`block text-6xl font-black leading-none sm:text-7xl ${
+            selecionado ? "text-white" : "text-white/80"
+          }`}
+        >
+          {etapa.letra}
+        </span>
+        <span
+          style={reduce ? undefined : { transform: "translateZ(20px)" }}
+          className={`mt-3 block text-sm font-bold uppercase tracking-wider ${
+            selecionado ? "text-white" : "text-vosz-amarelo"
+          }`}
+        >
+          {etapa.nome}
+        </span>
+      </motion.button>
+    </div>
+  );
+}
 
 export default function JornadaVoar() {
   const [ativo, setAtivo] = useState(0);
@@ -21,42 +90,30 @@ export default function JornadaVoar() {
   const cor = corMap[etapa.cor];
 
   return (
-    <Section id="voar" dark className="overflow-hidden">
-      {/* textura de fundo */}
-      <div aria-hidden className="pointer-events-none absolute -right-20 -top-20 h-80 w-80 rounded-full bg-vosz-rosa/20 blur-3xl" />
+    <Section id="voar" dark className="grain overflow-hidden">
+      {/* iluminação da cena */}
+      <div aria-hidden className="pointer-events-none absolute -right-24 -top-24 h-96 w-96 rounded-full bg-vosz-rosa/20 blur-[110px]" />
+      <div aria-hidden className="pointer-events-none absolute -left-24 bottom-0 h-96 w-96 rounded-full bg-vosz-roxo/40 blur-[110px]" />
+
       <Container className="relative">
         <SectionHeading eyebrow={voar.eyebrow} titulo={voar.titulo} subtitulo={voar.subtitulo} dark center />
 
-        {/* Seletor de letras */}
-        <div className="mt-12 grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
-          {voar.etapas.map((e, i) => {
-            const c = corMap[e.cor];
-            const selecionado = i === ativo;
-            return (
-              <button
-                key={e.letra}
-                type="button"
-                onMouseEnter={() => setAtivo(i)}
-                onFocus={() => setAtivo(i)}
-                onClick={() => setAtivo(i)}
-                aria-pressed={selecionado}
-                className={`group relative rounded-3xl p-5 text-left transition-all duration-200 ${
-                  selecionado ? `${c.bg} shadow-soft-lg` : "bg-white/10 hover:bg-white/[0.16]"
-                }`}
-              >
-                <span className={`block text-5xl font-black leading-none ${selecionado ? "text-white" : "text-white/85"}`}>
-                  {e.letra}
-                </span>
-                <span className={`mt-2 block text-sm font-bold ${selecionado ? "text-white" : "text-vosz-amarelo"}`}>
-                  {e.nome}
-                </span>
-              </button>
-            );
-          })}
+        {/* Cartões com tilt 3D */}
+        <div className="mt-14 grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-5">
+          {voar.etapas.map((e, i) => (
+            <CartaoLetra
+              key={e.letra}
+              etapa={e}
+              index={i}
+              selecionado={i === ativo}
+              onSelect={setAtivo}
+              reduce={reduce}
+            />
+          ))}
         </div>
 
         {/* Painel de detalhe */}
-        <div className="mt-4 min-h-[8.5rem] rounded-3xl bg-white p-6 shadow-soft-lg sm:mt-6 sm:p-8">
+        <div className="mt-5 min-h-[8.5rem] rounded-3xl bg-white p-6 shadow-soft-lg sm:mt-7 sm:p-8">
           <AnimatePresence mode="wait">
             <motion.div
               key={ativo}

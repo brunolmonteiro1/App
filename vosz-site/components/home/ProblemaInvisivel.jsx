@@ -6,8 +6,12 @@ const accents = ["rosa", "roxo", "azul", "verde", "amarelo", "rosa", "roxo", "az
 
 export default function ProblemaInvisivel() {
   return (
-    <Section id="problema" className="bg-white">
-      <Container>
+    <Section id="problema" className="relative overflow-hidden bg-white">
+      {/* Número editorial da cena */}
+      <span aria-hidden className="num-editorial pointer-events-none absolute -top-4 right-4 text-[9rem] sm:text-[13rem]">
+        01
+      </span>
+      <Container className="relative">
         <SectionHeading eyebrow={problema.eyebrow} titulo={problema.titulo} subtitulo={problema.texto} />
         <div className="mt-12 grid grid-cols-2 gap-4 sm:gap-5 md:grid-cols-4">
           {problema.cards.map((c, i) => (

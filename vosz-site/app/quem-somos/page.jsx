@@ -2,7 +2,7 @@ import PageHero from "@/components/ui/PageHero";
 import { Container, Section } from "@/components/ui/Section";
 import Reveal from "@/components/ui/Reveal";
 import Button from "@/components/ui/Button";
-import { quemSomos } from "@/lib/content";
+import { quemSomos, missaoVisao } from "@/lib/content";
 
 export const metadata = {
   title: "Quem Somos",
@@ -22,6 +22,39 @@ export default function QuemSomosPage() {
               <div className="h-full rounded-3xl border border-black/[0.06] bg-white p-7 shadow-soft">
                 <h2 className="text-xl font-bold text-vosz-roxo-escuro">{b.titulo}</h2>
                 <p className="mt-3 leading-relaxed text-ink/70">{b.texto}</p>
+              </div>
+            </Reveal>
+          ))}
+        </Container>
+      </Section>
+
+      {/* Versículo que dá nome ao Vosz */}
+      <Section className="grain relative overflow-hidden bg-vosz-roxo-escuro">
+        <div aria-hidden className="pointer-events-none absolute -left-24 -top-24 h-80 w-80 rounded-full bg-vosz-rosa/20 blur-[100px]" />
+        <Container className="relative text-center">
+          <blockquote className="mx-auto max-w-3xl">
+            <p className="text-2xl font-extrabold leading-snug text-white sm:text-3xl">
+              &ldquo;{missaoVisao.versiculo}&rdquo;
+            </p>
+            <footer className="mt-5 text-sm font-bold uppercase tracking-[0.2em] text-vosz-amarelo">
+              {missaoVisao.versiculoRef}
+            </footer>
+          </blockquote>
+        </Container>
+      </Section>
+
+      {/* Missão, Visão e Alvo */}
+      <Section className="bg-cream">
+        <Container className="grid gap-4 md:grid-cols-3">
+          {[
+            { titulo: "Missão", texto: missaoVisao.missao, cor: "text-vosz-roxo" },
+            { titulo: "Visão", texto: missaoVisao.visao, cor: "text-vosz-rosa" },
+            { titulo: "Alvo", texto: missaoVisao.alvo, cor: "text-[#0f9d63]" },
+          ].map((m, i) => (
+            <Reveal key={m.titulo} delay={i * 0.06}>
+              <div className="h-full rounded-3xl border border-black/[0.06] bg-white p-7 shadow-soft">
+                <h2 className={`text-sm font-bold uppercase tracking-[0.2em] ${m.cor}`}>{m.titulo}</h2>
+                <p className="mt-3 leading-relaxed text-ink/70">{m.texto}</p>
               </div>
             </Reveal>
           ))}

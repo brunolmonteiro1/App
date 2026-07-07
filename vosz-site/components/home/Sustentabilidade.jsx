@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { motion, useReducedMotion } from "framer-motion";
 import { Container, Section, SectionHeading } from "../ui/Section";
 import Icon from "../ui/Icon";
@@ -21,8 +22,9 @@ export default function Sustentabilidade() {
   };
 
   return (
-    <Section id="sustentabilidade" dark className="overflow-hidden">
+    <Section id="sustentabilidade" dark className="grain overflow-hidden">
       <div aria-hidden className="pointer-events-none absolute -left-24 bottom-0 h-80 w-80 rounded-full bg-vosz-verde/15 blur-3xl" />
+      <div aria-hidden className="pointer-events-none absolute -right-24 top-0 h-80 w-80 rounded-full bg-vosz-rosa/15 blur-3xl" />
       <Container className="relative">
         <SectionHeading
           eyebrow={sustentabilidade.eyebrow}
@@ -74,7 +76,29 @@ export default function Sustentabilidade() {
           </p>
         </motion.div>
 
-        <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+        {/* Produtos sociais reais que sustentam a missão */}
+        <div className="mx-auto mt-12 grid max-w-3xl grid-cols-2 gap-4">
+          {[
+            { src: "/fotos/bazar-copos.jpg", alt: "Copos personalizados do Instituto Vosz", legenda: "Produtos sociais" },
+            { src: "/fotos/bazar-caderno.jpg", alt: "Cadernos do bazar do Instituto Vosz", legenda: "Bazar Vosz" },
+          ].map((f) => (
+            <figure key={f.src} className="group relative overflow-hidden rounded-3xl">
+              <Image
+                src={f.src}
+                alt={f.alt}
+                width={618}
+                height={700}
+                className="h-44 w-full object-cover transition-transform duration-500 group-hover:scale-105 sm:h-56"
+                sizes="(min-width: 640px) 360px, 45vw"
+              />
+              <figcaption className="absolute bottom-3 left-3 rounded-full bg-vosz-roxo-escuro/80 px-3 py-1 text-xs font-bold text-white backdrop-blur-sm">
+                {f.legenda}
+              </figcaption>
+            </figure>
+          ))}
+        </div>
+
+        <div className="mt-10 flex flex-col justify-center gap-3 sm:flex-row">
           <Button href="/como-apoiar" variant="branco" size="md">
             Apoie essa jornada
           </Button>

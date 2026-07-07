@@ -73,32 +73,67 @@ export const voar = {
       nome: "Voz / Vosz",
       resumo: "Escutamos, acolhemos e reconhecemos a história de cada criança e família.",
       detalhe:
-        "Escuta, acolhimento, protagonismo e defesa de direitos. Antes de qualquer atividade, reconhecemos a história de quem chega.",
+        "O Instituto assume o papel de facilitador, promovendo protagonismo e dando voz às famílias. Escuta, acolhimento e defesa de direitos: antes de qualquer atividade, reconhecemos a história de quem chega.",
       cor: "roxo",
     },
     {
       letra: "O",
       nome: "Oportunidade",
-      resumo: "Criamos acesso a educação complementar, cultura, tecnologia, arte, alimentação e capacitação.",
+      resumo: "Criamos acesso a educação, capacitação profissional e empreendedorismo.",
       detalhe:
-        "Educação complementar, arte, tecnologia, cultura e capacitação. Oportunidades reais, oferecidas com excelência e não como favor.",
+        "Acesso à educação complementar, arte, tecnologia, cultura, capacitação profissional e empreendedorismo. Oportunidades reais, oferecidas com excelência e não como favor.",
       cor: "rosa",
     },
     {
       letra: "A",
       nome: "Ação",
-      resumo: "Acompanhamos de forma técnica, com assistência social, neuropsicologia, registros e plano de cuidado.",
+      resumo: "Intervenções práticas e integradas, com resultados mensuráveis.",
       detalhe:
-        "Acompanhamento social, neuropsicologia, plano de cuidado, família e encaminhamentos. O cuidado vira método, com registros e responsabilidade.",
+        "Intervenções práticas e integradas com resultados mensuráveis: assistência social, neuropsicologia, plano de cuidado, família e encaminhamentos. O cuidado vira método, com registros e responsabilidade.",
       cor: "azul",
     },
     {
       letra: "R",
       nome: "Restauração",
-      resumo: "Buscamos fortalecer vínculos, dignidade, autonomia e desenvolvimento comunitário.",
+      resumo: "Rumo à dignidade e à autonomia das famílias atendidas.",
       detalhe:
-        "Dignidade, autonomia, fortalecimento de vínculos e transformação comunitária. O objetivo não é dependência: é autonomia.",
+        "Rumo à dignidade e à autonomia das famílias atendidas. Fortalecimento de vínculos e transformação comunitária — o objetivo não é dependência: é autonomia.",
       cor: "verde",
+    },
+  ],
+};
+
+// Jornada do Beneficiário — como o cuidado funciona na prática (apresentação oficial).
+export const jornadaBeneficiario = {
+  eyebrow: "Como funciona na prática",
+  titulo: "A jornada de cada família",
+  subtitulo:
+    "Aqui, não entregamos apenas atividades. Construímos jornadas transformadoras — com começo, acompanhamento e horizonte de autonomia.",
+  etapas: [
+    {
+      titulo: "Escuta e diagnóstico",
+      texto:
+        "A jornada começa com uma anamnese multidisciplinar da situação da família, que gera um plano de atendimento individualizado.",
+    },
+    {
+      titulo: "A criança entra no contraturno",
+      texto:
+        "A criança é inserida nos programas socioeducativos: educação complementar, arte, esporte, tecnologia e alimentação.",
+    },
+    {
+      titulo: "A família ganha caminhos",
+      texto:
+        "Os responsáveis são direcionados para capacitação profissional, orientação jurídica, recolocação, geração de renda e outros apoios.",
+    },
+    {
+      titulo: "O plano é revisado",
+      texto:
+        "A cada 6 meses, o plano é revisado, acompanhando o progresso da família rumo à autonomia.",
+    },
+    {
+      titulo: "O vínculo continua",
+      texto:
+        "Após a saída formal da jornada, o atendimento à criança continua nos programas educativos. O cuidado não se rompe.",
     },
   ],
 };
@@ -216,7 +251,7 @@ export const frentes = [
     id: "contraturno",
     titulo: "Contraturno Socioeducativo",
     texto:
-      "Educação complementar no período oposto à escola, com rotina, convivência, turmas reduzidas e ensino personalizado. Um espaço de proteção e desenvolvimento — não de ocupação de tempo.",
+      "Educação complementar no período oposto à escola, com rotina, convivência, turmas reduzidas e ensino personalizado. Disciplinas como Português, Matemática, Robótica, Teatro, Balé, Educação Física, Musicalização, Ecologia e Sustentabilidade — com metodologias STEAM-S e PBL. Um espaço de proteção e desenvolvimento, não de ocupação de tempo.",
   },
   {
     id: "assistencia-social",
@@ -232,9 +267,9 @@ export const frentes = [
   },
   {
     id: "arte-cultura",
-    titulo: "Arte e Cultura",
+    titulo: "Arte, Cultura e Esporte",
     texto:
-      "Balé, música, teatro e expressão corporal desenvolvem disciplina, autoestima, pertencimento e sensibilidade. A arte não é entretenimento: é parte da formação humana.",
+      "Balé, música, teatro e expressão corporal desenvolvem disciplina, autoestima, pertencimento e sensibilidade. Modalidades esportivas como muay thai, jiu-jitsu e futsal completam a formação. A arte não é entretenimento: é parte da formação humana.",
   },
   {
     id: "tecnologia",
@@ -292,15 +327,67 @@ export const impacto = {
   titulo: "Cuidado que aponta para autonomia",
   intro:
     "Transformação social exige continuidade, vínculo, acompanhamento técnico e presença constante. Nosso impacto se constrói no tempo — na criança que passa a ser vista, na família que ganha rede de apoio e no vínculo que não se rompe.",
+  // Números da apresentação institucional oficial do Instituto.
+  numeros: [
+    { valor: "50", sufixo: "", legenda: "crianças atendidas diariamente no contraturno, com refeição completa garantida" },
+    { valor: "+1.500", sufixo: "", legenda: "famílias apoiadas ao longo da história do Instituto" },
+    { valor: "+26.000", sufixo: "", legenda: "cestas básicas entregues a famílias em vulnerabilidade" },
+    { valor: "+2.000", sufixo: "", legenda: "kits de higiene e de Natal distribuídos" },
+  ],
+  fraseNumeros: "O impacto não se limita à criança. Transforma a família inteira.",
   qualitativos: [
     { titulo: "Crianças vistas por inteiro", texto: "Quando diferentes professores olham para a mesma criança e compartilham percepções, sinais importantes começam a aparecer." },
     { titulo: "Famílias acompanhadas", texto: "O acompanhamento social ajuda a enxergar o contexto que impacta o desenvolvimento da criança — sem reduzir pessoas a dados." },
     { titulo: "Vínculos fortalecidos", texto: "Rotina, escuta e adultos atentos reconstroem confiança e pertencimento." },
     { titulo: "Caminhos de autonomia", texto: "Capacitação e fortalecimento familiar abrem caminho para que o cuidado se multiplique." },
   ],
-  // Sem métricas inventadas: espaço reservado para dados reais quando o Instituto os fornecer.
   notaMetricas:
-    "Indicadores quantitativos de impacto serão publicados aqui à medida que forem consolidados pela equipe técnica do Instituto.",
+    "Números da apresentação institucional do Instituto Vosz. Novos indicadores serão publicados à medida que forem consolidados pela equipe técnica.",
+};
+
+// Missão, visão e alvo — texto oficial da apresentação institucional.
+export const missaoVisao = {
+  missao:
+    "Enfrentar injustiças com auxílio imediato, integral e contínuo, promovendo acesso justo aos direitos e contribuindo para o desenvolvimento integral de crianças, adolescentes e famílias em vulnerabilidade social — gerando transformação, dignidade e liberdade por meio de programas educacionais, culturais e esportivos, ancorados em valores cristãos.",
+  visao:
+    "Ser um centro de referência em educação integral e inovação social, validando e replicando metodologias que gerem impacto efetivo em comunidades vulneráveis.",
+  alvo:
+    "Nos próximos 2 anos, sistematizar nossa metodologia e replicá-la por meio de formações e parcerias com outras instituições, ampliando ainda mais o alcance do trabalho.",
+  versiculo:
+    "Erga a voz em favor dos que não podem defender-se; seja o defensor de todos os desamparados. Erga a voz e julgue com justiça; defenda os direitos dos pobres e dos necessitados.",
+  versiculoRef: "Provérbios 31:8-9 — o versículo que dá nome ao Vosz",
+};
+
+// Programa de embaixadores — presente na apresentação institucional oficial.
+export const portaVosz = {
+  titulo: "Seja um Porta Vosz",
+  intro:
+    "Quando uma criança entra no contraturno do Instituto Vosz, ela é acolhida em um ambiente estruturado onde aprende robótica, balé, matemática e teatro. Seus responsáveis, antes sem perspectiva, iniciam formações para gerar renda e dignidade. Em pouco tempo, essa família volta a sonhar. Essa transformação só é possível com pessoas como você.",
+  frase: "Juntos, podemos restaurar sonhos e gerar autonomia.",
+  acoes: [
+    { titulo: "Mobilize sua rede", texto: "Leve a causa do Vosz para as pessoas ao seu redor." },
+    { titulo: "Apresente o Vosz", texto: "Conecte o Instituto à sua igreja, empresa ou grupo." },
+    { titulo: "Doe tempo, talento ou recurso", texto: "Cada forma de contribuição fortalece a jornada." },
+  ],
+};
+
+// Projeto em captação — Sala Sensorial (dados da apresentação oficial).
+export const salaSensorial = {
+  eyebrow: "Projeto em captação",
+  titulo: "Sala Sensorial de Avaliação Multidisciplinar",
+  subtitulo: "Transformando diagnósticos inacessíveis em oportunidades de futuro.",
+  problema:
+    "No SUS, uma criança pode esperar até 2 anos por uma avaliação neuropsicológica ou intervenção especializada. Essa demora gera perdas irreversíveis no desenvolvimento e amplia desigualdades.",
+  solucao:
+    "Com a Sala Sensorial concluída, o Vosz poderá diagnosticar em semanas — não anos —, personalizar planos de intervenção para cada criança e ampliar o alcance dos atendimentos gratuitos.",
+  beneficios: [
+    { titulo: "Para as crianças", texto: "Diagnóstico precoce, redução da defasagem escolar e inclusão real." },
+    { titulo: "Para as famílias", texto: "Acesso gratuito a serviços de alto custo e orientação qualificada." },
+    { titulo: "Para a comunidade", texto: "Um modelo de intervenção replicável, com transparência total." },
+  ],
+  meta: "R$ 55.000",
+  metaDescricao:
+    "Custo total estimado para concluir as obras: adequação elétrica, pintura, obras civis e mobiliário — com prestação de contas documentada.",
 };
 
 export const transparencia = {

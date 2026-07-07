@@ -8,8 +8,11 @@ const accents = ["roxo", "rosa", "azul", "verde", "amarelo", "rosa", "roxo", "ve
 
 export default function Pilares() {
   return (
-    <Section id="pilares" className="bg-cream">
-      <Container>
+    <Section id="pilares" className="relative overflow-hidden bg-cream">
+      <span aria-hidden className="num-editorial pointer-events-none absolute -top-4 right-4 text-[9rem] sm:text-[13rem]">
+        03
+      </span>
+      <Container className="relative">
         <div className="flex flex-col items-start justify-between gap-6 sm:flex-row sm:items-end">
           <SectionHeading eyebrow={pilares.eyebrow} titulo={pilares.titulo} subtitulo={pilares.subtitulo} />
           <Button href="/o-que-fazemos" variant="contorno" size="md" className="shrink-0">

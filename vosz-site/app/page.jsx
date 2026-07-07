@@ -2,6 +2,7 @@ import Hero from "@/components/home/Hero";
 import ProblemaInvisivel from "@/components/home/ProblemaInvisivel";
 import NossaResposta from "@/components/home/NossaResposta";
 import JornadaVoar from "@/components/home/JornadaVoar";
+import JornadaBeneficiario from "@/components/home/JornadaBeneficiario";
 import TurmasReduzidas from "@/components/home/TurmasReduzidas";
 import Pilares from "@/components/home/Pilares";
 import Sustentabilidade from "@/components/home/Sustentabilidade";
@@ -16,6 +17,7 @@ export default function HomePage() {
       <ProblemaInvisivel />
       <NossaResposta />
       <JornadaVoar />
+      <JornadaBeneficiario numero="02" />
       <TurmasReduzidas />
       <Pilares />
       <Sustentabilidade />

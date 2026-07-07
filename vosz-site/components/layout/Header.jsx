@@ -22,15 +22,22 @@ export default function Header() {
   // Fecha o menu ao trocar de rota.
   useEffect(() => setOpen(false), [pathname]);
 
+  // Na Home, o header começa transparente sobre o hero escuro e ganha fundo ao rolar.
+  const sobreHeroEscuro = pathname === "/" && !scrolled && !open;
+
   return (
     <header
       className={`sticky top-0 z-50 transition-all duration-300 ${
-        scrolled ? "bg-white/90 shadow-soft backdrop-blur-md" : "bg-white/60 backdrop-blur-sm"
+        sobreHeroEscuro
+          ? "bg-transparent"
+          : scrolled
+            ? "bg-white/90 shadow-soft backdrop-blur-md"
+            : "bg-white/60 backdrop-blur-sm"
       }`}
     >
       <div className="container-vosz flex h-16 items-center justify-between gap-4 sm:h-20">
         <Link href="/" aria-label="Instituto Vosz — início" className="shrink-0">
-          <Logo priority />
+          {sobreHeroEscuro ? <Logo variant="branco" priority className="h-9 w-auto sm:h-10" /> : <Logo priority />}
         </Link>
 
         <nav className="hidden items-center gap-1 lg:flex" aria-label="Navegação principal">
@@ -41,7 +48,13 @@ export default function Header() {
                 key={item.href}
                 href={item.href}
                 className={`rounded-full px-3 py-2 text-sm font-semibold transition-colors ${
-                  active ? "text-vosz-rosa" : "text-ink/75 hover:text-vosz-roxo"
+                  sobreHeroEscuro
+                    ? active
+                      ? "text-vosz-amarelo"
+                      : "text-white/85 hover:text-white"
+                    : active
+                      ? "text-vosz-rosa"
+                      : "text-ink/75 hover:text-vosz-roxo"
                 }`}
               >
                 {item.label}
@@ -59,7 +72,9 @@ export default function Header() {
         {/* Botão do menu mobile */}
         <button
           type="button"
-          className="inline-flex h-11 w-11 items-center justify-center rounded-full text-vosz-roxo lg:hidden"
+          className={`inline-flex h-11 w-11 items-center justify-center rounded-full lg:hidden ${
+            sobreHeroEscuro ? "text-white" : "text-vosz-roxo"
+          }`}
           aria-expanded={open}
           aria-controls="mobile-menu"
           aria-label={open ? "Fechar menu" : "Abrir menu"}

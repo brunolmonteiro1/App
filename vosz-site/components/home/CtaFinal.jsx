@@ -1,21 +1,32 @@
+import Image from "next/image";
 import { Container } from "../ui/Section";
 import Button from "../ui/Button";
-import Grafismo from "../ui/Grafismo";
 import { ctaFinal } from "@/lib/content";
 
+// Cena final full-bleed: foto real com véu roxo cinematográfico + headline massiva.
 export default function CtaFinal() {
   return (
-    <section className="relative overflow-hidden bg-gradient-to-br from-vosz-roxo to-vosz-roxo-escuro py-20 sm:py-28">
-      <Grafismo className="pointer-events-none absolute left-6 top-6 h-20 w-20 opacity-30" color="rosa" />
-      <Grafismo className="pointer-events-none absolute bottom-6 right-6 h-24 w-24 opacity-20" color="branco" flip />
-      <div aria-hidden className="pointer-events-none absolute left-1/2 top-1/2 h-96 w-96 -translate-x-1/2 -translate-y-1/2 rounded-full bg-vosz-rosa/20 blur-3xl" />
+    <section className="grain relative overflow-hidden">
+      {/* Foto de fundo com tratamento da marca */}
+      <Image
+        src="/fotos/criancas.jpg"
+        alt=""
+        aria-hidden
+        fill
+        className="object-cover object-center"
+        sizes="100vw"
+      />
+      <div aria-hidden className="absolute inset-0 bg-gradient-to-br from-vosz-roxo-escuro/95 via-vosz-roxo/85 to-vosz-rosa/60" />
 
-      <Container className="relative text-center">
-        <h2 className="mx-auto max-w-3xl text-3xl leading-tight text-white sm:text-4xl md:text-5xl">
+      <Container className="relative py-24 text-center sm:py-32">
+        <span className="inline-flex rounded-full border border-white/20 bg-white/10 px-4 py-2 text-[0.65rem] font-bold uppercase tracking-[0.2em] text-white/85 backdrop-blur-sm sm:text-xs">
+          Sua doação é um gesto de amor
+        </span>
+        <h2 className="mx-auto mt-6 max-w-3xl text-4xl font-black leading-[1.05] tracking-tight text-white sm:text-5xl md:text-6xl">
           {ctaFinal.titulo}
         </h2>
-        <p className="mx-auto mt-5 max-w-2xl text-lg leading-relaxed text-white/80">{ctaFinal.texto}</p>
-        <div className="mt-9 flex flex-col justify-center gap-3 sm:flex-row">
+        <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-white/85">{ctaFinal.texto}</p>
+        <div className="mt-10 flex flex-col justify-center gap-3 sm:flex-row">
           <Button href={ctaFinal.ctaPrimario.href} variant="branco" size="lg">
             {ctaFinal.ctaPrimario.label}
           </Button>

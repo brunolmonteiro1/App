@@ -1,122 +1,253 @@
 "use client";
 
+import { useRef } from "react";
 import Image from "next/image";
-import { motion, useReducedMotion } from "framer-motion";
+import {
+  motion,
+  useMotionValue,
+  useReducedMotion,
+  useScroll,
+  useSpring,
+  useTransform,
+} from "framer-motion";
 import Button from "../ui/Button";
 import { Container } from "../ui/Section";
-import Grafismo from "../ui/Grafismo";
 import { hero } from "@/lib/content";
 
-// Momento visual #1 — Hero narrativo.
-// A criança/comunidade (símbolo Vosz) ao centro; as camadas de cuidado surgem
-// suavemente ao redor e se conectam, formando uma "rede de cuidado".
-// Sem rosto de criança. Respeita prefers-reduced-motion.
+// Momento visual #1 — Hero cinematográfico.
+// Cena escura em roxo profundo com colagem de fotos reais do Vosz flutuando em
+// perspectiva. O mouse desloca as camadas (parallax 3D leve); o scroll aprofunda
+// a cena. Fotos: material oficial do manual da marca. Respeita reduced-motion.
 
-// Posições dos chips ao redor do centro (em %), num anel.
-const orbit = [
-  { top: "2%", left: "50%" },
-  { top: "15%", left: "88%" },
-  { top: "50%", left: "100%" },
-  { top: "85%", left: "88%" },
-  { top: "98%", left: "50%" },
-  { top: "85%", left: "12%" },
-  { top: "50%", left: "0%" },
-  { top: "15%", left: "12%" },
+// Cartões da colagem: foto real + rótulo + posição/profundidade na cena.
+const cartoes = [
+  {
+    src: "/fotos/estudo.jpg",
+    alt: "Crianças escrevendo juntas durante atividade no contraturno",
+    label: "Ensino personalizado",
+    className: "left-0 top-[4%] w-[42%] rotate-[-5deg]",
+    depth: 22,
+    delay: 0.15,
+  },
+  {
+    src: "/fotos/bale.jpg",
+    alt: "Meninas praticando balé no Instituto Vosz",
+    label: "Arte e cultura",
+    className: "right-0 top-0 w-[36%] rotate-[4deg]",
+    depth: 42,
+    delay: 0.3,
+  },
+  {
+    src: "/fotos/criatividade.jpg",
+    alt: "Criança mostrando um origami amarelo",
+    label: "Criatividade",
+    className: "bottom-0 left-[6%] w-[34%] rotate-[3deg]",
+    depth: 60,
+    delay: 0.45,
+  },
+  {
+    src: "/fotos/refeicao.jpg",
+    alt: "Crianças fazendo refeição juntas no Instituto",
+    label: "Alimentação",
+    className: "bottom-[6%] right-[2%] w-[44%] rotate-[-3deg]",
+    depth: 34,
+    delay: 0.6,
+  },
 ];
+
+function Colagem() {
+  const reduce = useReducedMotion();
+  const areaRef = useRef(null);
+
+  // Parallax guiado pelo mouse (suavizado com spring).
+  const mx = useMotionValue(0);
+  const my = useMotionValue(0);
+  const sx = useSpring(mx, { stiffness: 60, damping: 18 });
+  const sy = useSpring(my, { stiffness: 60, damping: 18 });
+
+  const onMove = (e) => {
+    if (reduce || !areaRef.current) return;
+    const r = areaRef.current.getBoundingClientRect();
+    mx.set((e.clientX - r.left) / r.width - 0.5);
+    my.set((e.clientY - r.top) / r.height - 0.5);
+  };
+
+  return (
+    <div
+      ref={areaRef}
+      onMouseMove={onMove}
+      onMouseLeave={() => {
+        mx.set(0);
+        my.set(0);
+      }}
+      className="relative mx-auto aspect-[10/11] w-full max-w-xl [perspective:1200px]"
+    >
+      {/* aura de luz atrás da cena */}
+      <div
+        aria-hidden
+        className="absolute left-1/2 top-1/2 h-[70%] w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-vosz-rosa/25 blur-[100px]"
+      />
+
+      {cartoes.map((c) => (
+        <CartaoFoto key={c.src} {...c} sx={sx} sy={sy} reduce={reduce} />
+      ))}
+
+      {/* selo do símbolo no centro da composição */}
+      <motion.div
+        initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.6 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ delay: 0.8, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+        className="absolute left-1/2 top-1/2 z-20 flex h-24 w-24 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white shadow-[0_20px_60px_-15px_rgba(255,0,167,0.5)] sm:h-28 sm:w-28"
+      >
+        <Image src="/simbolo-vosz.png" alt="" width={80} height={80} priority className="h-16 w-16 sm:h-[4.5rem] sm:w-[4.5rem]" aria-hidden />
+      </motion.div>
+    </div>
+  );
+}
+
+function CartaoFoto({ src, alt, label, className, depth, delay, sx, sy, reduce }) {
+  // Quanto maior a profundidade, maior o deslocamento — sensação de camadas 3D.
+  const x = useTransform(sx, (v) => v * depth);
+  const y = useTransform(sy, (v) => v * depth);
+  const rx = useTransform(sy, (v) => v * -6);
+  const ry = useTransform(sx, (v) => v * 8);
+
+  return (
+    <motion.div
+      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 40, scale: 0.92 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ delay, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+      style={reduce ? undefined : { x, y, rotateX: rx, rotateY: ry, transformStyle: "preserve-3d" }}
+      className={`absolute z-10 ${className}`}
+    >
+      <figure className="overflow-hidden rounded-3xl border border-white/15 bg-white/5 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.6)]">
+        <Image
+          src={src}
+          alt={alt}
+          width={480}
+          height={560}
+          priority
+          className="h-auto w-full object-cover"
+          sizes="(min-width: 1024px) 280px, 45vw"
+        />
+        <figcaption className="absolute bottom-2 left-2 rounded-full bg-vosz-roxo-escuro/80 px-3 py-1 text-[0.65rem] font-bold uppercase tracking-wider text-white backdrop-blur-sm sm:text-xs">
+          {label}
+        </figcaption>
+      </figure>
+    </motion.div>
+  );
+}
 
 export default function Hero() {
   const reduce = useReducedMotion();
+  const secRef = useRef(null);
+
+  // O scroll afasta suavemente a cena (profundidade cinematográfica).
+  const { scrollYProgress } = useScroll({
+    target: secRef,
+    offset: ["start start", "end start"],
+  });
+  const cenaY = useTransform(scrollYProgress, [0, 1], [0, 80]);
+  const cenaOpacity = useTransform(scrollYProgress, [0, 0.85], [1, 0.2]);
 
   return (
-    <section className="relative overflow-hidden bg-gradient-to-b from-white via-cream to-cream">
-      {/* Blobs suaves da marca ao fundo */}
-      <div aria-hidden className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-vosz-roxo/10 blur-3xl" />
-      <div aria-hidden className="pointer-events-none absolute -right-16 top-40 h-72 w-72 rounded-full bg-vosz-rosa/10 blur-3xl" />
-      <Grafismo className="pointer-events-none absolute right-6 top-6 h-16 w-16 opacity-70" color="rosa" />
+    <section
+      ref={secRef}
+      className="grain relative -mt-16 overflow-hidden bg-[#160040] sm:-mt-20"
+    >
+      {/* iluminação da cena */}
+      <div aria-hidden className="pointer-events-none absolute inset-0">
+        <div className="absolute -left-40 -top-40 h-[34rem] w-[34rem] rounded-full bg-vosz-roxo/50 blur-[120px]" />
+        <div className="absolute -right-40 top-1/3 h-[30rem] w-[30rem] rounded-full bg-vosz-rosa/20 blur-[130px]" />
+        <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-[#160040] to-transparent" />
+      </div>
 
-      <Container className="relative grid items-center gap-12 py-16 sm:py-20 lg:grid-cols-[1.05fr_0.95fr] lg:py-24">
+      {/* grafismo gigante como marca d'água */}
+      <Image
+        src="/simbolo-vosz.png"
+        alt=""
+        aria-hidden
+        width={900}
+        height={1020}
+        className="pointer-events-none absolute -right-48 -top-48 w-[44rem] opacity-[0.05]"
+      />
+
+      <Container className="relative grid min-h-[96svh] items-center gap-14 pb-20 pt-28 sm:pt-32 lg:grid-cols-[1.05fr_0.95fr] lg:gap-10 lg:pb-24">
         {/* Texto */}
-        <div>
-          <span className="inline-flex rounded-2xl bg-white px-4 py-2 text-[0.7rem] font-bold uppercase leading-snug tracking-wider text-vosz-roxo shadow-soft sm:text-xs">
+        <motion.div style={reduce ? undefined : { y: cenaY, opacity: cenaOpacity }}>
+          <motion.span
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.07] px-4 py-2 text-[0.65rem] font-bold uppercase tracking-[0.18em] text-white/80 backdrop-blur-sm sm:text-xs"
+          >
+            <span className="h-1.5 w-1.5 rounded-full bg-vosz-verde" />
             {hero.eyebrow}
-          </span>
-          <h1 className="mt-6 text-4xl leading-[1.08] sm:text-5xl md:text-[3.4rem]">
-            A escola ensina.{" "}
-            <span className="text-gradient-vosz">Mas quem cuida do que impede a criança de aprender?</span>
-          </h1>
-          <p className="mt-6 max-w-xl text-lg leading-relaxed text-ink/70">{hero.subtitulo}</p>
-          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+          </motion.span>
+
+          <motion.h1
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
+            className="mt-7 text-[2.5rem] font-black leading-[1.05] tracking-tight text-white sm:text-5xl lg:text-[3.6rem] xl:text-[4rem]"
+          >
+            A escola ensina.
+            <br />
+            <span className="text-gradient-quente">
+              Mas quem cuida do que impede a criança de aprender?
+            </span>
+          </motion.h1>
+
+          <motion.p
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.28 }}
+            className="mt-7 max-w-xl text-lg leading-relaxed text-white/70"
+          >
+            {hero.subtitulo}
+          </motion.p>
+
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.42 }}
+            className="mt-9 flex flex-col gap-3 sm:flex-row"
+          >
             <Button href={hero.ctaPrimario.href} variant="rosa" size="lg">
               {hero.ctaPrimario.label}
             </Button>
-            <Button href={hero.ctaSecundario.href} variant="contorno" size="lg">
+            <Button href={hero.ctaSecundario.href} variant="fantasmaBranco" size="lg">
               {hero.ctaSecundario.label}
             </Button>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
 
-        {/* Visual: rede de cuidado */}
-        <div className="relative">
-          {/* Desktop/tablet: órbita de camadas ao redor do símbolo */}
-          <div className="relative mx-auto hidden aspect-square w-full max-w-md lg:block">
-            <div aria-hidden className="absolute inset-0 rounded-full border border-vosz-roxo/10" />
-            <div aria-hidden className="absolute inset-[12%] rounded-full border border-vosz-rosa/15" />
-
-            <motion.div
-              initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-              className="absolute left-1/2 top-1/2 flex h-36 w-36 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white shadow-soft-lg"
-            >
-              <Image src="/simbolo-vosz.png" alt="" width={120} height={120} priority className="h-24 w-24" aria-hidden />
-            </motion.div>
-
-            <ul className="absolute inset-0">
-              {hero.camadas.map((label, i) => (
-                <li
-                  key={label}
-                  className="absolute -translate-x-1/2 -translate-y-1/2 animate-fade-up whitespace-nowrap rounded-full border border-black/5 bg-white px-3 py-1.5 text-xs font-bold text-vosz-roxo-escuro shadow-soft"
-                  style={{ top: orbit[i].top, left: orbit[i].left, animationDelay: `${0.2 + i * 0.09}s` }}
-                >
-                  {label}
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Mobile: símbolo + nuvem de camadas (garante legibilidade) */}
-          <div className="flex flex-col items-center gap-6 lg:hidden">
-            <motion.div
-              initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-              className="flex h-28 w-28 items-center justify-center rounded-full bg-white shadow-soft-lg"
-            >
-              <Image src="/simbolo-vosz.png" alt="" width={96} height={96} priority className="h-16 w-16" aria-hidden />
-            </motion.div>
-            <ul className="flex max-w-md flex-wrap justify-center gap-2">
-              {hero.camadas.map((label, i) => (
-                <li
-                  key={label}
-                  className="animate-fade-up rounded-full border border-black/5 bg-white px-3 py-1.5 text-xs font-bold text-vosz-roxo-escuro shadow-soft"
-                  style={{ animationDelay: `${0.15 + i * 0.07}s` }}
-                >
-                  {label}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
+        {/* Colagem 3D de fotos reais */}
+        <motion.div style={reduce ? undefined : { y: cenaY, opacity: cenaOpacity }}>
+          <Colagem />
+        </motion.div>
       </Container>
 
-      {/* faixa-conceito no rodapé do hero */}
-      <div className="border-y border-black/5 bg-white/60">
-        <Container className="py-4">
-          <p className="text-center text-sm font-semibold text-ink/60 sm:text-base">
-            Assistência social · Contraturno socioeducativo · Cuidado integral —{" "}
-            <span className="text-vosz-rosa">no Cambuci, São Paulo</span>
-          </p>
-        </Container>
+      {/* Marquee das camadas de cuidado */}
+      <div className="relative border-t border-white/10 bg-white/[0.04] py-4 backdrop-blur-sm">
+        {/* Lista estática acessível para leitores de tela */}
+        <p className="sr-only">
+          Camadas de cuidado: {hero.camadas.join(", ")}.
+        </p>
+        <div aria-hidden className="marquee-track">
+          {[0, 1].map((rep) => (
+            <div key={rep} className="flex shrink-0 items-center">
+              {hero.camadas.map((c) => (
+                <span
+                  key={`${rep}-${c}`}
+                  className="mx-6 flex items-center gap-3 whitespace-nowrap text-sm font-bold uppercase tracking-[0.2em] text-white/60"
+                >
+                  <span className="text-vosz-rosa">✦</span> {c}
+                </span>
+              ))}
+            </div>
+          ))}
+        </div>
       </div>
     </section>
   );

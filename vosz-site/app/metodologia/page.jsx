@@ -1,6 +1,7 @@
 import PageHero from "@/components/ui/PageHero";
 import { Container, Section, SectionHeading } from "@/components/ui/Section";
 import JornadaVoar from "@/components/home/JornadaVoar";
+import JornadaBeneficiario from "@/components/home/JornadaBeneficiario";
 import { Card } from "@/components/ui/Card";
 import Reveal from "@/components/ui/Reveal";
 import CtaFinal from "@/components/home/CtaFinal";
@@ -19,6 +20,8 @@ export default function MetodologiaPage() {
       <PageHero eyebrow="Metodologia" titulo={metodologia.titulo} intro={metodologia.intro} />
 
       <JornadaVoar />
+
+      <JornadaBeneficiario />
 
       <Section className="bg-white">
         <Container>

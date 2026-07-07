@@ -5,21 +5,23 @@
 export const site = {
   name: "Instituto Vosz",
   shortName: "Vosz",
-  // Ajuste para o domínio final antes do deploy definitivo.
-  url: "https://institutovosz.org.br",
+  slogan: "Educação que transforma. Amor que restaura.",
+  url: "https://institutovosz.com.br",
   description:
     "O Instituto Vosz é uma OSC de assistência social no Cambuci, São Paulo, que atua no contraturno socioeducativo com cuidado integral: assistência social, alimentação, neuropsicologia, arte, tecnologia e acompanhamento familiar.",
   tagline: "Cuidado integral para crianças, adolescentes e famílias.",
 };
 
 export const contato = {
-  enderecoLinha1: "Rua Clímaco Barbosa, 380",
+  // Endereço da apresentação institucional mais recente.
+  // CONFIRMAR: material anterior citava "Rua Clímaco Barbosa, 380".
+  enderecoLinha1: "R. da Independência, 866",
   enderecoLinha2: "Cambuci — São Paulo/SP",
   cep: "", // CONFIRMAR
-  // WhatsApp e e-mail oficiais precisam ser confirmados pelo Instituto.
-  whatsapp: "5511000000000", // CONFIRMAR — número oficial de atendimento
-  whatsappLabel: "(11) 0000-0000", // CONFIRMAR
-  email: "contato@institutovosz.org.br", // CONFIRMAR
+  // WhatsApp da apresentação mais recente. CONFIRMAR: outro material cita (11) 93365-0516.
+  whatsapp: "5511999373154",
+  whatsappLabel: "(11) 99937-3154",
+  email: "contato@institutovosz.com.br", // CONFIRMAR
   instagram: "https://www.instagram.com/institutovosz",
   instagramHandle: "@institutovosz",
   facebook: "https://www.facebook.com/institutovosz", // CONFIRMAR
