@@ -52,21 +52,6 @@ export default function NossaResposta() {
           </div>
         </div>
 
-        {/* Pull-quote editorial em escala grande */}
-        <Reveal>
-          <blockquote className="relative mx-auto mt-20 max-w-4xl text-center">
-            <span aria-hidden className="num-editorial absolute -top-10 left-1/2 -translate-x-1/2 text-[7rem] sm:text-[9rem]">
-              &ldquo;
-            </span>
-            <p className="relative text-[1.7rem] font-black leading-tight tracking-tight text-vosz-roxo-escuro sm:text-4xl">
-              Contraturno não é depósito de criança.{" "}
-              <span className="text-gradient-vosz">É uma rede de cuidado.</span>
-            </p>
-            <footer className="mt-5 text-sm font-bold uppercase tracking-[0.2em] text-ink/45">
-              Bruno Monteiro · Diretor do Instituto Vosz
-            </footer>
-          </blockquote>
-        </Reveal>
       </Container>
     </Section>
   );

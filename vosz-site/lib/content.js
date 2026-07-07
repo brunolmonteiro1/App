@@ -9,7 +9,7 @@
 
 export const hero = {
   eyebrow: "Assistência social · Contraturno socioeducativo · Cambuci/SP",
-  titulo: "A escola ensina. Mas quem cuida do que impede a criança de aprender?",
+  titulo: "Do acolhimento à autonomia. Uma jornada de cuidado integral.",
   subtitulo:
     "O Instituto Vosz atua no contraturno socioeducativo com uma metodologia de cuidado integral, unindo assistência social, alimentação, neuropsicologia, arte, tecnologia e acompanhamento familiar para fortalecer crianças e famílias em situação de vulnerabilidade.",
   ctaPrimario: { label: "Quero Doar", href: "/como-apoiar" },
@@ -59,7 +59,7 @@ export const resposta = {
     "Assistência social",
     "Acompanhamento familiar",
   ],
-  frase: "Contraturno não é depósito de criança. É uma rede de cuidado.",
+  frase: "Um espaço de proteção, convivência e desenvolvimento — com método e afeto.",
 };
 
 export const voar = {
@@ -143,7 +143,7 @@ export const turmas = {
   titulo: "Em grupos menores, cada criança pode ser vista de perto",
   texto:
     "No Vosz, a escolha por turmas reduzidas não é luxo. É método. Grupos menores permitem que professores observem melhor, adaptem materiais, identifiquem sinais e acompanhem o desenvolvimento de cada criança.",
-  frase: "Na ânsia de atender todo mundo, quantos se perdem?",
+  frase: "Para que nenhuma criança passe despercebida.",
 };
 
 export const pilares = {

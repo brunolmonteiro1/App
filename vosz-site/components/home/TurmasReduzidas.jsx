@@ -27,8 +27,8 @@ export default function TurmasReduzidas() {
       <Container className="grid items-center gap-12 lg:grid-cols-2">
         <div>
           <SectionHeading eyebrow={turmas.eyebrow} titulo={turmas.titulo} subtitulo={turmas.texto} />
-          <p className="mt-6 text-xl font-extrabold text-vosz-rosa sm:text-2xl">
-            &ldquo;{turmas.frase}&rdquo;
+          <p className="mt-6 text-xl font-extrabold sm:text-2xl">
+            <span className="text-gradient-vosz">{turmas.frase}</span>
           </p>
         </div>
 

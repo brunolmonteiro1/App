@@ -1,137 +1,126 @@
 "use client";
 
-import { useRef, useState } from "react";
-import {
-  motion,
-  AnimatePresence,
-  useMotionValue,
-  useSpring,
-  useTransform,
-  useReducedMotion,
-} from "framer-motion";
+import { useState } from "react";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { Container, Section, SectionHeading } from "../ui/Section";
 import { voar } from "@/lib/content";
 
-// Momento visual #2 — Jornada VOAR interativa.
-// Cada letra é um cartão com tilt 3D real (a superfície acompanha o cursor).
-// Desktop: hover/foco revela o detalhe. Mobile: toque seleciona.
-const corMap = {
-  roxo: { bg: "bg-vosz-roxo", text: "text-vosz-roxo", soft: "bg-vosz-roxo/10", glow: "rgba(66,0,172,0.55)" },
-  rosa: { bg: "bg-vosz-rosa", text: "text-vosz-rosa", soft: "bg-vosz-rosa/10", glow: "rgba(255,0,167,0.5)" },
-  azul: { bg: "bg-[#00989a]", text: "text-[#00989a]", soft: "bg-vosz-azul/15", glow: "rgba(0,231,233,0.4)" },
-  verde: { bg: "bg-[#0f9d63]", text: "text-[#0f9d63]", soft: "bg-vosz-verde/20", glow: "rgba(63,252,148,0.4)" },
-};
+// Momento visual #2 — Jornada VOAR.
+// A palavra V·O·A·R em escala display É a interface: letras em contorno,
+// a ativa se preenche com a cor da etapa; o detalhe aparece uma única vez
+// no painel abaixo. Hover/clique trocam a etapa.
 
-function CartaoLetra({ etapa, index, selecionado, onSelect, reduce }) {
-  const c = corMap[etapa.cor];
-  const ref = useRef(null);
-
-  // Tilt 3D: a superfície do cartão inclina seguindo o cursor.
-  const px = useMotionValue(0);
-  const py = useMotionValue(0);
-  const rx = useSpring(useTransform(py, [-0.5, 0.5], [10, -10]), { stiffness: 200, damping: 20 });
-  const ry = useSpring(useTransform(px, [-0.5, 0.5], [-10, 10]), { stiffness: 200, damping: 20 });
-
-  const onMove = (e) => {
-    if (reduce || !ref.current) return;
-    const r = ref.current.getBoundingClientRect();
-    px.set((e.clientX - r.left) / r.width - 0.5);
-    py.set((e.clientY - r.top) / r.height - 0.5);
-  };
-  const onLeave = () => {
-    px.set(0);
-    py.set(0);
-  };
-
-  return (
-    <div className="[perspective:800px]">
-      <motion.button
-        ref={ref}
-        type="button"
-        onMouseMove={onMove}
-        onMouseLeave={onLeave}
-        onMouseEnter={() => onSelect(index)}
-        onFocus={() => onSelect(index)}
-        onClick={() => onSelect(index)}
-        aria-pressed={selecionado}
-        style={{
-          boxShadow: selecionado ? `0 24px 70px -18px ${c.glow}` : "none",
-          ...(reduce ? {} : { rotateX: rx, rotateY: ry, transformStyle: "preserve-3d" }),
-        }}
-        className={`group relative w-full rounded-3xl p-5 text-left transition-colors duration-200 sm:p-6 ${
-          selecionado ? c.bg : "bg-white/[0.07] hover:bg-white/[0.12]"
-        }`}
-      >
-        <span
-          style={reduce ? undefined : { transform: "translateZ(30px)" }}
-          className={`block text-6xl font-black leading-none sm:text-7xl ${
-            selecionado ? "text-white" : "text-white/80"
-          }`}
-        >
-          {etapa.letra}
-        </span>
-        <span
-          style={reduce ? undefined : { transform: "translateZ(20px)" }}
-          className={`mt-3 block text-sm font-bold uppercase tracking-wider ${
-            selecionado ? "text-white" : "text-vosz-amarelo"
-          }`}
-        >
-          {etapa.nome}
-        </span>
-      </motion.button>
-    </div>
-  );
-}
+const cores = [
+  { letra: "#a78bff", texto: "text-[#6d3dff]", bg: "bg-[#6d3dff]/10" },
+  { letra: "#ff00a7", texto: "text-vosz-rosa", bg: "bg-vosz-rosa/10" },
+  { letra: "#00e7e9", texto: "text-[#00989a]", bg: "bg-vosz-azul/15" },
+  { letra: "#3ffc94", texto: "text-[#0f9d63]", bg: "bg-vosz-verde/20" },
+];
 
 export default function JornadaVoar() {
   const [ativo, setAtivo] = useState(0);
   const reduce = useReducedMotion();
   const etapa = voar.etapas[ativo];
-  const cor = corMap[etapa.cor];
+  const cor = cores[ativo];
 
   return (
     <Section id="voar" dark className="grain overflow-hidden">
-      {/* iluminação da cena */}
-      <div aria-hidden className="pointer-events-none absolute -right-24 -top-24 h-96 w-96 rounded-full bg-vosz-rosa/20 blur-[110px]" />
-      <div aria-hidden className="pointer-events-none absolute -left-24 bottom-0 h-96 w-96 rounded-full bg-vosz-roxo/40 blur-[110px]" />
+      {/* iluminação que acompanha a etapa */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -top-32 left-1/2 h-96 w-96 -translate-x-1/2 rounded-full blur-[130px] transition-colors duration-700"
+        style={{ backgroundColor: `${cores[ativo].letra}2e` }}
+      />
 
       <Container className="relative">
         <SectionHeading eyebrow={voar.eyebrow} titulo={voar.titulo} subtitulo={voar.subtitulo} dark center />
 
-        {/* Cartões com tilt 3D */}
-        <div className="mt-14 grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-5">
-          {voar.etapas.map((e, i) => (
-            <CartaoLetra
-              key={e.letra}
-              etapa={e}
-              index={i}
-              selecionado={i === ativo}
-              onSelect={setAtivo}
-              reduce={reduce}
-            />
-          ))}
+        {/* A palavra VOAR como interface */}
+        <div
+          role="tablist"
+          aria-label="Etapas da metodologia VOAR"
+          className="mt-10 flex items-end justify-center gap-2 sm:gap-6 lg:gap-10"
+        >
+          {voar.etapas.map((e, i) => {
+            const sel = i === ativo;
+            const c = cores[i];
+            return (
+              <button
+                key={e.letra}
+                type="button"
+                role="tab"
+                aria-selected={sel}
+                aria-label={`${e.letra} — ${e.nome}`}
+                onMouseEnter={() => setAtivo(i)}
+                onFocus={() => setAtivo(i)}
+                onClick={() => setAtivo(i)}
+                className="group relative select-none outline-none"
+              >
+                <motion.span
+                  animate={
+                    reduce
+                      ? undefined
+                      : { y: sel ? -8 : 0, scale: sel ? 1.04 : 1 }
+                  }
+                  transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+                  className="block text-[4.4rem] font-black leading-none tracking-tight transition-colors duration-500 sm:text-[7rem] lg:text-[9rem]"
+                  style={
+                    sel
+                      ? { color: c.letra }
+                      : {
+                          color: "transparent",
+                          WebkitTextStroke: "2px rgba(255,255,255,0.30)",
+                        }
+                  }
+                >
+                  {e.letra}
+                </motion.span>
+                {/* nome curto sob a letra */}
+                <span
+                  className={`mt-1 block text-center text-[0.6rem] font-bold uppercase tracking-[0.18em] transition-colors duration-300 sm:text-xs ${
+                    sel ? "text-white" : "text-white/35 group-hover:text-white/60"
+                  }`}
+                >
+                  {e.nome}
+                </span>
+                {/* traço indicador */}
+                <span
+                  aria-hidden
+                  className="mx-auto mt-2 block h-1 rounded-full transition-all duration-500"
+                  style={{
+                    width: sel ? "2.5rem" : "0.5rem",
+                    backgroundColor: sel ? c.letra : "rgba(255,255,255,0.15)",
+                  }}
+                />
+              </button>
+            );
+          })}
         </div>
 
-        {/* Painel de detalhe */}
-        <div className="mt-5 min-h-[8.5rem] rounded-3xl bg-white p-6 shadow-soft-lg sm:mt-7 sm:p-8">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={ativo}
-              initial={reduce ? { opacity: 0 } : { opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={reduce ? { opacity: 0 } : { opacity: 0, y: -8 }}
-              transition={{ duration: 0.28 }}
-              className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-6"
-            >
-              <span className={`inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${cor.soft} text-2xl font-black ${cor.text}`}>
-                {etapa.letra}
-              </span>
-              <div>
-                <h3 className={`text-xl font-extrabold ${cor.text}`}>{etapa.nome}</h3>
-                <p className="mt-2 text-[1.02rem] leading-relaxed text-ink/75">{etapa.detalhe}</p>
-              </div>
-            </motion.div>
-          </AnimatePresence>
+        {/* Painel de detalhe — o conteúdo aparece uma única vez */}
+        <div className="mx-auto mt-10 max-w-3xl">
+          <div className="min-h-[9rem] rounded-[2rem] bg-white p-7 shadow-soft-lg sm:p-9">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={ativo}
+                initial={reduce ? { opacity: 0 } : { opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={reduce ? { opacity: 0 } : { opacity: 0, y: -10 }}
+                transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <div className="flex items-baseline justify-between gap-4">
+                  <h3 className={`text-xl font-extrabold sm:text-2xl ${cor.texto}`}>{etapa.nome}</h3>
+                  <span className="text-xs font-bold tabular-nums tracking-[0.2em] text-ink/35">
+                    {String(ativo + 1).padStart(2, "0")} / {String(voar.etapas.length).padStart(2, "0")}
+                  </span>
+                </div>
+                <p className="mt-3 text-[1.05rem] leading-relaxed text-ink/75">{etapa.detalhe}</p>
+              </motion.div>
+            </AnimatePresence>
+          </div>
+          <p className="mt-6 text-center text-sm italic text-white/50">
+            Um caminho de transformação — do acolhimento à autonomia.
+          </p>
         </div>
       </Container>
     </Section>

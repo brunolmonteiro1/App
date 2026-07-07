@@ -170,9 +170,9 @@ export default function Hero() {
             transition={{ duration: 0.75, delay: 0.12, ease: [0.22, 1, 0.36, 1] }}
             className="mt-6 text-[2.7rem] font-black leading-[1.03] tracking-tight text-white sm:text-6xl lg:text-[4.1rem]"
           >
-            A escola ensina.
+            Do acolhimento à <span className="text-vosz-rosa">autonomia</span>.
             <br />
-            Mas quem <span className="text-vosz-rosa">cuida</span> do que impede a criança de aprender?
+            Uma jornada de cuidado integral.
           </motion.h1>
 
           <motion.p
