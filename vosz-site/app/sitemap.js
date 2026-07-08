@@ -6,6 +6,6 @@ export default function sitemap() {
     url: `${site.url}${rota === "/" ? "" : rota}`,
     lastModified: now,
     changeFrequency: rota === "/" ? "weekly" : "monthly",
-    priority: rota === "/" ? 1 : rota === "/como-apoiar" ? 0.9 : 0.7,
+    priority: rota === "/" ? 1 : rota === "/apoie" ? 0.9 : 0.7,
   }));
 }

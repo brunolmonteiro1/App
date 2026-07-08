@@ -5,7 +5,8 @@ import JornadaBeneficiario from "@/components/home/JornadaBeneficiario";
 import { Card } from "@/components/ui/Card";
 import Reveal from "@/components/ui/Reveal";
 import CtaFinal from "@/components/home/CtaFinal";
-import { metodologia } from "@/lib/content";
+import { IconCard } from "@/components/ui/Card";
+import { metodologia, pilares } from "@/lib/content";
 
 export const metadata = {
   title: "Metodologia — Jornada VOAR",
@@ -38,6 +39,29 @@ export default function MetodologiaPage() {
                   <p className="mt-2 text-[0.95rem] leading-relaxed text-ink/70">{p.texto}</p>
                 </Card>
               </Reveal>
+            ))}
+          </div>
+        </Container>
+      </Section>
+
+      {/* Pilares de atuação completos */}
+      <Section id="pilares" className="scroll-mt-20 bg-cream">
+        <Container>
+          <SectionHeading
+            eyebrow="Pilares de atuação"
+            titulo="As oito frentes da rede de cuidado"
+            subtitulo="Cada frente detalhada na página O que Fazemos."
+          />
+          <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {pilares.itens.map((p, i) => (
+              <IconCard
+                key={p.id}
+                icon={p.icon}
+                titulo={p.titulo}
+                texto={p.texto}
+                accent={["roxo", "rosa", "azul", "verde"][i % 4]}
+                className="h-full"
+              />
             ))}
           </div>
         </Container>

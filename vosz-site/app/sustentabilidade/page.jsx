@@ -43,7 +43,7 @@ export default function SustentabilidadePage() {
             Sua empresa pode ser parte dessa estrutura de cuidado
           </h2>
           <div className="mt-7">
-            <Button href="/como-apoiar#empresas" variant="rosa" size="lg">
+            <Button href="/apoie#empresas" variant="rosa" size="lg">
               Seja empresa parceira
             </Button>
           </div>

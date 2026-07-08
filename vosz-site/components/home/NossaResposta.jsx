@@ -49,9 +49,11 @@ export default function NossaResposta() {
                 </li>
               ))}
             </ul>
+            <p className="mt-8 text-xl font-extrabold leading-snug sm:text-2xl">
+              <span className="text-gradient-vosz">{resposta.frase}</span>
+            </p>
           </div>
         </div>
-
       </Container>
     </Section>
   );

@@ -11,8 +11,10 @@ export const hero = {
   eyebrow: "Assistência social · Contraturno socioeducativo · Cambuci/SP",
   titulo: "Do acolhimento à autonomia. Uma jornada de cuidado integral.",
   subtitulo:
-    "O Instituto Vosz atua no contraturno socioeducativo com uma metodologia de cuidado integral, unindo assistência social, alimentação, neuropsicologia, arte, tecnologia e acompanhamento familiar para fortalecer crianças e famílias em situação de vulnerabilidade.",
-  ctaPrimario: { label: "Quero Doar", href: "/como-apoiar" },
+    "O Instituto Vosz acolhe crianças, adolescentes e famílias em situação de vulnerabilidade no Cambuci, unindo assistência social, contraturno socioeducativo, alimentação, arte, tecnologia, neuropsicologia e acompanhamento familiar.",
+  // Linha de confiança exibida sob os CTAs do hero.
+  confianca: ["OSC sem fins lucrativos", "Atendimento gratuito às famílias", "Receita reinvestida na missão"],
+  ctaPrimario: { label: "Quero Doar", href: "/apoie" },
   ctaSecundario: { label: "Conheça a Metodologia", href: "/metodologia" },
   // Rótulos das camadas de cuidado que orbitam a criança na composição do hero.
   camadas: [
@@ -38,8 +40,6 @@ export const problema = {
     { titulo: "Saúde emocional", texto: "Sofrimento emocional que muitas vezes é lido como desinteresse.", icon: "heart" },
     { titulo: "Diagnóstico", texto: "Condições de neurodesenvolvimento ainda não identificadas.", icon: "search" },
     { titulo: "Acesso a direitos", texto: "Documentos, benefícios e serviços que nem sempre chegam.", icon: "shield" },
-    { titulo: "Cultura", texto: "Repertório, arte e experiências que ampliam o mundo.", icon: "palette" },
-    { titulo: "Tecnologia", texto: "Ferramentas e criatividade como caminho de futuro.", icon: "chip" },
     { titulo: "Vínculos", texto: "Adultos atentos e relações de confiança que não desistem.", icon: "link" },
   ],
 };
@@ -59,7 +59,7 @@ export const resposta = {
     "Assistência social",
     "Acompanhamento familiar",
   ],
-  frase: "Um espaço de proteção, convivência e desenvolvimento — com método e afeto.",
+  frase: "Contraturno não é depósito de criança. É uma rede de cuidado.",
 };
 
 export const voar = {
@@ -70,7 +70,7 @@ export const voar = {
   etapas: [
     {
       letra: "V",
-      nome: "Voz / Vosz",
+      nome: "Voz",
       resumo: "Escutamos, acolhemos e reconhecemos a história de cada criança e família.",
       detalhe:
         "O Instituto assume o papel de facilitador, promovendo protagonismo e dando voz às famílias. Escuta, acolhimento e defesa de direitos: antes de qualquer atividade, reconhecemos a história de quem chega.",
@@ -140,7 +140,7 @@ export const jornadaBeneficiario = {
 
 export const turmas = {
   eyebrow: "Turmas reduzidas",
-  titulo: "Em grupos menores, cada criança pode ser vista de perto",
+  titulo: "Turmas reduzidas não são luxo. São método de cuidado.",
   texto:
     "No Vosz, a escolha por turmas reduzidas não é luxo. É método. Grupos menores permitem que professores observem melhor, adaptem materiais, identifiquem sinais e acompanhem o desenvolvimento de cada criança.",
   frase: "Para que nenhuma criança passe despercebida.",
@@ -151,6 +151,14 @@ export const pilares = {
   titulo: "Pilares de atuação",
   subtitulo:
     "Frentes que se integram em uma única rede de cuidado — da assistência social à autonomia familiar.",
+  // Macroblocos exibidos na Home (versão síntese). Os 8 itens completos
+  // continuam disponíveis em itens[] para as páginas internas.
+  macro: [
+    { titulo: "Cuidado Social", texto: "Assistência social, acompanhamento familiar, acesso a direitos e fortalecimento de vínculos.", icon: "family" },
+    { titulo: "Desenvolvimento Socioeducativo", texto: "Contraturno com turmas reduzidas, ensino personalizado, tecnologia e laboratório maker.", icon: "book" },
+    { titulo: "Saúde Emocional, Arte e Cultura", texto: "Neuropsicologia, sala sensorial, balé, música, teatro, esporte e experiências culturais.", icon: "heart" },
+    { titulo: "Autonomia e Sustentabilidade", texto: "Capacitação, empreendedorismo, cozinha social e bazar — receita reinvestida na missão.", icon: "sprout" },
+  ],
   itens: [
     { id: "assistencia-social", titulo: "Assistência Social e Família", texto: "Acompanhamento familiar, escuta, visitas, acesso a direitos, vínculos e encaminhamentos.", icon: "family" },
     { id: "contraturno", titulo: "Contraturno Socioeducativo", texto: "Educação complementar, rotina, convivência, turmas reduzidas e ensino personalizado.", icon: "book" },
@@ -184,6 +192,14 @@ export const sustentabilidade = {
 export const timeline = {
   eyebrow: "Nossa história",
   titulo: "De uma semente chamada Cultivar a um ecossistema de cuidado integral",
+  // Marcos exibidos na Home (síntese); a página Quem Somos usa itens[] completo.
+  curta: [
+    { ano: "2017", titulo: "Cultivar", texto: "Início do projeto social com aulas de Muay Thai para crianças." },
+    { ano: "2020", titulo: "Pandemia", texto: "Cestas básicas e kits de Natal; o projeto vira Instituto Vosz." },
+    { ano: "2022", titulo: "Nova sede", texto: "Retomada das atividades presenciais no Cambuci." },
+    { ano: "2024", titulo: "Nova fase", texto: "Reestruturação com metodologia, equipe e sustentabilidade." },
+    { ano: "Hoje", titulo: "Ecossistema de cuidado", texto: "Assistência social, educação, arte, tecnologia e autonomia." },
+  ],
   itens: [
     { ano: "2017", titulo: "Cultivar", texto: "Início do projeto social na igreja A Casa da Rocha, com aulas de Muay Thai para crianças." },
     { ano: "2020", titulo: "Pandemia", texto: "Atuação emergencial com entrega de cestas básicas e kits de Natal para famílias." },
@@ -198,10 +214,10 @@ export const apoiar = {
   eyebrow: "Como apoiar",
   titulo: "Faça parte dessa história",
   cards: [
-    { titulo: "Doe", texto: "Sua doação ajuda a manter alimentação, professores, equipe técnica, materiais e acompanhamento familiar.", cta: "Quero Doar", href: "/como-apoiar", icon: "heart" },
-    { titulo: "Seja voluntário", texto: "Compartilhe seu tempo, conhecimento e habilidades.", cta: "Quero ser Voluntário", href: "/como-apoiar#voluntariado", icon: "users" },
-    { titulo: "Seja empresa parceira", texto: "Conecte sua empresa a uma causa real, com impacto social e responsabilidade comunitária.", cta: "Minha empresa quer apoiar", href: "/como-apoiar#empresas", icon: "building" },
-    { titulo: "Divulgue", texto: "Ajude a levar a voz do Vosz mais longe.", cta: "Compartilhar", href: "/contato", icon: "megaphone" },
+    { titulo: "Doe", texto: "Sua doação mantém alimentação, professores, equipe técnica e acompanhamento familiar.", cta: "Quero Doar", href: "/apoie", icon: "heart" },
+    { titulo: "Seja recorrente", texto: "A doação mensal garante continuidade — o cuidado não pode parar.", cta: "Doar todo mês", href: "/apoie#recorrente", icon: "calendar" },
+    { titulo: "Empresa parceira", texto: "Conecte sua empresa a uma causa real, com impacto social mensurável.", cta: "Quero apoiar", href: "/apoie#empresas", icon: "building" },
+    { titulo: "Voluntarie-se", texto: "Compartilhe seu tempo, conhecimento e habilidades.", cta: "Ser voluntário", href: "/apoie#voluntariado", icon: "users" },
   ],
 };
 
@@ -209,7 +225,7 @@ export const ctaFinal = {
   titulo: "Ajude uma criança a ser vista por inteiro",
   texto:
     "Quando uma criança recebe cuidado, vínculo, alimentação, escuta, arte, tecnologia e acompanhamento, ela não ganha apenas atividades. Ela ganha a chance de construir futuro.",
-  ctaPrimario: { label: "Quero Doar Agora", href: "/como-apoiar" },
+  ctaPrimario: { label: "Quero Doar Agora", href: "/apoie" },
   ctaSecundario: { label: "Falar com o Vosz", href: "/contato" },
 };
 
@@ -405,5 +421,55 @@ export const transparencia = {
     { titulo: "Relatório de atividades", status: "Em consolidação" },
     { titulo: "Prestação de contas", status: "Em consolidação" },
     { titulo: "Diretoria e conselho", status: "Disponível sob solicitação" },
+  ],
+};
+
+
+// Seção curta de impacto e confiança na Home.
+export const impactoHome = {
+  eyebrow: "Impacto e confiança",
+  titulo: "Cuidado que já está acontecendo",
+  cta: { label: "Ver impacto", href: "/impacto" },
+};
+
+// Valores institucionais (página Quem Somos).
+export const valores = [
+  "Amor ao próximo",
+  "Fé em ação",
+  "Dignidade",
+  "Integridade",
+  "Processos a serviço de pessoas",
+  "Relacionamentos transformadores",
+  "Integração familiar",
+  "Excelência para quem mais precisa",
+  "Autonomia",
+];
+
+// Página Apoie — conversão.
+export const apoie = {
+  valoresSugeridos: ["R$ 30", "R$ 70", "R$ 150", "R$ 300"],
+  paraOndeVai: [
+    { titulo: "Alimentação", icon: "utensils" },
+    { titulo: "Professores e equipe técnica", icon: "users" },
+    { titulo: "Materiais pedagógicos", icon: "book" },
+    { titulo: "Arte, cultura e esporte", icon: "palette" },
+    { titulo: "Tecnologia e maker", icon: "chip" },
+    { titulo: "Neuropsicologia", icon: "brain" },
+    { titulo: "Acompanhamento familiar", icon: "family" },
+    { titulo: "Manutenção do espaço", icon: "home" },
+  ],
+  confianca: [
+    "OSC sem fins lucrativos",
+    "Atendimento gratuito às famílias",
+    "Toda receita reinvestida na missão",
+    "CNPJ público e dados institucionais abertos",
+  ],
+  faq: [
+    { p: "Como posso doar?", r: "Pelo PIX (chave CNPJ 39.891.120/0001-61), copiando o código no botão acima, ou pelos canais do nosso linktree. Em breve, cartão e doação recorrente automática." },
+    { p: "Posso doar todo mês?", r: "Sim! A doação recorrente é a forma mais valiosa de apoiar, porque garante continuidade do cuidado. Fale com a gente pelo WhatsApp para configurar." },
+    { p: "Empresas podem apoiar?", r: "Sim. Empresas podem patrocinar frentes específicas, doar produtos ou construir parcerias de longo prazo. Use o formulário de empresas nesta página." },
+    { p: "Para onde vai o dinheiro?", r: "Alimentação, professores, equipe técnica, materiais, tecnologia, neuropsicologia e acompanhamento familiar. O atendimento às famílias é gratuito e toda receita é reinvestida na missão." },
+    { p: "Posso ser voluntário?", r: "Sim! Precisamos de pessoas em educação, arte, tecnologia, comunicação, eventos e apoio administrativo. Preencha o formulário de voluntariado." },
+    { p: "O Vosz emite recibo?", r: "Sim, mediante solicitação pelo nosso e-mail ou WhatsApp institucional." },
   ],
 };

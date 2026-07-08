@@ -1,8 +1,9 @@
 import PageHero from "@/components/ui/PageHero";
-import { Container, Section } from "@/components/ui/Section";
+import { Container, Section, SectionHeading } from "@/components/ui/Section";
 import Reveal from "@/components/ui/Reveal";
 import Button from "@/components/ui/Button";
-import { quemSomos, missaoVisao } from "@/lib/content";
+import { TimelineList } from "@/components/home/Timeline";
+import { quemSomos, missaoVisao, valores, timeline } from "@/lib/content";
 
 export const metadata = {
   title: "Quem Somos",
@@ -61,17 +62,51 @@ export default function QuemSomosPage() {
         </Container>
       </Section>
 
+      {/* Valores */}
       <Section className="bg-white">
+        <Container>
+          <SectionHeading eyebrow="Valores" titulo="O que nos guia" center />
+          <ul className="mx-auto mt-10 flex max-w-3xl flex-wrap justify-center gap-2.5">
+            {valores.map((v) => (
+              <li key={v} className="rounded-full border-2 border-vosz-roxo/15 bg-cream px-5 py-2 text-sm font-bold text-vosz-roxo-escuro">
+                {v}
+              </li>
+            ))}
+          </ul>
+        </Container>
+      </Section>
+
+      {/* História completa */}
+      <Section id="historia" className="scroll-mt-20 bg-cream">
+        <Container>
+          <SectionHeading eyebrow="Nossa história" titulo={timeline.titulo} center />
+          <TimelineList itens={timeline.itens} />
+        </Container>
+      </Section>
+
+      {/* Equipe e liderança */}
+      <Section className="bg-white">
+        <Container>
+          <SectionHeading
+            eyebrow="Equipe e liderança"
+            titulo="Pessoas que fazem o cuidado acontecer"
+            subtitulo="Educadores, equipe técnica, voluntários e liderança comprometidos com a missão. Perfis completos da diretoria e do conselho serão publicados nesta página."
+            center
+          />
+        </Container>
+      </Section>
+
+      <Section className="bg-cream">
         <Container className="rounded-4xl bg-vosz-roxo p-8 text-center text-white sm:p-12">
           <h2 className="mx-auto max-w-2xl text-2xl text-white sm:text-3xl">
-            Conheça a metodologia que organiza o nosso cuidado
+            Apoie essa missão
           </h2>
           <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
-            <Button href="/metodologia" variant="branco" size="md">
-              Jornada VOAR
+            <Button href="/apoie" variant="branco" size="md">
+              Quero Doar
             </Button>
-            <Button href="/nossa-historia" variant="fantasmaBranco" size="md">
-              Nossa história
+            <Button href="/metodologia" variant="fantasmaBranco" size="md">
+              Conheça a metodologia
             </Button>
           </div>
         </Container>

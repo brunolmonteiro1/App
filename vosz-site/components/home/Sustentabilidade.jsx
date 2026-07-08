@@ -99,11 +99,11 @@ export default function Sustentabilidade() {
         </div>
 
         <div className="mt-10 flex flex-col justify-center gap-3 sm:flex-row">
-          <Button href="/como-apoiar" variant="branco" size="md">
-            Apoie essa causa
+          <Button href="/apoie" variant="branco" size="md">
+            Quero Doar
           </Button>
-          <Button href="/como-apoiar#empresas" variant="fantasmaBranco" size="md">
-            Seja empresa parceira
+          <Button href="/apoie#empresas" variant="fantasmaBranco" size="md">
+            Minha empresa quer apoiar
           </Button>
         </div>
       </Container>

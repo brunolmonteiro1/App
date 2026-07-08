@@ -20,7 +20,7 @@ export default function MobileDonateBar() {
           WhatsApp
         </a>
         <Link
-          href="/como-apoiar"
+          href="/apoie"
           className="inline-flex h-12 flex-1 items-center justify-center rounded-full bg-vosz-rosa font-bold text-white shadow-soft"
         >
           Quero Doar

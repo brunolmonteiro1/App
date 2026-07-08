@@ -6,13 +6,14 @@ import LeadForm from "@/components/forms/LeadForm";
 import Button from "@/components/ui/Button";
 import Reveal from "@/components/ui/Reveal";
 import { contato, whatsappUrl } from "@/lib/site";
-import { portaVosz, salaSensorial } from "@/lib/content";
+import Icon from "@/components/ui/Icon";
+import { portaVosz, salaSensorial, apoie } from "@/lib/content";
 
 export const metadata = {
-  title: "Como Apoiar — Doe agora",
+  title: "Apoie — Doe agora",
   description:
     "Doe via PIX, seja voluntário ou torne sua empresa parceira do Instituto Vosz. Cada gesto sustenta o cuidado integral de crianças e famílias.",
-  alternates: { canonical: "/como-apoiar" },
+  alternates: { canonical: "/apoie" },
 };
 
 const formas = [
@@ -26,15 +27,26 @@ export default function ComoApoiarPage() {
   return (
     <>
       <PageHero
-        eyebrow="Como apoiar"
+        eyebrow="Apoie"
         titulo="Faça parte dessa rede de cuidado"
         intro="O atendimento às famílias é gratuito. É o apoio de doadores, voluntários e empresas que sustenta a estrutura, a equipe e a continuidade do cuidado."
       />
 
-      {/* PIX em destaque */}
+      {/* PIX em destaque + valores sugeridos */}
       <Section className="bg-cream pt-10">
         <Container>
           <PixCard />
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-2.5" aria-label="Valores sugeridos de doação">
+            <span className="text-sm font-semibold text-ink/55">Sugestões de valor:</span>
+            {apoie.valoresSugeridos.map((v) => (
+              <span key={v} className="rounded-full border-2 border-vosz-roxo/20 bg-white px-4 py-1.5 text-sm font-bold text-vosz-roxo">
+                {v}
+              </span>
+            ))}
+            <span className="rounded-full border-2 border-dashed border-vosz-rosa/40 bg-white px-4 py-1.5 text-sm font-bold text-vosz-rosa">
+              Outro valor
+            </span>
+          </div>
           <p className="mt-4 text-center text-sm text-ink/60">
             Prefere doar por outro canal?{" "}
             <a href={contato.linktree} target="_blank" rel="noopener noreferrer" className="font-bold text-vosz-rosa underline-offset-2 hover:underline">
@@ -54,6 +66,55 @@ export default function ComoApoiarPage() {
               <IconCard key={f.titulo} icon={f.icon} titulo={f.titulo} texto={f.texto} accent={f.accent} />
             ))}
           </div>
+        </Container>
+      </Section>
+
+      {/* Doação recorrente */}
+      <Section id="recorrente" className="scroll-mt-20 bg-cream">
+        <Container className="grid items-center gap-8 lg:grid-cols-2">
+          <SectionHeading
+            eyebrow="Doação recorrente"
+            titulo="O cuidado não pode parar. Doe todo mês."
+            subtitulo="A doação mensal é a forma mais valiosa de apoiar: ela garante alimentação, equipe e acompanhamento contínuo para as crianças e famílias, mês após mês."
+          />
+          <div className="rounded-[2rem] bg-vosz-roxo p-8 text-center shadow-soft-lg sm:p-10">
+            <p className="text-lg font-extrabold text-white">Torne-se doador(a) mensal</p>
+            <p className="mt-2 text-sm leading-relaxed text-white/75">
+              Fale com a gente pelo WhatsApp e configure sua doação recorrente em minutos.
+            </p>
+            <div className="mt-5">
+              <Button as="a" href={whatsappUrl("Olá! Quero ser doador(a) mensal do Instituto Vosz.")} variant="branco" size="md">
+                Quero doar todo mês
+              </Button>
+            </div>
+          </div>
+        </Container>
+      </Section>
+
+      {/* Para onde vai sua doação */}
+      <Section className="bg-white">
+        <Container>
+          <SectionHeading eyebrow="Transparência no destino" titulo="Para onde vai sua doação" center />
+          <ul className="mx-auto mt-10 grid max-w-4xl grid-cols-2 gap-3 sm:grid-cols-4">
+            {apoie.paraOndeVai.map((d) => (
+              <li key={d.titulo} className="flex flex-col items-center gap-2.5 rounded-2xl border border-black/[0.05] bg-cream p-5 text-center shadow-soft">
+                <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-vosz-roxo/10 text-vosz-roxo">
+                  <Icon name={d.icon} className="h-5 w-5" />
+                </span>
+                <span className="text-sm font-bold leading-snug text-vosz-roxo-escuro">{d.titulo}</span>
+              </li>
+            ))}
+          </ul>
+          <ul className="mx-auto mt-10 flex max-w-3xl flex-wrap items-center justify-center gap-x-6 gap-y-2">
+            {apoie.confianca.map((c) => (
+              <li key={c} className="flex items-center gap-2 text-sm font-semibold text-ink/65">
+                <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 text-[#0f9d63]" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="m5 12 5 5L20 7" />
+                </svg>
+                {c}
+              </li>
+            ))}
+          </ul>
         </Container>
       </Section>
 
@@ -157,6 +218,29 @@ export default function ComoApoiarPage() {
             </div>
           </div>
           <LeadForm tipo="empresa" id="form-empresa" />
+        </Container>
+      </Section>
+
+      {/* FAQ */}
+      <Section className="bg-cream">
+        <Container className="max-w-3xl">
+          <SectionHeading eyebrow="Dúvidas frequentes" titulo="Perguntas e respostas" center />
+          <div className="mt-10 space-y-3">
+            {apoie.faq.map((f) => (
+              <details
+                key={f.p}
+                className="group rounded-2xl border border-black/[0.06] bg-white p-5 shadow-soft open:shadow-soft-lg"
+              >
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-bold text-vosz-roxo-escuro [&::-webkit-details-marker]:hidden">
+                  {f.p}
+                  <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 text-vosz-rosa transition-transform group-open:rotate-45" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden>
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                </summary>
+                <p className="mt-3 leading-relaxed text-ink/70">{f.r}</p>
+              </details>
+            ))}
+          </div>
         </Container>
       </Section>
     </>

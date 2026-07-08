@@ -4,6 +4,7 @@ import { useRef } from "react";
 import Image from "next/image";
 import { motion, useReducedMotion, useScroll, useSpring, useTransform } from "framer-motion";
 import { Container, Section, SectionHeading } from "../ui/Section";
+import Button from "../ui/Button";
 import { timeline } from "@/lib/content";
 
 // Nossa História como storytelling: linha que se preenche com o scroll,
@@ -125,7 +126,12 @@ export default function Timeline() {
       </span>
       <Container className="relative">
         <SectionHeading eyebrow={timeline.eyebrow} titulo={timeline.titulo} center />
-        <TimelineList itens={timeline.itens} />
+        <TimelineList itens={timeline.curta} />
+        <div className="mt-12 text-center">
+          <Button href="/quem-somos#historia" variant="contorno" size="md">
+            Conheça nossa história
+          </Button>
+        </div>
       </Container>
     </Section>
   );

@@ -52,15 +52,20 @@ export function whatsappUrl(mensagem) {
   return mensagem ? `${base}?text=${encodeURIComponent(mensagem)}` : base;
 }
 
-// Navegação principal (ordem do menu do blueprint).
+// Navegação principal enxuta: Home converte, internas aprofundam.
 export const nav = [
   { label: "Início", href: "/" },
   { label: "Quem Somos", href: "/quem-somos" },
   { label: "Metodologia", href: "/metodologia" },
+  { label: "Impacto", href: "/impacto" },
+  { label: "Apoie", href: "/apoie" },
+  { label: "Transparência", href: "/transparencia" },
+];
+
+// Conteúdos fora do menu principal continuam acessíveis pelo footer.
+export const navFooter = [
   { label: "O que Fazemos", href: "/o-que-fazemos" },
   { label: "Sustentabilidade", href: "/sustentabilidade" },
-  { label: "Impacto", href: "/impacto" },
-  { label: "Transparência", href: "/transparencia" },
   { label: "Contato", href: "/contato" },
 ];
 
@@ -68,12 +73,11 @@ export const nav = [
 export const rotas = [
   "/",
   "/quem-somos",
-  "/nossa-historia",
   "/metodologia",
   "/o-que-fazemos",
   "/sustentabilidade",
   "/impacto",
-  "/como-apoiar",
+  "/apoie",
   "/transparencia",
   "/contato",
 ];

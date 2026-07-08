@@ -2,6 +2,7 @@
 
 import { motion, useReducedMotion } from "framer-motion";
 import { Container, Section, SectionHeading } from "../ui/Section";
+import Button from "../ui/Button";
 import { voar } from "@/lib/content";
 
 // Momento visual #2 — Jornada VOAR.
@@ -73,15 +74,17 @@ export default function JornadaVoar() {
                 <h3 className="mt-4 text-lg font-extrabold uppercase tracking-wide text-vosz-roxo-escuro">
                   {e.nome}
                 </h3>
-                <p className="mt-2.5 text-[0.98rem] leading-relaxed text-ink/75">{e.detalhe}</p>
+                <p className="mt-2.5 text-[0.98rem] leading-relaxed text-ink/75">{e.resumo}</p>
               </motion.li>
             );
           })}
         </ol>
 
-        <p className="mt-14 text-center text-sm italic text-ink/50">
-          Um caminho de transformação, vivido todos os dias.
-        </p>
+        <div className="mt-12 text-center">
+          <Button href="/metodologia" variant="contorno" size="md">
+            Ver metodologia completa
+          </Button>
+        </div>
       </Container>
     </Section>
   );

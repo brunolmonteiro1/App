@@ -2,8 +2,9 @@ import PageHero from "@/components/ui/PageHero";
 import { Container, Section, SectionHeading } from "@/components/ui/Section";
 import { Card } from "@/components/ui/Card";
 import Reveal from "@/components/ui/Reveal";
+import Button from "@/components/ui/Button";
 import { transparencia } from "@/lib/content";
-import { juridico, contato } from "@/lib/site";
+import { juridico, contato, whatsappUrl } from "@/lib/site";
 
 export const metadata = {
   title: "Transparência",
@@ -55,7 +56,7 @@ export default function TransparenciaPage() {
       </Section>
 
       {/* Documentos */}
-      <Section className="bg-cream">
+      <Section id="lgpd" className="scroll-mt-20 bg-cream">
         <Container>
           <SectionHeading
             eyebrow="Documentos públicos"
@@ -79,6 +80,26 @@ export default function TransparenciaPage() {
             </a>
             .
           </p>
+        </Container>
+      </Section>
+
+      {/* Contato institucional */}
+      <Section className="bg-white">
+        <Container className="rounded-4xl bg-vosz-roxo-escuro p-8 text-center text-white sm:p-12">
+          <h2 className="mx-auto max-w-2xl text-2xl text-white sm:text-3xl">
+            Fale com a nossa equipe
+          </h2>
+          <p className="mx-auto mt-3 max-w-xl text-white/75">
+            Dúvidas institucionais, imprensa, editais e parcerias: estamos à disposição.
+          </p>
+          <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
+            <Button as="a" href={whatsappUrl("Olá! Gostaria de falar com a equipe do Instituto Vosz.")} variant="branco" size="md">
+              WhatsApp institucional
+            </Button>
+            <Button as="a" href={`mailto:${contato.email}`} variant="fantasmaBranco" size="md">
+              {contato.email}
+            </Button>
+          </div>
         </Container>
       </Section>
     </>

@@ -64,7 +64,7 @@ export default function Header() {
         </nav>
 
         <div className="hidden items-center gap-3 lg:flex">
-          <Button href="/como-apoiar" variant="rosa" size="sm">
+          <Button href="/apoie" variant="rosa" size="sm">
             Quero Doar
           </Button>
         </div>
@@ -110,7 +110,7 @@ export default function Header() {
               </Link>
             );
           })}
-          <Button href="/como-apoiar" variant="rosa" size="md" className="mt-3">
+          <Button href="/apoie" variant="rosa" size="md" className="mt-3">
             Quero Doar
           </Button>
         </nav>

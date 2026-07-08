@@ -197,6 +197,23 @@ export default function Hero() {
               {hero.ctaSecundario.label}
             </Button>
           </motion.div>
+
+          {/* Linha de confiança */}
+          <motion.ul
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.6, delay: 0.6 }}
+            className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-2"
+          >
+            {hero.confianca.map((c) => (
+              <li key={c} className="flex items-center gap-2 text-xs font-semibold text-white/60 sm:text-sm">
+                <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 text-vosz-verde" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="m5 12 5 5L20 7" />
+                </svg>
+                {c}
+              </li>
+            ))}
+          </motion.ul>
         </motion.div>
 
         {/* Quadro cinematográfico */}
