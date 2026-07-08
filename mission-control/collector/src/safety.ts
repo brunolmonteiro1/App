@@ -54,22 +54,25 @@ export class SafetyGuard {
       const method = request.method().toUpperCase();
       const url = request.url();
 
-      // 1. Requisições de escrita (POST/PUT/PATCH/DELETE)
+      // 1. BACKSTOP UNIVERSAL: padrões proibidos bloqueiam em QUALQUER método,
+      //    inclusive escritas que por acaso estejam na writeAllowlist. Assim
+      //    "gerar boleto" / "cancelar" nunca passam, mesmo via POST de relatório.
+      const hit = FORBIDDEN_URL_PATTERNS.find((re) => re.test(url));
+      if (hit) {
+        this.log({ kind: "write_blocked", method, url, reason: `padrão proibido: ${hit}` });
+        return route.abort("blockedbyclient");
+      }
+
+      // 2. Requisições de escrita (POST/PUT/PATCH/DELETE): só as da writeAllowlist
+      //    (login + geração de relatório, que é leitura mas trafega como POST).
       if (WRITE_METHODS.has(method)) {
         const allowed = this.writeAllowlist.some((re) => re.test(url));
         if (!allowed) {
           this.log({ kind: "write_blocked", method, url, reason: "método de escrita não permitido" });
           return route.abort("blockedbyclient");
         }
-        this.log({ kind: "write_allowed", method, url, reason: "na writeAllowlist (ex.: login)" });
+        this.log({ kind: "write_allowed", method, url, reason: "na writeAllowlist (login/relatório)" });
         return route.continue();
-      }
-
-      // 2. Padrões proibidos em qualquer método (mesmo GET disfarçado)
-      const hit = FORBIDDEN_URL_PATTERNS.find((re) => re.test(url));
-      if (hit) {
-        this.log({ kind: "write_blocked", method, url, reason: `padrão proibido: ${hit}` });
-        return route.abort("blockedbyclient");
       }
 
       // 3. GET/HEAD: só se estiver dentro da allowlist de navegação, ou for

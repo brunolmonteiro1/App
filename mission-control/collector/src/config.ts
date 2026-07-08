@@ -31,6 +31,13 @@ export const config = {
     abaRenovacoes: "Relatorio_Renovacoes",
   },
 
+  // --- Filtros do relatório de inadimplência ---
+  // Janela de "Data de Vencimento" para capturar TODOS os inadimplentes.
+  // Padrão: dos últimos 24 meses até hoje (dd/mm/aaaa).
+  inadimplencia: {
+    vencimentoMesesAtras: Number(process.env.VENC_MESES_ATRAS || 24),
+  },
+
   // --- Segurança ---
   safety: {
     // dry-run: navega, loga tudo, mas NÃO baixa/grava nada. Sempre o 1º teste.
@@ -48,9 +55,17 @@ export function buildUrlAllowlist(host: string): RegExp[] {
   return [new RegExp(`^https?://([a-z0-9-]+\\.)?${h}(/|$|\\?)`, "i")];
 }
 
-// Allowlist de escrita: SÓ o POST de login. Ajuste o path quando soubermos
-// o endpoint real do formulário de login do STCOP (capturado via codegen).
+// Allowlist de escrita: o POST de login E os POSTs de GERAÇÃO DE RELATÓRIO
+// (o botão "Imprimir" do Vilesoft envia o formulário como POST, mas é leitura).
+// O backstop de padrões proibidos (salvar/cancelar/ativar/boleto...) roda ANTES
+// desta allowlist, então mesmo aqui uma ação de escrita real seria bloqueada.
 export function buildWriteAllowlist(host: string): RegExp[] {
   const h = host.replace(/[.]/g, "\\.");
-  return [new RegExp(`^https?://([a-z0-9-]+\\.)?${h}/(login|autenticar|acessar|j_security_check|signin)`, "i")];
+  const base = `^https?://([a-z0-9-]+\\.)?${h}`;
+  return [
+    // login
+    new RegExp(`${base}/(login|autenticar|acessar|j_security_check|signin|default)`, "i"),
+    // geração de relatório (Vilesoft): inadimplência, contratos a renovar, imprimir/exportar
+    new RegExp(`${base}/.*(relatorio|inadimplencia|renovar|contratos.?a.?renovar|imprimir|exportar|report)`, "i"),
+  ];
 }

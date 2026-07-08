@@ -20,24 +20,24 @@ Na `src/safety.ts` — a interceptação de rede (`SafetyGuard`) roda em toda re
 
 Validação da lógica de bloqueio: 10/10 casos passando (salvar, cancelar, gerar boleto, deletar, ativar e host externo → todos bloqueados; ler relatório e login → permitidos).
 
-## Como completar a navegação do STCOP (sem escrever código)
+## Navegação mapeada (TAG Assistência / Vilesoft)
 
-O único pedaço que falta é o caminho específico do STCOP (login → menu → relatório → exportar). A forma mais fácil de capturar isso, sem você descrever nada em texto: **grave seus próprios cliques**.
+Os prints do cliente confirmaram: TAG, STCOP e ViaVante são o mesmo sistema **Vilesoft** (v7.378) — o coletor serve para os três trocando só a URL no `.env`. Caminho já roteirizado em `src/collect.ts` (seletores por texto, resilientes a IDs internos):
 
-Na sua máquina (com Node instalado):
-```bash
-npx playwright codegen "https://URL-DO-STCOP"
-```
-Isso abre o STCOP + uma janela que **grava cada clique/preenchimento como código**. Faça o caminho completo uma vez: logar → ir ao relatório de inadimplência → exportar → idem renovações. Copie o código gerado e me manda. Eu encaixo nas seções `>>> PREENCHER <<<` do `src/collect.ts` **envolvendo tudo nos trilhos de segurança** — você nunca precisa mexer no código.
+1. **Login** — `tagassistencia.com.br` → campos "Seu e-mail" / "Senha" → botão **Entrar**;
+2. **Menu** (☰) → **Ativações - TAG** → **Relatórios**;
+3. **Inadimplência** → o formulário tem **Formato: CSV/PDF** → marca **CSV** → botão **Imprimir** → baixa o CSV;
+4. **Contratos a Renovar** → mesmo padrão (CSV → Imprimir).
 
-> Alternativa sem codegen: me manda um vídeo de tela ou uma sequência de prints do caminho (login → cada clique → tela do relatório → botão de exportar) que eu roteirizo.
+O relatório exporta CSV nativamente (radio no formulário) — sem raspagem de tela. Unidade default já é **BELO HORIZONTE**, batendo com o piloto.
 
-## Perguntas que preciso para finalizar (críticas para a arquitetura)
+## Estado atual: pronto para dry-run
 
-1. **URL do STCOP** e se o login é usuário+senha simples, ou tem **captcha / código por SMS/e-mail (2FA)**. Captcha muda tudo — pode exigir sessão persistente ou um passo humano no primeiro login.
-2. O relatório sai como **download de arquivo** (CSV/Excel — ideal) ou só como **tabela na tela** (raspagem — também funciona)?
-3. **Janela de baixo movimento** para os primeiros testes (ex.: domingo de manhã), em dry-run, para não atrapalhar a operação.
-4. Quais **colunas reais** o relatório do STCOP traz (para eu mapear para `Cliente/Telefone/Placa/Contrato/Valor/Vencimento`).
+O código está completo e com typecheck limpo. Os pontos marcados `AJUSTE` no `collect.ts` (seletor do hamburguer, radio CSV) só serão confirmados no primeiro **dry-run contra o DOM real** — que navega, tira screenshots e audita **sem baixar nem gravar nada**. É assim que validamos os seletores com segurança total.
+
+Ainda preciso de:
+- Uma **janela de baixo movimento** (ex.: domingo de manhã) para o primeiro dry-run;
+- Um **CSV de exemplo** (pode anonimizar) de cada relatório, para eu confirmar o mapa de colunas em `csv.ts` (hoje ele casa por nome de cabeçalho com tolerância a acento, mas ver o real fecha 100%).
 
 ## Setup no VPS (quando a navegação estiver pronta)
 
