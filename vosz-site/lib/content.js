@@ -59,7 +59,7 @@ export const resposta = {
     "Assistência social",
     "Acompanhamento familiar",
   ],
-  frase: "Contraturno não é depósito de criança. É uma rede de cuidado.",
+  frase: "Mais que atividades: uma rede de cuidado em torno de cada criança.",
 };
 
 export const voar = {
