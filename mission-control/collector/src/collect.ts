@@ -33,13 +33,21 @@ async function main() {
     buildWriteAllowlist(config.stcop.host),
   );
 
+  // No VPS o Playwright acha o Chromium sozinho (via `npx playwright install`).
+  // PW_EXECUTABLE_PATH é uma exceção opcional para ambientes com browser
+  // pré-instalado em caminho fixo (ex.: este sandbox).
   const browser: Browser = await chromium.launch({
-    executablePath: "/opt/pw-browsers/chromium",
     headless: true,
+    ...(process.env.PW_EXECUTABLE_PATH ? { executablePath: process.env.PW_EXECUTABLE_PATH } : {}),
+    // PW_PROXY_SERVER: só para ambientes atrás de proxy (este sandbox). No VPS
+    // fica desligado e o Chromium conecta direto.
+    ...(process.env.PW_PROXY_SERVER ? { proxy: { server: process.env.PW_PROXY_SERVER } } : {}),
   });
   const context = await browser.newContext({
     acceptDownloads: true,
     viewport: { width: 1366, height: 900 }, // layout desktop
+    // ignoreHTTPSErrors só quando o proxy do sandbox faz interceptação TLS.
+    ...(process.env.PW_IGNORE_HTTPS_ERRORS === "true" ? { ignoreHTTPSErrors: true } : {}),
   });
   await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
   const page: Page = await context.newPage();
@@ -177,13 +185,15 @@ async function main() {
       config.sheets.abaInadimplencia,
       ["Cliente", "Telefone", "Placa", "Contrato", "Valor", "Vencimento"],
     );
-    await coletar(
-      "Contratos a Renovar",
-      "renovacoes.csv",
-      MAPA_RENOVACOES,
-      config.sheets.abaRenovacoes,
-      ["Cliente", "Telefone", "Placa", "Contrato", "FimVigencia"],
-    );
+    if (process.env.SO_INADIMPLENCIA !== "true") {
+      await coletar(
+        "Contratos a Renovar",
+        "renovacoes.csv",
+        MAPA_RENOVACOES,
+        config.sheets.abaRenovacoes,
+        ["Cliente", "Telefone", "Placa", "Contrato", "FimVigencia"],
+      );
+    }
 
     // ---- LOGOUT ------------------------------------------------------------
     await page.locator("header [title*=sair i], header [aria-label*=sair i]").first().click().catch(() => {});
