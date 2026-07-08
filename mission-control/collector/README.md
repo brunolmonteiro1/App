@@ -39,7 +39,33 @@ Ainda preciso de:
 - Uma **janela de baixo movimento** (ex.: domingo de manhã) para o primeiro dry-run;
 - Um **CSV de exemplo** (pode anonimizar) de cada relatório, para eu confirmar o mapa de colunas em `csv.ts` (hoje ele casa por nome de cabeçalho com tolerância a acento, mas ver o real fecha 100%).
 
-## Setup no VPS (quando a navegação estiver pronta)
+## Setup no VPS — opção A: Docker (recomendado)
+
+O mesmo VPS já roda Docker por causa do n8n. A imagem oficial do Playwright
+(`v1.49.0-noble`) já traz Node + Chromium + libs, então não instala nada no host.
+
+```bash
+# um comando instala tudo (sparse checkout, build da imagem, cron 07:45):
+curl -fsSL https://raw.githubusercontent.com/brunolmonteiro1/app/claude/ai-mission-control-arch-inabaj/mission-control/collector/deploy-docker.sh | sudo bash
+
+# depois: preencher credenciais e testar
+cd /opt/mission-control/collector
+nano .env                                   # STCOP_USERNAME / STCOP_PASSWORD
+docker compose run --rm -e DRY_RUN=true -e SO_INADIMPLENCIA=true collector
+ls audit/*/                                 # screenshots de cada passo
+docker compose run --rm collector           # produção (usa DRY_RUN do .env)
+```
+
+## Setup no VPS — opção B: Node direto (sem Docker)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/brunolmonteiro1/app/claude/ai-mission-control-arch-inabaj/mission-control/collector/deploy.sh | sudo bash
+cd /opt/mission-control/collector
+nano .env
+DRY_RUN=true SO_INADIMPLENCIA=true node dist/collect.js
+```
+
+Ou manualmente numa máquina de dev:
 
 ```bash
 cd collector

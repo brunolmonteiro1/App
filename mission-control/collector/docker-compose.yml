@@ -1,0 +1,21 @@
+# ============================================================================
+# Coletor TAG/Vilesoft — job batch (roda e sai, não é serviço 24/7).
+# Uso:
+#   docker compose build
+#   docker compose run --rm collector                      # usa DRY_RUN do .env
+#   docker compose run --rm -e DRY_RUN=true -e SO_INADIMPLENCIA=true collector
+#
+# Segredos/estado ficam FORA da imagem, montados por volume:
+#   .env         -> variáveis (login/senha, SHEET_ID...)  [nunca versionado]
+#   sa-key.json  -> chave da Service Account do Google      [nunca versionado]
+#   ./audit      -> screenshots + trace + safety-log de cada run
+# ============================================================================
+services:
+  collector:
+    build: .
+    image: mission-control-collector
+    env_file: .env
+    volumes:
+      - ./sa-key.json:/app/sa-key.json:ro
+      - ./audit:/app/audit
+    # Sem ports, sem restart: é um coletor batch acionado pelo cron.

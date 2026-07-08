@@ -1,0 +1,9 @@
+# Nunca entram na imagem: segredos, artefatos e lixo de build.
+node_modules
+dist
+.env
+sa-key.json
+audit
+audit*/
+*.log
+.git
