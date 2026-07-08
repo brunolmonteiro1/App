@@ -10,14 +10,14 @@ function required(name: string): string {
 }
 
 export const config = {
-  // --- STCOP (preencher no .env do VPS) ---
+  // --- Sistema legado TAG/STCOP/ViaVante (Vilesoft) ---
+  // URL e host NÃO são segredo (página de login pública) — têm default.
+  // Usuário e senha são segredo: SÓ do .env do VPS, nunca em código/chat.
   stcop: {
-    // A URL de login. Só isto e as URLs de relatório entram na allowlist.
-    loginUrl: required("STCOP_LOGIN_URL"),
-    username: required("STCOP_USERNAME"),
-    password: required("STCOP_PASSWORD"),
-    // Host base do sistema, usado para montar a allowlist de navegação.
-    host: required("STCOP_HOST"), // ex.: "sistema.stcop.com.br"
+    loginUrl: process.env.STCOP_LOGIN_URL || "https://sistema.tagassistencia.com.br/login",
+    host: process.env.STCOP_HOST || "tagassistencia.com.br",
+    username: required("STCOP_USERNAME"), // do .env, nunca versionado
+    password: required("STCOP_PASSWORD"), // do .env, nunca versionado
   },
 
   // --- Google Sheets (destino dos dados coletados) ---
