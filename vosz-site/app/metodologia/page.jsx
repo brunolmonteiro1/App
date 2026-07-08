@@ -2,6 +2,7 @@ import PageHero from "@/components/ui/PageHero";
 import { Container, Section, SectionHeading } from "@/components/ui/Section";
 import JornadaVoar from "@/components/home/JornadaVoar";
 import JornadaBeneficiario from "@/components/home/JornadaBeneficiario";
+import TurmasReduzidas from "@/components/home/TurmasReduzidas";
 import { Card } from "@/components/ui/Card";
 import Reveal from "@/components/ui/Reveal";
 import CtaFinal from "@/components/home/CtaFinal";
@@ -23,6 +24,8 @@ export default function MetodologiaPage() {
       <JornadaVoar completa />
 
       <JornadaBeneficiario />
+
+      <TurmasReduzidas />
 
       <Section className="bg-white">
         <Container>
