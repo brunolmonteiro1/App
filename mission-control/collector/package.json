@@ -1,0 +1,21 @@
+{
+  "name": "mission-control-collector",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Coletor determinístico read-only do STCOP para o piloto Mission Control",
+  "scripts": {
+    "build": "tsc",
+    "collect": "node dist/collect.js",
+    "collect:dry": "DRY_RUN=true node dist/collect.js",
+    "codegen": "playwright codegen"
+  },
+  "dependencies": {
+    "googleapis": "^144.0.0",
+    "playwright": "^1.49.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "@types/node": "^22.0.0"
+  }
+}
