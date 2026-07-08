@@ -76,6 +76,36 @@ async function main() {
     await campos.nth(1).fill(dataBR(hoje)).catch(() => {});
   }
 
+  // Marca o radio CSV e CONFIRMA. O PDF é o default do Vilesoft, então esta
+  // etapa é obrigatória e verificada — não pode falhar em silêncio.
+  async function selecionarCsv() {
+    // Tenta várias estratégias de seleção (o dry-run confirma qual pega).
+    const tentativas = [
+      () => page.getByLabel("CSV", { exact: true }).check(),
+      () => page.locator('input[type=radio][value*="csv" i]').check(),
+      () => page.getByText("CSV", { exact: true }).click(),
+    ];
+    for (const t of tentativas) {
+      await t().catch(() => {});
+      if (await csvMarcado()) return;
+    }
+    throw new Error(
+      "[coletor] Não consegui marcar o formato CSV (PDF é o default). " +
+        "Abortando para não baixar PDF por engano. Verificar seletor do radio (ver AJUSTE).",
+    );
+  }
+
+  // true se o formato selecionado é CSV (checa o radio marcado).
+  async function csvMarcado(): Promise<boolean> {
+    // O radio CSV marcado, por label OU por value.
+    const porLabel = await page.getByLabel("CSV", { exact: true }).isChecked().catch(() => false);
+    if (porLabel) return true;
+    return await page
+      .locator('input[type=radio][value*="csv" i]')
+      .isChecked()
+      .catch(() => false);
+  }
+
   // Navega até um relatório do submenu Relatórios e devolve o download do CSV.
   async function baixarRelatorioCsv(
     itemRelatorio: string,
@@ -91,10 +121,11 @@ async function main() {
 
     if (preencherDatas) await preencherIntervaloVencimento();
 
-    // Seleciona formato CSV (radio). AJUSTE: se o label não pegar, usar value.
-    await page.getByText("CSV", { exact: true }).click().catch(async () => {
-      await page.locator('input[type=radio][value*=csv i]').check().catch(() => {});
-    });
+    // Seleciona formato CSV — CRÍTICO: o PDF vem marcado por padrão. Se não
+    // trocarmos para CSV, baixaríamos um PDF que o parser não lê. Por isso
+    // clicamos E confirmamos que o CSV ficou marcado; senão, aborta com erro
+    // claro (nunca deixa passar um PDF disfarçado).
+    await selecionarCsv();
 
     // Dispara o "Imprimir" e captura o download.
     const [download] = (await Promise.all([
@@ -116,7 +147,13 @@ async function main() {
       return;
     }
     const csvPath = await baixarRelatorioCsv(item, path.join(auditDir, arquivo), item === "Inadimplência");
-    const linhas = parseCsv(await fs.readFile(csvPath, "utf8"), mapa);
+    const conteudo = await fs.readFile(csvPath, "utf8");
+    // Salvaguarda final: se veio um PDF (magic bytes %PDF), aborta — o parser
+    // não deve tentar ler PDF como CSV.
+    if (conteudo.startsWith("%PDF")) {
+      throw new Error(`[coletor] "${item}" baixou um PDF, não CSV. Verificar a seleção de formato.`);
+    }
+    const linhas = parseCsv(conteudo, mapa);
     console.log(`[coletor] ${item}: ${linhas.length} linhas.`);
     await gravarAba(aba, cabecalho, linhas);
   }
