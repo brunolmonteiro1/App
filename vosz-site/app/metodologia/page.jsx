@@ -20,7 +20,7 @@ export default function MetodologiaPage() {
     <>
       <PageHero eyebrow="Metodologia" titulo={metodologia.titulo} intro={metodologia.intro} />
 
-      <JornadaVoar />
+      <JornadaVoar completa />
 
       <JornadaBeneficiario />
 

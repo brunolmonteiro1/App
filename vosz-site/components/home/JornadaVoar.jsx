@@ -29,7 +29,9 @@ function Seta({ className = "" }) {
   );
 }
 
-export default function JornadaVoar() {
+// completa=true (página Metodologia): usa o texto integral e oculta o CTA,
+// que seria redundante dentro da própria página.
+export default function JornadaVoar({ completa = false }) {
   const reduce = useReducedMotion();
 
   return (
@@ -74,17 +76,21 @@ export default function JornadaVoar() {
                 <h3 className="mt-4 text-lg font-extrabold uppercase tracking-wide text-vosz-roxo-escuro">
                   {e.nome}
                 </h3>
-                <p className="mt-2.5 text-[0.98rem] leading-relaxed text-ink/75">{e.resumo}</p>
+                <p className="mt-2.5 text-[0.98rem] leading-relaxed text-ink/75">
+                  {completa ? e.detalhe : e.resumo}
+                </p>
               </motion.li>
             );
           })}
         </ol>
 
-        <div className="mt-12 text-center">
-          <Button href="/metodologia" variant="contorno" size="md">
-            Ver metodologia completa
-          </Button>
-        </div>
+        {!completa && (
+          <div className="mt-12 text-center">
+            <Button href="/metodologia" variant="contorno" size="md">
+              Ver metodologia completa
+            </Button>
+          </div>
+        )}
       </Container>
     </Section>
   );
