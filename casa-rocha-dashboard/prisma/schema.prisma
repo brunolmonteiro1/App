@@ -1,0 +1,278 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Sermon {
+  id                    String   @id @default(cuid())
+  notebookSourceId      String   @unique
+  contentHash           String
+  title                 String
+  normalizedTitle       String
+  messageNumber         Int?
+  series                String?
+  seriesRaw             String?
+  preacher              String?
+  dateEstimated         DateTime?
+  dateConfidence        String?
+  year                  Int?
+  youtubeUrl            String?
+  youtubeId             String?  @unique
+  sourceType            String
+  isSermon              Boolean  @default(true)
+  durationRaw           String?
+  durationSeconds       Int?
+  transcriptText        String
+  transcriptCharCount   Int
+  transcriptWordCount   Int
+  transcriptQualityFlag String?
+  metadataConflict      String?
+  importStatus          String   @default("imported")
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  analysis   SermonAnalysis?
+  scores     SermonScores?
+  evidence   SermonEvidence[]
+  references BiblicalReference[]
+  lexical    LexicalMetric[]
+  saturation SaturationMetric?
+
+  @@index([year])
+  @@index([series])
+  @@map("sermons")
+}
+
+model SermonAnalysis {
+  id                         String    @id @default(cuid())
+  sermonId                   String    @unique
+  analysisStatus             String    @default("pending")
+  analysisVersion            Int       @default(1)
+  reviewStatus               String?
+  reviewedBy                 String?
+  reviewedAt                 DateTime?
+  confidenceGlobal           String?
+  biblicalMainText           String?
+  biblicalBooksCited         String?
+  testamentPredominant       String?
+  sermonType                 String?
+  mainTheme                  String?
+  secondaryThemes            String?
+  doctrineMain               String?
+  doctrinesSecondary         String?
+  pastoralTone               String?
+  formativeFocus             String?
+  individualVsCommunityFocus String?
+  theologicalLevel           String?
+  languageComplexityScore    Int?
+  ontologicalVsPragmatic     String?
+  summary3Lines              String?
+  mainApplication            String?
+  possibleFormativeGap       String?
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
+
+  sermon Sermon @relation(fields: [sermonId], references: [id])
+
+  @@map("sermon_analysis")
+}
+
+model SermonScores {
+  id       String @id @default(cuid())
+  sermonId String @unique
+
+  biblicalHealthScore        Int?
+  homileticExpositionScore   Int?
+  christocentricReadingScore Int?
+  biblicalApplicationScore   Int?
+
+  orthodoxyScore       Int?
+  trinityScore         Int?
+  theologyProperScore  Int?
+  christologyScore     Int?
+  crucicentrismScore   Int?
+  soteriologyScore     Int?
+  pneumatologyScore    Int?
+  bibliologyScore      Int?
+  ecclesiologyScore    Int?
+  eschatologyScore     Int?
+  anthropologyScore    Int?
+  hamartiologyScore    Int?
+  sanctificationScore  Int?
+  kingdomTheologyScore Int?
+
+  orthopraxyScore                Int?
+  serviceDiaconiaScore           Int?
+  generosityScore                Int?
+  missionEvangelismScore         Int?
+  discipleshipScore              Int?
+  communityMutualityScore        Int?
+  hospitalityScore               Int?
+  careForPoorScore               Int?
+  forgivenessReconciliationScore Int?
+  vocationWorkScore              Int?
+  familyRelationshipsScore       Int?
+  financeStewardshipScore        Int?
+
+  spiritualityScore         Int?
+  prayerScore               Int?
+  scriptureDevotionScore    Int?
+  fastingScore              Int?
+  worshipScore              Int?
+  repentanceScore           Int?
+  discernmentScore          Int?
+  spiritualDisciplinesScore Int?
+
+  pastoralHealthScore             Int?
+  religiousDeconstructionScore    Int?
+  discipleshipReconstructionScore Int?
+  practicalActivationScore        Int?
+  healingWoundedScore             Int?
+  sendingHealedScore              Int?
+  coresponsibilityScore           Int?
+  passivityRiskScore              Int?
+  cynicismElitismRiskScore        Int?
+
+  practicalMethodScore Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sermon Sermon @relation(fields: [sermonId], references: [id])
+
+  @@map("sermon_scores")
+}
+
+model SermonEvidence {
+  id                 String   @id @default(cuid())
+  sermonId           String
+  category           String
+  scoreField         String
+  scoreValue         Int?
+  evidenceQuote      String
+  evidenceStartIndex Int?
+  evidenceEndIndex   Int?
+  keywordMatched     String?
+  analyticalComment  String?
+  analysisMethod     String
+  confidence         String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  sermon Sermon @relation(fields: [sermonId], references: [id])
+
+  @@index([sermonId])
+  @@index([category])
+  @@index([scoreField])
+  @@map("sermon_evidence")
+}
+
+model BiblicalReference {
+  id         String   @id @default(cuid())
+  sermonId   String
+  book       String
+  bookSlug   String
+  testament  String
+  chapter    Int?
+  verseStart Int?
+  verseEnd   Int?
+  rawMatch   String
+  startIndex Int
+  endIndex   Int
+  isMainText Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  sermon Sermon @relation(fields: [sermonId], references: [id])
+
+  @@index([sermonId])
+  @@index([bookSlug])
+  @@map("biblical_references")
+}
+
+model LexicalMetric {
+  id            String   @id @default(cuid())
+  sermonId      String
+  theme         String
+  term          String?
+  rawCount      Int
+  densityPer10k Float
+  createdAt     DateTime @default(now())
+
+  sermon Sermon @relation(fields: [sermonId], references: [id])
+
+  @@unique([sermonId, theme, term])
+  @@index([theme])
+  @@map("lexical_metrics")
+}
+
+model SaturationMetric {
+  id                  String   @id @default(cuid())
+  sermonId            String   @unique
+  iscRatio            Float?
+  criticDensityPer10k Float
+  gospelDensityPer10k Float
+  criticRawCount      Int
+  gospelRawCount      Int
+  saturationLabel     String?
+  thresholdUsed       Float
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  sermon Sermon @relation(fields: [sermonId], references: [id])
+
+  @@map("saturation_metrics")
+}
+
+model CodebookCategory {
+  id               String   @id @default(cuid())
+  fieldName        String
+  label            String
+  axis             String
+  description      String
+  score0Definition String
+  score1Definition String
+  score2Definition String
+  score3Definition String
+  score4Definition String
+  score5Definition String
+  examplesPositive String?
+  examplesNegative String?
+  keywords         String?
+  version          Int      @default(1)
+  active           Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([fieldName, version])
+  @@map("codebook_categories")
+}
+
+model BenchmarkTopic {
+  id        String   @id @default(cuid())
+  topic     String   @unique
+  baseTexts String
+  axis      String
+  category  String
+  notes     String?
+  createdAt DateTime @default(now())
+
+  @@map("benchmark_topics")
+}
+
+model ImportRun {
+  id             String    @id @default(cuid())
+  fileName       String
+  exportedAt     DateTime?
+  sourcesTotal   Int
+  sourcesNew     Int
+  sourcesUpdated Int
+  sourcesSkipped Int
+  conflicts      String?
+  createdAt      DateTime  @default(now())
+
+  @@map("import_runs")
+}
