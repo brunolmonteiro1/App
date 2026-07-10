@@ -75,6 +75,13 @@ Casamento · filhos · família · trabalho · finanças · conflitos · saúde 
 ### P12 — Cura, desconstrução e envio (`/dashboard/pastoral`)
 Desconstrução religiosa por ano · reconstrução discipular por ano · acolhimento × envio · risco de passividade · **índice desconstrução × reconstrução** (gauge/barras comparativas ou scatter) · linha do tempo da linguagem (a crítica ao sistema mudou ao longo dos anos? o vocabulário de comunidade cresceu?).
 
+### P12b — Saturação Crítica (`/dashboard/saturacao`)
+Módulo ISC (`CRITICAL_SATURATION.md`) — banner fixo: *"Métrica lexical — hipótese a validar; não mede intenção."*
+- **Linha temporal**: média anual do ISC 2020–2026 com banda de dispersão e marcação de datas estimadas — a proporção de crítica caiu, manteve-se ou cresceu?
+- **Scatter de pregações**: X = data, Y = ISC%; linha do limiar configurável; pontos `saturacao_alta` em cor de alerta; clique abre o sermão + snippets exatos do campo crítica;
+- **Card comparativo**: "Em {ANO_A}, saturação crítica média (lexical) de {X}% ({n} pregações); em {ANO_B}, {Y}%" — verbo neutro, denominadores visíveis;
+- Cruzamento ISC lexical × `religiousDeconstructionScore` codificado (validação convergente).
+
 ### P13 — Lacunas formativas (`/dashboard/lacunas`)
 Tabela: tema · frequência (presença) · centralidade · score médio · evidências · recomendação pastoral · trilha sugerida. Só popula com dados `reviewed`; antes disso, exibe "hipóteses a validar".
 Trilhas exemplo: grupos de cuidado, curso de oração, trilha de voluntariado, formação de discipuladores, aconselhamento financeiro, formação para família, missão local, discipulado básico, dons e serviço.
@@ -98,7 +105,9 @@ Transcrições com flag de qualidade · conflitos JSON × TSV · fontes sem sér
 
 **Radar**: os 8 eixos (saúde bíblica, ortodoxia, ortopraxia, espiritualidade, comunidade, missão, vida cotidiana, saúde pastoral) — geral, por ano e por série.
 
-**Scatter**: ortodoxia × ortopraxia · desconstrução × reconstrução · acolhimento × envio · explicação bíblica × aplicação prática.
+**Scatter**: ortodoxia × ortopraxia · desconstrução × reconstrução · acolhimento × envio · explicação bíblica × aplicação prática · pregações × ISC com linha de limiar (P12b).
+
+**Saturação Crítica (ISC)**: linha temporal da média anual · scatter com limiar · card comparativo entre anos — ver P12b e `CRITICAL_SATURATION.md`.
 
 **Dieta teológica** (proporção entre blocos): preferir **treemap ou barras empilhadas** a pie chart — temas coexistem na mesma pregação (uma pregação pode ser simultaneamente cristológica, soteriológica e eclesiológica); pie única esconde isso. Rotular a métrica usada (densidade ou score médio).
 

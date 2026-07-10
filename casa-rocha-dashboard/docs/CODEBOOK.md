@@ -73,6 +73,13 @@ Cristo · Jesus · Logos · Verbo · Filho · Pai · Espírito Santo · Trindade
 ### Desconstrução religiosa
 sistema religioso · religião · legalismo · barganha · culpa · medo · mercado gospel · evangelho de Judas · Mamon · pastor como guru · líder totalitário · abuso espiritual · manipulação · ritual vazio · fariseu · clericalismo
 
+Expansão para o Módulo de Saturação Crítica (ver `CRITICAL_SATURATION.md`):
+- **diretos**: mercado da fé · gurus · instituição · CNPJ · caça-níqueis · dízimo · campanhas
+- **irônicos**: alquimias da religião · fórmulas mágicas · gênio da lâmpada · bater continência para pastor · ungido · mandingas evangélicas · fábrica de crentes · recebe a vitória · toma posse · tá amarrado
+- **ideologias de poder**: idolatria política · gado · esquerdas e direitas na igreja
+
+Atenção redobrada a falsos positivos neste campo ("dízimo", "campanhas", "ungido" têm usos neutros/bíblicos) — a camada lexical gera candidatos; o sentido é validado nas camadas 2–3.
+
 ### Santificação e maturidade
 fruto do Espírito · morte do ego · arrependimento · humildade · domínio próprio · santidade · dependência de Deus · carne · nova criatura · transformação
 

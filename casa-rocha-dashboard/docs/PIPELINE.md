@@ -56,7 +56,8 @@ Sobre cada transcrição, usando os dicionários do `CODEBOOK.md` §5:
 2. Densidade por 10.000 palavras → `LexicalMetric`;
 3. Extração de snippets: janela de contexto ao redor de cada match relevante → `SermonEvidence` com `analysisMethod: "dictionary"`;
 4. TF-IDF sobre o corpus → termos distintivos por pregação e por série;
-5. (Fase avançada) embeddings + clustering: pregações semanticamente próximas, evolução de vocabulário por ano, comparação entre séries.
+5. **Índice de Saturação Crítica (ISC)** — ver `CRITICAL_SATURATION.md`: para cada pregação, `isc = (menções crítica ao sistema / menções Evangelho) × 100`, com densidades absolutas dos dois campos, denominador mínimo configurável (default 5 menções; abaixo disso, `nao_calculavel`), rótulo por limiar configurável (default 30% = `saturacao_alta`) e snippets do campo crítica gravados em `SermonEvidence` (`category: "critica_ao_sistema"`, `analysisMethod: "dictionary"`) → tabela `SaturationMetric`;
+6. (Fase avançada) embeddings + clustering: pregações semanticamente próximas, evolução de vocabulário por ano, comparação entre séries.
 
 Tudo nesta camada é rotulado como **frequência/densidade lexical** — nunca vira score teológico sozinho.
 

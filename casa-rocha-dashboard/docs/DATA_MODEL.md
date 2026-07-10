@@ -10,6 +10,7 @@ sermons 1──1 sermon_scores
 sermons 1──N sermon_evidence
 sermons 1──N biblical_references
 sermons 1──N lexical_metrics
+sermons 1──1 saturation_metrics   (Módulo ISC — CRITICAL_SATURATION.md)
 codebook_categories (referência da régua; versionada)
 import_runs (log de importações idempotentes)
 ```
@@ -53,6 +54,7 @@ model Sermon {
   evidence   SermonEvidence[]
   references BiblicalReference[]
   lexical    LexicalMetric[]
+  saturation SaturationMetric?
 
   @@map("sermons")
 }
@@ -228,6 +230,27 @@ model LexicalMetric {
   sermon Sermon @relation(fields: [sermonId], references: [id])
   @@unique([sermonId, theme, term])
   @@map("lexical_metrics")
+}
+
+// ─────────────────────────────────────────────
+// Módulo de Saturação Crítica (ISC) — camada lexical, 1 por pregação
+// ver docs/CRITICAL_SATURATION.md
+// ─────────────────────────────────────────────
+model SaturationMetric {
+  id                   String  @id @default(cuid())
+  sermonId             String  @unique
+  iscRatio             Float?  // (crítica / evangelho) × 100; null se não_calculável
+  criticDensityPer10k  Float   // densidade do campo "crítica ao sistema"
+  gospelDensityPer10k  Float   // densidade do campo "Evangelho" (cruz + cristologia)
+  criticRawCount       Int
+  gospelRawCount       Int
+  saturationLabel      String? // saturacao_baixa | saturacao_moderada | saturacao_alta | nao_calculavel
+  thresholdUsed        Float   // limiar vigente no cálculo (auditável)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  sermon Sermon @relation(fields: [sermonId], references: [id])
+  @@map("saturation_metrics")
 }
 
 // ─────────────────────────────────────────────

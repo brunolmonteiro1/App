@@ -62,5 +62,6 @@ Linguagem correta: "ênfases observadas", "dieta formativa", "padrões recorrent
 | `docs/CODEBOOK.md` | Régua 0–5, categorias por eixo, dicionários temáticos |
 | `docs/METHODOLOGY.md` | Presença/centralidade/densidade, camadas de proveniência, kappa, hipótese vs conclusão |
 | `docs/PIPELINE.md` | Importação, motor bíblico, NLP, codificação IA em lotes, revisão humana |
+| `docs/CRITICAL_SATURATION.md` | Módulo ISC: proporção crítica ao sistema × Evangelho, limiar configurável, página P12b |
 | `docs/DASHBOARD_SPEC.md` | Páginas, filtros, gráficos, drill-down, exportações, relatórios |
 | `docs/ROADMAP.md` | Fases 1–6, critérios de aceite do MVP, estrutura de pastas |
