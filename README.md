@@ -14,6 +14,7 @@ antifraude. **A tecnologia é o meio. O produto é a campanha. O cliente é a em
 | [`docs/04-decisoes.md`](docs/04-decisoes.md) | Registro de decisões (tomadas e em aberto) |
 | [`norton_app/`](norton_app/) | Protótipo Flutter navegável (dados mock) — gera APK de teste |
 | [`.github/workflows/build-apk.yml`](.github/workflows/build-apk.yml) | CI que compila o APK a cada push |
+| [`casa-rocha-dashboard/`](casa-rocha-dashboard/) | Subprojeto independente: Dashboard de Saúde Teológica e Formação Pastoral — A Casa da Rocha (documentação e dados; ver [`casa-rocha-dashboard/CLAUDE.md`](casa-rocha-dashboard/CLAUDE.md)) |
 
 ## Rodando o protótipo
 
