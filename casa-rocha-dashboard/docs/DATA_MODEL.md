@@ -85,6 +85,7 @@ model SermonAnalysis {
   individualVsCommunityFocus String?
   theologicalLevel          String?
   languageComplexityScore   Int?
+  ontologicalVsPragmatic    String?  // ontologico | equilibrado | pragmatico | nao_identificavel (eixo transversal, CODEBOOK §4b)
   summary3Lines             String?
   mainApplication           String?
   possibleFormativeGap      String?  // sempre redigida como hipótese
@@ -157,6 +158,10 @@ model SermonScores {
   sendingHealedScore               Int?
   coresponsibilityScore            Int?
   passivityRiskScore               Int?
+  cynicismElitismRiskScore         Int?  // risco de cinismo/elitismo teológico (CODEBOOK §4, Lc 18:11)
+
+  // Eixo transversal — modo de ensino (CODEBOOK §4b)
+  practicalMethodScore             Int?  // há passo/método concreto aplicável?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -278,6 +283,23 @@ model CodebookCategory {
 
   @@unique([fieldName, version])
   @@map("codebook_categories")
+}
+
+// ─────────────────────────────────────────────
+// Benchmark "igreja saudável" — régua normativa de referência
+// (seed a partir de HEALTH_BENCHMARK.md; contra o qual a cobertura é medida)
+// ─────────────────────────────────────────────
+model BenchmarkTopic {
+  id         String  @id @default(cuid())
+  topic      String  // ex.: "Igreja como corpo", "Serviço"
+  baseTexts  String  // JSON array de refs bíblicas ("1Co 12", "Rm 12", "Ef 4")
+  axis       String  // eixo 1–8 correspondente (CODEBOOK)
+  category   String  // "textos_base" | "area_saude" | "ortodoxia"
+  notes      String?
+  createdAt  DateTime @default(now())
+
+  @@unique([topic])
+  @@map("benchmark_topics")
 }
 
 // ─────────────────────────────────────────────

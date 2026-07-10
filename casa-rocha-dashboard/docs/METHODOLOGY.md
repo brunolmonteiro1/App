@@ -23,6 +23,12 @@ O projeto parte de **hipótese pastoral** (ver `BLUEPRINT.md` §3), nunca de con
 
 A UI reflete isso: painéis interpretativos exibem o banner *"N de 263 pregações codificadas — dados parciais"* enquanto a codificação não terminar, e o texto dos relatórios usa a linguagem metodológica acima.
 
+**Caso real (por que a regra existe).** A análise anterior do mesmo acervo, feita no NotebookLM, afirmou percentuais como "~80% do foco homilético", "~40% a 50% das mensagens" e "< 5% do ensino" — e, na mesma conversa, **admitiu** que "o arquivo de dados brutos contém apenas os metadados... o número exato exigiria uma tabulação manual prévia de cada vídeo". Ou seja, produziu percentuais que confessou não ter como calcular. Este projeto existe justamente para substituir essa estimativa por contagem auditável: nenhum percentual sem pregações codificadas e denominador visível.
+
+## 2b. Recomendação = trilha complementar (guardrail de enquadramento)
+
+Toda recomendação pastoral gerada pelo sistema é enquadrada como **trilha complementar de formação** (grupos de cuidado, cursos, discipulado, aconselhamento) — **nunca** como "o púlpito deve mudar", "o pregador deveria pregar X" ou juízo sobre a escolha homilética. A opção do púlpito por ênfase ontológica (ver `CODEBOOK.md` §4b) é tratada como legítima; o papel do dashboard é apontar onde o *ecossistema da igreja* (fora do domingo) pode complementar, não corrigir o púlpito.
+
 ## 3. Presença × Centralidade × Densidade
 
 | Métrica | Pergunta | Fonte do dado | Exemplo |
@@ -86,4 +92,13 @@ Todo relatório inclui seção fixa de limitações:
 - datas parcialmente estimadas por interpolação;
 - ausência de timestamps (evidência textual, não temporal);
 - a análise mede o **púlpito dominical**, não toda a vida formativa da igreja (grupos, aconselhamento, cursos não estão no corpus);
-- codificação por IA revisada por humano — não é juízo pastoral automático.
+- codificação por IA revisada por humano — não é juízo pastoral automático;
+- **não há dados de engajamento da congregação** (frequência, número de voluntários, participação em ministérios) neste corpus; a hipótese "muitos ouvintes, poucos servindo" descreve uma dor real, mas **não é comprovável só pelas transcrições** — exigiria dados internos da igreja, fora do escopo atual.
+
+## 9. Fora de escopo (decisões de governança)
+
+Itens deliberadamente excluídos deste produto, para preservar o princípio de não julgar a pessoa:
+
+- **Comparação "Imagem Pública vs Púlpito Interno"** — cruzar o "Dossiê público sobre Pr. José Bruno.pdf" (polêmicas, atuação pública) com o ensino interno **não** entra no dashboard de saúde. Desloca o foco do raio-x da dieta formativa para investigação do pregador e colide com a regra 2 (não inferir intenção). O PDF permanece no banco como fonte `isSermon = false`, **não analisada**.
+- **Dados de engajamento da igreja** (frequência/voluntários/ministérios) — fora do MVP; ver §8.
+- **Diagnóstico psicológico ou de trauma do pregador** — o Módulo de Saturação Crítica (`CRITICAL_SATURATION.md`) mede linguagem, não causa; qualquer leitura de "motivação" é proibida.

@@ -56,6 +56,7 @@ Radar doutrinário · ranking de doutrinas · doutrina × ano (heatmap) · doutr
 
 ### P6 — Ortopraxia (`/dashboard/ortopraxia`)
 Prática cristã por tema (serviço, generosidade, missão, discipulado, família, trabalho, dinheiro) · aplicação prática por ano e por série · chamados concretos por tipo · lacunas de prática (como hipótese).
+- **Painel Ontológico × Pragmático** (`ontologicalVsPragmatic` / `practicalMethodScore`, `CODEBOOK.md` §4b): barras empilhadas mostrando, por eixo/tema/ano, quanto do ensino é modo *ser* (identidade) vs *fazer* (método). É a lente mais direta para a hipótese central do projeto. Banner: "modo de ensino, não qualidade — score pragmático baixo pode ser opção homilética legítima".
 
 ### P7 — Ortodoxia × Ortopraxia (`/dashboard/equilibrio`)
 Scatter plot por pregação (X = ortodoxia, Y = ortopraxia) com 4 quadrantes nomeados; filtro por ano/série; clique no ponto abre a pregação. Objetivo: visualizar se a formação de crença correta é acompanhada de prática estruturada.
@@ -74,6 +75,8 @@ Casamento · filhos · família · trabalho · finanças · conflitos · saúde 
 
 ### P12 — Cura, desconstrução e envio (`/dashboard/pastoral`)
 Desconstrução religiosa por ano · reconstrução discipular por ano · acolhimento × envio · risco de passividade · **índice desconstrução × reconstrução** (gauge/barras comparativas ou scatter) · linha do tempo da linguagem (a crítica ao sistema mudou ao longo dos anos? o vocabulário de comunidade cresceu?).
+- **Funil de maturidade**: acolhimento → cura/desconstrução → discipulado/reconstrução → envio → corresponsabilidade (barras/funnel dos scores do Eixo 8) — visualiza a hipótese de estágios iniciais fortes e finais fracos; só afirmável sobre dados `reviewed`.
+- **Risco de cinismo/elitismo** (`cynicismElitismRiskScore`): distribuição por ano, com drill-down às evidências; rotulado como risco a monitorar, não acusação.
 
 ### P12b — Saturação Crítica (`/dashboard/saturacao`)
 Módulo ISC (`CRITICAL_SATURATION.md`) — banner fixo: *"Métrica lexical — hipótese a validar; não mede intenção."*
@@ -94,6 +97,14 @@ Fila de pendências · montagem de lote (5–10) · geração do prompt · colag
 
 ### P16 — Qualidade de dados (`/settings/quality`)
 Transcrições com flag de qualidade · conflitos JSON × TSV · fontes sem série identificada · datas com confiança baixa · análises desatualizadas (versão de codebook antiga) · log de importações.
+
+### P17 — Cobertura vs. Igreja Saudável (`/dashboard/benchmark`)
+Gap analysis contra a régua normativa de `HEALTH_BENCHMARK.md`. Para cada tema (textos-base, 5 áreas de saúde, taxonomia de ortodoxia):
+- **presença** dos textos-base no corpus (motor bíblico — determinístico, disponível desde a Fase 2);
+- **centralidade** do tema (codificação `reviewed` — quando disponível);
+- matriz/heatmap tema × cobertura, com selo de proveniência e denominador;
+- coluna de **trilha complementar** sugerida (grupos, curso de oração, aconselhamento financeiro, formação para família, missão local, discipulado básico…), sempre como hipótese e como complemento — nunca como crítica ao púlpito (`METHODOLOGY.md` §2b).
+Banner fixo: *"Lacuna = hipótese a validar; pode aparecer fora do corpus dominical (grupos, cursos, Caminho das Letras)."*
 
 ## 5. Catálogo de gráficos obrigatórios
 

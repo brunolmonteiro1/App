@@ -59,8 +59,9 @@ Linguagem correta: "ênfases observadas", "dieta formativa", "padrões recorrent
 | `docs/BLUEPRINT.md` | Visão do produto, hipótese pastoral, 8 eixos de análise |
 | `docs/DATA_AUDIT.md` | Inspeção real dos dados, estruturas, limitações |
 | `docs/DATA_MODEL.md` | Schema Prisma: sermons, analysis, scores, evidence, codebook, biblical_references |
-| `docs/CODEBOOK.md` | Régua 0–5, categorias por eixo, dicionários temáticos |
-| `docs/METHODOLOGY.md` | Presença/centralidade/densidade, camadas de proveniência, kappa, hipótese vs conclusão |
+| `docs/CODEBOOK.md` | Régua 0–5, categorias por eixo, eixo transversal ontológico×pragmático, dicionários temáticos |
+| `docs/HEALTH_BENCHMARK.md` | Régua normativa "igreja saudável": textos-base, áreas de saúde, gap analysis (P17) |
+| `docs/METHODOLOGY.md` | Presença/centralidade/densidade, camadas de proveniência, kappa, hipótese vs conclusão, fora de escopo |
 | `docs/PIPELINE.md` | Importação, motor bíblico, NLP, codificação IA em lotes, revisão humana |
 | `docs/CRITICAL_SATURATION.md` | Módulo ISC: proporção crítica ao sistema × Evangelho, limiar configurável, página P12b |
 | `docs/DASHBOARD_SPEC.md` | Páginas, filtros, gráficos, drill-down, exportações, relatórios |

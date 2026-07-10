@@ -58,7 +58,24 @@ Missio Dei, missão local/global, evangelismo pessoal, testemunho cotidiano, apo
 Casamento, filhos, solteiros, sexualidade, finanças, dívidas, consumo, trabalho, vocação, ética profissional, conflitos, perdão prático, saúde emocional, corpo. Scores: `familyRelationshipsScore`, `vocationWorkScore`, `financeStewardshipScore`, `forgivenessReconciliationScore`.
 
 ### Eixo 8 — Saúde pastoral: cura, desconstrução e envio
-`healingWoundedScore` (acolhimento dos feridos), `religiousDeconstructionScore` (crítica a legalismo, culpa, medo, barganha, mercado gospel, liderança autoritária), `discipleshipReconstructionScore`, `practicalActivationScore`, `sendingHealedScore`, `coresponsibilityScore`, `passivityRiskScore` + agregado `pastoralHealthScore`.
+`healingWoundedScore` (acolhimento dos feridos), `religiousDeconstructionScore` (crítica a legalismo, culpa, medo, barganha, mercado gospel, liderança autoritária), `discipleshipReconstructionScore`, `practicalActivationScore`, `sendingHealedScore`, `coresponsibilityScore`, `passivityRiskScore`, `cynicismElitismRiskScore` + agregado `pastoralHealthScore`.
+
+- `cynicismElitismRiskScore` — risco de a mensagem alimentar cinismo ou **elitismo teológico** (o paradoxo do fariseu de Lc 18:11: "graças a Deus não sou como os outros evangélicos"). Score alto = ironia/superioridade sobre "o sistema" sem chamado afirmativo correspondente. É um **risco a monitorar**, não uma acusação; exige evidência textual como qualquer 4–5.
+
+**Funil de maturidade.** Os scores do Eixo 8 compõem uma leitura de funil — acolhimento → cura/desconstrução → discipulado/reconstrução → envio → corresponsabilidade. A hipótese pastoral central do projeto (ver `BLUEPRINT.md`) é que os primeiros estágios podem estar fortes e os finais fracos; o funil só é afirmável sobre dados `reviewed`.
+
+## 4b. Eixo transversal — Ontológico (ser) × Pragmático (fazer)
+
+Mede o **modo** de ensino, não o tema — por isso é transversal a todos os eixos. Uma pregação pode ter `serviceDiaconiaScore` alto e ainda assim ensinar serviço só como identidade ("somos servos"), sem método ("sirva em X nesta semana"). Este é o achado mais recorrente da análise pastoral e a lente mais direta para a hipótese central.
+
+- `ontologicalVsPragmatic` (categórico, sobre o tema aplicado dominante): `ontologico` (ensina quem o cristão é/deve ser) · `equilibrado` · `pragmatico` (dá passo/método concreto) · `nao_identificavel`.
+- `practicalMethodScore` (0–5): há caminho prático aplicável? 0 = nenhum; 5 = passos claros e acionáveis.
+
+Exemplos:
+- "se os dois morrerem para si mesmos, o casamento dá certo" → `ontologico`, `practicalMethodScore` baixo.
+- "procure alguém para discipular esta semana; comece por…" → `pragmatico`, `practicalMethodScore` alto.
+
+Nota metodológica: score pragmático **baixo não é defeito** — pode ser opção homilética legítima. O dado serve para o presbitério decidir onde criar trilhas complementares (grupos, cursos), nunca para cobrar que o púlpito vire manual de passos.
 
 ## 5. Dicionários temáticos iniciais (camada lexical)
 
