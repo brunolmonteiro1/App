@@ -51,11 +51,14 @@ Não começar pelo relatório. Não começar por conclusões. Não inventar perc
 
 ## 3. Fases
 
-### Fase 1 — Importador e banco
+### Fase 1 — Importador e banco ✅ (implementada em 2026-07-10)
 Configurar projeto · schema Prisma · importar JSON (com idempotência e ImportRun) · listar fontes · abrir transcrições.
+Resultado: 266 fontes / 263 pregações importadas; re-importação idempotente verificada.
 
-### Fase 2 — Tabela e busca
+### Fase 2 — Tabela e busca ✅ (implementada em 2026-07-10)
 Tabela com filtros (TanStack) · busca full-text (FTS5) · filtros por série/ano/tipo · página individual da pregação · motor bíblico (regex) + análise lexical (dicionários, densidade/10k, snippets) — camadas determinísticas completas.
+Resultado: 1.510 referências bíblicas detectadas; 9.138 métricas lexicais; ISC calculado para 263 pregações; deploy via Docker (`INSTALL.md`).
+Decisões de MVP: busca com SQL `LIKE` (FTS5 fica para otimização futura); tabela server-rendered (TanStack quando a tela de codificação chegar); shadcn/ui adiado para a Fase 3; gráficos com Recharts e paleta validada.
 
 ### Fase 3 — Codebook e codificação
 Seed do codebook (régua 0–5 + dicionários) · tela `/coding` · geração de prompt de lote · validação Zod da resposta · cadastro de scores e evidências · fila de revisão humana side-by-side.
