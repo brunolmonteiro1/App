@@ -7,3 +7,5 @@ data/processed/
 npm-debug.log*
 *.tsbuildinfo
 next-env.d.ts
+.ca-test.crt
+Dockerfile.test
