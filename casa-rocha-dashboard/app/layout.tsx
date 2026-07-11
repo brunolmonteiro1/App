@@ -11,9 +11,14 @@ export const metadata: Metadata = {
 const NAV = [
   { href: "/dashboard", label: "Visão geral" },
   { href: "/sermons", label: "Pregações" },
+  { href: "/dashboard/biblia", label: "Bíblia" },
+  { href: "/dashboard/temas", label: "Temas" },
+  { href: "/dashboard/series", label: "Séries" },
   { href: "/dashboard/equilibrio", label: "Equilíbrio" },
   { href: "/dashboard/pastoral", label: "Pastoral" },
+  { href: "/dashboard/benchmark", label: "Benchmark" },
   { href: "/evidence", label: "Evidências" },
+  { href: "/reports", label: "Relatórios" },
   { href: "/coding", label: "Codificação" },
   { href: "/quality", label: "Qualidade" },
 ];

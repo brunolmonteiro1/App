@@ -1,4 +1,5 @@
 import Badge from "@/components/Badge";
+import CalendarHeatmap from "@/components/CalendarHeatmap";
 import { Card, StatTile } from "@/components/Card";
 import BarChartLink from "@/components/charts/BarChartLink";
 import IscTimeline from "@/components/charts/IscTimeline";
@@ -101,6 +102,18 @@ export default async function DashboardPage() {
           <Badge kind="lexical" />
         </div>
         <IscTimeline data={iscData} threshold={threshold} />
+      </Card>
+
+      <Card
+        title="Calendário de pregações (por semana)"
+        footnote="Buracos e ritmo visíveis de relance. Datas estimadas por interpolação — ver Qualidade de dados. Clique no ano para abrir o acervo."
+      >
+        <CalendarHeatmap
+          dates={(await prisma.sermon.findMany({
+            where: { isSermon: true, dateEstimated: { not: null }, year: { not: null } },
+            select: { dateEstimated: true, year: true },
+          })).map((s) => ({ date: s.dateEstimated as Date, year: s.year as number }))}
+        />
       </Card>
 
       {lastImport && (

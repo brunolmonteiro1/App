@@ -68,11 +68,13 @@ Resultado: codificação por IA **via OpenRouter dentro do sistema** (modelo esc
 Visão geral · séries · anos · Bíblia/homilética (mapa de cobertura) · ortodoxia · ortopraxia · saúde pastoral — com badges de proveniência e denominadores.
 Resultado: `/dashboard/equilibrio` (scatter ortodoxia×ortopraxia com quadrantes e drill-down + radar dos 8 eixos), `/dashboard/pastoral` (funil de maturidade, desconstrução×reconstrução, riscos de passividade/cinismo, modo ser×fazer), `/evidence` (P14 — evidências auditáveis filtráveis). Todos com banner de denominador, filtro "só revisadas" e estado vazio que aponta para `/coding`. Mapa de cobertura da Bíblia (P4) fica para a Fase 5.
 
-### Fase 5 — Dashboard avançado
+### Fase 5 — Dashboard avançado ✅ (implementada em 2026-07-11)
 Heatmaps · scatter plots com quadrantes · radar dos 8 eixos · calendário heatmap · comparador de séries · sparklines de vocabulário · drill-down completo · página de evidências auditáveis · página de qualidade de dados.
+Resultado: `/dashboard/biblia` (mapa dos 66 livros com drill-down por livro, AT×NT, textos recorrentes), `/dashboard/temas` (heatmap densidade lexical tema×ano + termos mais frequentes), `/dashboard/series` (panorama + comparador radar de até 3 séries), `/dashboard/benchmark` (P17: presença dos textos-base × centralidade codificada × trilha sugerida), calendário de pregações por semana na visão geral, filtro `?book=` no acervo. Sparklines dispensadas (o heatmap cobre a pergunta).
 
-### Fase 6 — Relatórios
+### Fase 6 — Relatórios ✅ (implementada em 2026-07-11)
 Resumo executivo · relatório por série · relatório por tema · relatório de confiabilidade (kappa) · pacote de auditoria por afirmação · exportações (CSV/Markdown/PDF) · modo apresentação.
+Resultado: `/reports` (forças, oportunidades como hipótese, por série, confiabilidade IA×revisor por eixo — concordância exata e ±1 sobre snapshot `aiScoresJson`) + download `.md` via `/api/reports/executive` com funil, ISC anual e seção fixa de limitações. Modo preliminar (ai_coded) sempre rotulado; modo final só com `reviewed`. Pendências futuras: kappa ponderado formal, PDF/DOCX, modo apresentação.
 
 ## 4. Critérios de aceite do MVP
 

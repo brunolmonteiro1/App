@@ -55,6 +55,7 @@ model SermonAnalysis {
   aiModel                    String?
   aiCodedAt                  DateTime?
   aiError                    String?
+  aiScoresJson               String?   // snapshot dos scores originais da IA → concordância IA×revisor
   reviewStatus               String?
   reviewedBy                 String?
   reviewedAt                 DateTime?

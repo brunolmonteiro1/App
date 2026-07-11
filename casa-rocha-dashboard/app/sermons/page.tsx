@@ -10,14 +10,15 @@ const PAGE_SIZE = 30;
 export default async function SermonsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; year?: string; series?: string; page?: string; fulltext?: string }>;
+  searchParams: Promise<{ q?: string; year?: string; series?: string; page?: string; fulltext?: string; book?: string }>;
 }) {
-  const { q, year, series, page: pageStr, fulltext } = await searchParams;
+  const { q, year, series, page: pageStr, fulltext, book } = await searchParams;
   const page = Math.max(1, parseInt(pageStr ?? "1", 10) || 1);
 
   const where: Prisma.SermonWhereInput = { isSermon: true };
   if (year) where.year = parseInt(year, 10);
   if (series) where.series = series;
+  if (book) where.references = { some: { bookSlug: book } };
   if (q) {
     where.OR = [
       { title: { contains: q } },
@@ -47,7 +48,7 @@ export default async function SermonsPage({
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const qp = (over: Record<string, string | undefined>) => {
     const params = new URLSearchParams();
-    for (const [k, v] of Object.entries({ q, year, series, fulltext, ...over })) {
+    for (const [k, v] of Object.entries({ q, year, series, fulltext, book, ...over })) {
       if (v) params.set(k, v);
     }
     const s = params.toString();
@@ -85,14 +86,14 @@ export default async function SermonsPage({
         <button className="rounded-lg bg-foreground text-background px-3 py-1.5 text-sm" type="submit">
           Filtrar
         </button>
-        {(q || year || series) && (
+        {(q || year || series || book) && (
           <Link href="/sermons" className="text-sm text-secondary underline">limpar</Link>
         )}
       </form>
 
       <p className="text-sm text-secondary">
         {total} pregações{year ? ` · ano ${year}` : ""}{series ? ` · série ${series}` : ""}
-        {q ? ` · busca "${q}"` : ""}
+        {book ? ` · citando ${book}` : ""}{q ? ` · busca "${q}"` : ""}
       </p>
 
       <div className="overflow-x-auto rounded-xl border border-hairline bg-surface">
