@@ -52,6 +52,9 @@ model SermonAnalysis {
   sermonId                   String    @unique
   analysisStatus             String    @default("pending")
   analysisVersion            Int       @default(1)
+  aiModel                    String?
+  aiCodedAt                  DateTime?
+  aiError                    String?
   reviewStatus               String?
   reviewedBy                 String?
   reviewedAt                 DateTime?
@@ -261,6 +264,14 @@ model BenchmarkTopic {
   createdAt DateTime @default(now())
 
   @@map("benchmark_topics")
+}
+
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+
+  @@map("app_settings")
 }
 
 model ImportRun {

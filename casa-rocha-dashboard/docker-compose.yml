@@ -14,4 +14,7 @@ services:
       - APP_PASSWORD=${APP_PASSWORD:-}
       # Limiar do Índice de Saturação Crítica, em % (padrão 30).
       - ISC_THRESHOLD=${ISC_THRESHOLD:-30}
+      # Chave da API do OpenRouter (https://openrouter.ai/keys) — habilita a
+      # codificação por IA na página /coding. Sem ela, o restante funciona normalmente.
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
     restart: unless-stopped

@@ -61,18 +61,21 @@ Sobre cada transcrição, usando os dicionários do `CODEBOOK.md` §5:
 
 Tudo nesta camada é rotulado como **frequência/densidade lexical** — nunca vira score teológico sozinho.
 
-## 4. Codificação por IA em lotes (página `/coding`)
+## 4. Codificação por IA via OpenRouter (página `/coding`) — implementado
+
+A codificação roda **dentro do sistema**, via API do OpenRouter (modelo escolhido na UI, chave via env `OPENROUTER_API_KEY`). O fluxo manual de copiar/colar foi descontinuado.
 
 ### 4.1 Fluxo
 
-1. Listar pregações `pending`; montar lote de **5–10** (evita erro e perda de contexto);
-2. Gerar o prompt do lote (template §4.2) contendo codebook + transcrições;
-3. Usuário roda no Claude (ou via API em batch);
-4. Colar a resposta na interface → **validação Zod**: JSON bem-formado, ids existentes, scores 0–5, evidência obrigatória para 4–5, evidência localizável na transcrição (senão rejeita o item);
-5. Salvar em `SermonAnalysis` + `SermonScores` + `SermonEvidence` com `analysisStatus: "ai_coded"` e `analysisMethod: "ai_coding"`;
-6. Item inválido → volta ao lote com o motivo.
+1. A página `/coding` lista as pendentes; o usuário escolhe o **modelo** (lista do OpenRouter com preços + campo livre) e a **quantidade** (1/5/10/25/todas);
+2. O navegador envia uma pregação por vez a `POST /api/coding/analyze` (progresso, pausa e log por item na tela; o que foi salvo permanece salvo);
+3. O servidor monta o prompt por pregação (`lib/coding/prompt.ts` — regras metodológicas + catálogo de scores do `lib/coding/score-fields.ts` + transcrição) e chama o OpenRouter com `temperature: 0` e `response_format: json_object` (1 retry em 429/5xx);
+4. **Validação no servidor** (`lib/coding/schema.ts` + `locate-evidence.ts`): JSON bem-formado (Zod), scores inteiros 0–5, todo score ≥4 com evidência do campo, e **cada citação localizada literalmente na transcrição** (busca tolerante a acentos/caixa/pontuação, com índices reais calculados) — citação inexistente rejeita a pregação inteira (anti-alucinação);
+5. Sucesso → transação grava `SermonAnalysis` (`ai_coded`, `aiModel`, `aiCodedAt`) + `SermonScores` + `SermonEvidence` (`analysisMethod: "ai_coding"`, com `startIndex`/`endIndex`); falha → `aiError` gravado e exibido com botão de re-tentativa;
+6. Pregação `reviewed` nunca é recodificada (exige desfazer a revisão);
+7. Recodificar uma `ai_coded` substitui scores e evidências de IA anteriores; evidências `dictionary` (camada lexical) são preservadas.
 
-### 4.2 Prompt padrão do lote
+### 4.2 Prompt padrão (base conceitual; a versão executável está em `lib/coding/prompt.ts`)
 
 ```
 Você é um pesquisador de homilética empírica, teologia pastoral e análise de conteúdo.
@@ -105,12 +108,12 @@ Não faça conclusão geral. Apenas codifique as pregações do lote.
 
 O template real anexa as definições 0–5 de cada categoria (do codebook, versão vigente) e as transcrições do lote.
 
-## 5. Revisão humana (página `/coding` → fila de revisão)
+## 5. Revisão humana (página `/coding/review/[id]`) — implementado
 
-- Tela side-by-side: transcrição com evidências destacadas (via índices) à esquerda; scores/campos editáveis à direita;
-- Ações: aprovar, ajustar (edita score/evidência), rejeitar (volta a `pending`);
-- Registrar `reviewedBy`/`reviewedAt`; status final `reviewed`;
-- Dupla codificação da amostra de confiabilidade (ver `METHODOLOGY.md` §6).
+- Tela side-by-side: transcrição com evidências destacadas (via índices reais) à esquerda; análise interpretativa, evidências clicáveis (rolam até o trecho) e scores editáveis por eixo à direita;
+- Ações: aprovar · salvar ajustes e aprovar (scores editados; evidências passam a `human_review`) · rejeitar (volta a `pending` para recodificação);
+- Registra `reviewedBy`/`reviewedAt`; status final `reviewed`; navegação automática para a próxima da fila;
+- Dupla codificação da amostra de confiabilidade (ver `METHODOLOGY.md` §6) — fase futura.
 
 ## 6. Exportações (`scripts/export-csv.ts`)
 

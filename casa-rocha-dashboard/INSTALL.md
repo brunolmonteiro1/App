@@ -56,6 +56,26 @@ echo "APP_PASSWORD=escolha-uma-senha-forte-aqui" > .env.deploy
 
 (Se preferir sem senha — por exemplo, testando na sua própria máquina — pule este passo.)
 
+## Passo 4b — Ativar a análise por IA (OpenRouter)
+
+A página **Codificação** analisa cada pregação com o modelo de IA que você escolher
+(Claude, Gemini, GPT etc.), via [OpenRouter](https://openrouter.ai). Para ativar:
+
+1. Crie uma conta em https://openrouter.ai e adicione créditos (US$ 10 dão folga
+   para codificar o acervo inteiro com um modelo intermediário);
+2. Gere uma chave em https://openrouter.ai/keys;
+3. Adicione ao mesmo `.env.deploy`:
+
+```bash
+echo "OPENROUTER_API_KEY=sk-or-v1-sua-chave-aqui" >> .env.deploy
+```
+
+Sem a chave o sistema funciona normalmente — apenas a análise por IA fica
+desabilitada (a página avisa). O modelo é escolhido dentro da própria página, com
+preço por 1M de tokens exibido ao lado. Cada pregação consome ~15 mil tokens de
+entrada + ~2 mil de saída; multiplique pelo preço do modelo escolhido para estimar
+o custo das 263.
+
 ## Passo 5 — Ligar o sistema
 
 ```bash
