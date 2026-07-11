@@ -11,8 +11,11 @@ export const metadata: Metadata = {
 const NAV = [
   { href: "/dashboard", label: "Visão geral" },
   { href: "/sermons", label: "Pregações" },
+  { href: "/dashboard/equilibrio", label: "Equilíbrio" },
+  { href: "/dashboard/pastoral", label: "Pastoral" },
+  { href: "/evidence", label: "Evidências" },
   { href: "/coding", label: "Codificação" },
-  { href: "/quality", label: "Qualidade de dados" },
+  { href: "/quality", label: "Qualidade" },
 ];
 
 export default function RootLayout({

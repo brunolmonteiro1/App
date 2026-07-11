@@ -64,8 +64,9 @@ Decisões de MVP: busca com SQL `LIKE` (FTS5 fica para otimização futura); tab
 Seed do codebook (régua 0–5 + dicionários) · tela `/coding` · geração de prompt de lote · validação Zod da resposta · cadastro de scores e evidências · fila de revisão humana side-by-side.
 Resultado: codificação por IA **via OpenRouter dentro do sistema** (modelo escolhível na UI, chave via `OPENROUTER_API_KEY`), uma pregação por requisição, validação anti-alucinação (citação localizada literalmente na transcrição, com índices reais) e revisão humana em `/coding/review/[id]`. Fluxo manual de colar prompt foi descontinuado. Catálogo canônico de scores em `lib/coding/score-fields.ts` (substitui o seed de `CodebookCategory` no MVP).
 
-### Fase 4 — Dashboard básico
+### Fase 4 — Dashboard básico ✅ (implementada em 2026-07-11)
 Visão geral · séries · anos · Bíblia/homilética (mapa de cobertura) · ortodoxia · ortopraxia · saúde pastoral — com badges de proveniência e denominadores.
+Resultado: `/dashboard/equilibrio` (scatter ortodoxia×ortopraxia com quadrantes e drill-down + radar dos 8 eixos), `/dashboard/pastoral` (funil de maturidade, desconstrução×reconstrução, riscos de passividade/cinismo, modo ser×fazer), `/evidence` (P14 — evidências auditáveis filtráveis). Todos com banner de denominador, filtro "só revisadas" e estado vazio que aponta para `/coding`. Mapa de cobertura da Bíblia (P4) fica para a Fase 5.
 
 ### Fase 5 — Dashboard avançado
 Heatmaps · scatter plots com quadrantes · radar dos 8 eixos · calendário heatmap · comparador de séries · sparklines de vocabulário · drill-down completo · página de evidências auditáveis · página de qualidade de dados.
