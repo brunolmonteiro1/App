@@ -2,6 +2,8 @@
 
 Régua oficial de codificação. Toda análise (IA ou humana) segue este documento. O codebook é versionado (`CodebookCategory.version`): mudar definições exige nova versão e marca análises antigas como desatualizadas.
 
+> **Rubrica executável:** as definições operacionais por categoria (o que distingue 1–2 / 3 / 4–5 em cada campo) vivem em `lib/coding/rubric.ts` e são embutidas em todo prompt de codificação, junto com o glossário (`lib/coding/glossary.ts`) e o padrão confessional (`docs/THEOLOGY_BASELINE.md`, lido em runtime). Este doc é a referência conceitual; o código é a fonte executável — alterar a rubrica implica bump de `analysisVersion`.
+
 ## 1. Escala 0–5 (todas as categorias)
 
 | Score | Definição |

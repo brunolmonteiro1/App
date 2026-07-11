@@ -15,6 +15,7 @@ export interface ReportData {
   funnel: { label: string; value: number; n: number }[];
   iscByYear: { year: number; isc: number; n: number }[];
   bySeries: { series: string; n: number; orthodoxy: number | null; orthopraxy: number | null }[];
+  doctrines: { label: string; avg: number; n: number; central: number }[];
   reliability: { axis: string; exact: number; adjacent: number; n: number }[] | null;
 }
 
@@ -90,6 +91,22 @@ export async function buildReportData(preliminary: boolean): Promise<ReportData>
     })
     .sort((a, b) => b.n - a.n);
 
+  // Doutrinas (Eixo 2): média, n e centralidade (score >= 4)
+  const doctrineFields = SCORE_FIELDS.filter(
+    (f) => f.axis === "2. Ortodoxia" && f.field !== "orthodoxyScore"
+  );
+  const doctrines = doctrineFields
+    .map((f) => {
+      const { value, n } = average(rows, f.field);
+      const central = rows.filter((r) => {
+        const s = (r.scores as unknown as Record<string, number | null>)[f.field];
+        return s !== null && s !== undefined && s >= 4;
+      }).length;
+      return { label: f.label, avg: Number(value.toFixed(2)), n, central };
+    })
+    .filter((r) => r.n > 0)
+    .sort((a, b) => b.avg - a.avg);
+
   // Confiabilidade IA×revisor: revisadas com snapshot, comparação por eixo
   const reviewedWithSnapshot = await prisma.sermonAnalysis.findMany({
     where: { analysisStatus: "reviewed", aiScoresJson: { not: null } },
@@ -136,6 +153,7 @@ export async function buildReportData(preliminary: boolean): Promise<ReportData>
     funnel,
     iscByYear,
     bySeries,
+    doctrines,
     reliability,
   };
 }
@@ -192,6 +210,14 @@ export function buildMarkdown(d: ReportData): string {
     ...d.iscByYear.map((r) => `| ${r.year} | ${r.isc}% | ${r.n} |`),
     ``,
     `_ISC = menções de crítica ao sistema / menções do Evangelho × 100. Frequência de vocabulário — não mede intenção._`,
+    ``,
+    `## Doutrinas (Eixo 2 — média e centralidade)`,
+    ``,
+    `| Doutrina | Média | Central (score ≥4) | n |`,
+    `|---|---|---|---|`,
+    ...d.doctrines.map((r) => `| ${r.label} | ${r.avg.toFixed(2)} | ${r.central} | ${r.n} |`),
+    ``,
+    `_Centralidade = nº de pregações onde a doutrina é eixo forte/central, sempre com evidência textual._`,
     ``,
     `## Por série (ortodoxia × ortopraxia médias)`,
     ``,

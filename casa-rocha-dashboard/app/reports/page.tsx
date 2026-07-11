@@ -96,6 +96,31 @@ export default async function ReportsPage({
             </Card>
           </div>
 
+          <Card title="Doutrinas (Eixo 2 — média e centralidade)" footnote="Centralidade = pregações onde a doutrina é eixo forte/central (score ≥4, com evidência).">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs text-muted border-b border-hairline">
+                    <th className="py-2 pr-3 font-medium">Doutrina</th>
+                    <th className="py-2 pr-3 font-medium">Média</th>
+                    <th className="py-2 pr-3 font-medium">Central em</th>
+                    <th className="py-2 font-medium">n</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {d.doctrines.map((r) => (
+                    <tr key={r.label} className="border-b border-hairline last:border-0">
+                      <td className="py-1.5 pr-3">{r.label}</td>
+                      <td className="py-1.5 pr-3 tabular-nums">{r.avg.toFixed(2)}</td>
+                      <td className="py-1.5 pr-3 tabular-nums">{r.central}</td>
+                      <td className="py-1.5 tabular-nums">{r.n}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+
           <Card title="Por série (ortodoxia × ortopraxia médias)">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">

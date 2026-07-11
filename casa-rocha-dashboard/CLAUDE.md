@@ -60,6 +60,7 @@ Linguagem correta: "ênfases observadas", "dieta formativa", "padrões recorrent
 | `docs/DATA_AUDIT.md` | Inspeção real dos dados, estruturas, limitações |
 | `docs/DATA_MODEL.md` | Schema Prisma: sermons, analysis, scores, evidence, codebook, biblical_references |
 | `docs/CODEBOOK.md` | Régua 0–5, categorias por eixo, eixo transversal ontológico×pragmático, dicionários temáticos |
+| `docs/THEOLOGY_BASELINE.md` | Padrão confessional de referência (lido em runtime no prompt; editável pelo presbitério) |
 | `docs/HEALTH_BENCHMARK.md` | Régua normativa "igreja saudável": textos-base, áreas de saúde, gap analysis (P17) |
 | `docs/METHODOLOGY.md` | Presença/centralidade/densidade, camadas de proveniência, kappa, hipótese vs conclusão, fora de escopo |
 | `docs/PIPELINE.md` | Importação, motor bíblico, NLP, codificação IA em lotes, revisão humana |

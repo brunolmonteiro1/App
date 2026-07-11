@@ -1,4 +1,8 @@
 // Monta o prompt de codificação por pregação (PIPELINE.md §4.2 adaptado para API).
+// Base teológica executável: rubrica por categoria + glossário + baseline confessional.
+import { baselinePromptSection } from "./baseline";
+import { GLOSSARY } from "./glossary";
+import { RUBRIC } from "./rubric";
 import { SCORE_FIELDS } from "./score-fields";
 
 const AXIS_ORDER = [
@@ -14,7 +18,8 @@ function scoreCatalog(): string {
   const byAxis = new Map<string, string[]>();
   for (const f of SCORE_FIELDS) {
     const list = byAxis.get(f.axis) ?? [];
-    list.push(`  - "${f.field}": ${f.label}`);
+    const rubric = RUBRIC[f.field];
+    list.push(`  - "${f.field}" (${f.label}): ${rubric ?? "aplicar a escala geral."}`);
     byAxis.set(f.axis, list);
   }
   return AXIS_ORDER.map((axis) => `${axis}:\n${(byAxis.get(axis) ?? []).join("\n")}`).join("\n\n");
@@ -40,6 +45,10 @@ REGRAS INEGOCIÁVEIS:
 ESCALA (para todos os scores):
 0 = ausente ou não identificável · 1 = menção muito fraca · 2 = presença baixa · 3 = presença moderada · 4 = presença forte (eixo importante) · 5 = tema central da pregação.
 Não confunda menção com centralidade: uma palavra citada uma vez não é tema central.
+
+${baselinePromptSection()}
+
+${GLOSSARY}
 
 DISTINÇÕES IMPORTANTES:
 - Ortopraxia mede prática ESTRUTURADA (chamado concreto, passo aplicável), não exortação genérica "vivam o evangelho".

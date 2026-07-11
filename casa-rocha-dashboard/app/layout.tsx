@@ -14,6 +14,7 @@ const NAV = [
   { href: "/dashboard/biblia", label: "Bíblia" },
   { href: "/dashboard/temas", label: "Temas" },
   { href: "/dashboard/series", label: "Séries" },
+  { href: "/dashboard/ortodoxia", label: "Ortodoxia" },
   { href: "/dashboard/equilibrio", label: "Equilíbrio" },
   { href: "/dashboard/pastoral", label: "Pastoral" },
   { href: "/dashboard/benchmark", label: "Benchmark" },

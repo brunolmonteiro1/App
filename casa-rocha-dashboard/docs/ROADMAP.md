@@ -93,6 +93,8 @@ O MVP está pronto quando:
 
 ## 5. Evolução pós-MVP
 
+**Rodada 7 (2026-07-11) — base teológica executável:** rubrica 0–5 por categoria (`lib/coding/rubric.ts`) + glossário operacional (`lib/coding/glossary.ts`) + padrão confessional editável (`docs/THEOLOGY_BASELINE.md`, lido em runtime) embutidos em todo prompt — a base teológica fica no sistema, não no treinamento do modelo. Nova página `/dashboard/ortodoxia` (ranking de doutrinas com centralidade, heatmap doutrina×ano, tipos de pregação, testamento) e seção de doutrinas no relatório executivo.
+
 - Migração SQLite → PostgreSQL/Supabase (multiusuário, deploy);
 - codificação via API em batch (além do fluxo colar-prompt);
 - embeddings/clustering para descoberta temática;
