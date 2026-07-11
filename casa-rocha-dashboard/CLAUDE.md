@@ -67,3 +67,5 @@ Linguagem correta: "ênfases observadas", "dieta formativa", "padrões recorrent
 | `docs/CRITICAL_SATURATION.md` | Módulo ISC: proporção crítica ao sistema × Evangelho, limiar configurável, página P12b |
 | `docs/DASHBOARD_SPEC.md` | Páginas, filtros, gráficos, drill-down, exportações, relatórios |
 | `docs/ROADMAP.md` | Fases 1–6, critérios de aceite do MVP, estrutura de pastas |
+| `docs/BLUEPRINT_MESTRE_v2.md` | Especificação canônica v2 (reparo seguro, tentativas auditáveis, campos contextuais, Master View) |
+| `docs/BLUEPRINT_V2_ADEQUACAO.md` | **Ler antes de implementar o v2**: avaliação crítica, adaptações decididas e plano por rodadas (tem precedência operacional sobre o v2) |
