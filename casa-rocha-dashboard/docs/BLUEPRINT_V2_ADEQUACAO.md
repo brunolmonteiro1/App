@@ -96,8 +96,12 @@ conservador do que o v2 supõe.
   botão opcional "Auditar com IA" (`auditPrompt.ts`).
 
 ### Leva 2 — Operação e diagnóstico
-- **Rodada E:** OpenRouter UX (§21): combobox agrupado, tags, fallback `model-presets.ts`,
-  preferência de modelo por função (codificação/reparo/auditoria/relatório) em `AppSetting`.
+- **Rodada E ✅ (2026-07-12):** OpenRouter UX (§21): `lib/coding/model-presets.ts` (fallback
+  curado + provedores + tags), `listCatalog()` com cache e fallback automático em
+  `openrouter.ts`, `ModelSelector` (combobox pesquisável agrupado por provedor, preço/contexto/
+  tags/recomendado + modo avançado), preferência de modelo por função em `AppSetting`
+  (`lib/coding/model-preference.ts`; reparo/auditoria herdam de codificação). Endpoint
+  `/api/coding/models` devolve catálogo com `source` (openrouter|fallback).
 - **Rodada F:** Master Diagnostic View (§29–35): `MASTER_PASSWORD` em middleware + APIs,
   `SecurityAuditLog`, agregador determinístico de tensões (§33, thresholds versionados em
   config), cards, prompt master, `MasterDiagnosticReport` persistido/versionado, revisão,

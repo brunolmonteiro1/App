@@ -6,6 +6,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import SuggestionsPanel from "@/components/coding/SuggestionsPanel";
+import ModelSelector, { type ModelInfo as CatalogModel } from "@/components/coding/ModelSelector";
 
 interface PendingItem {
   id: string;
@@ -29,12 +30,6 @@ interface Status {
   model: string;
   suggestedModels: string[];
 }
-interface ModelInfo {
-  id: string;
-  name: string;
-  promptPrice: number | null;
-  completionPrice: number | null;
-}
 interface LogEntry {
   title: string;
   ok: boolean;
@@ -43,7 +38,7 @@ interface LogEntry {
 
 export default function CodingPage() {
   const [status, setStatus] = useState<Status | null>(null);
-  const [models, setModels] = useState<ModelInfo[]>([]);
+  const [models, setModels] = useState<CatalogModel[]>([]);
   const [model, setModel] = useState("");
   const [batch, setBatch] = useState(5);
   const [running, setRunning] = useState(false);
@@ -147,22 +142,13 @@ export default function CodingPage() {
         <h2 className="text-sm font-medium text-secondary">Configuração da análise</h2>
         <div className="flex flex-wrap items-end gap-3">
           <label className="text-sm">
-            <span className="block text-xs text-muted mb-1">Modelo (qualquer id do OpenRouter)</span>
-            <input
-              list="model-list"
+            <span className="block text-xs text-muted mb-1">Modelo do OpenRouter</span>
+            <ModelSelector
               value={model}
-              onChange={(e) => setModel(e.target.value)}
-              className="rounded-lg border border-hairline bg-background px-3 py-1.5 w-80 font-mono text-xs"
-              placeholder="ex.: anthropic/claude-sonnet-4.5"
+              onChange={setModel}
+              preferredTag="recomendado_para_codificacao"
+              disabled={running}
             />
-            <datalist id="model-list">
-              {status.suggestedModels.map((m) => (
-                <option key={m} value={m} />
-              ))}
-              {models.map((m) => (
-                <option key={m.id} value={m.id}>{m.name}</option>
-              ))}
-            </datalist>
           </label>
           <label className="text-sm">
             <span className="block text-xs text-muted mb-1">Quantidade</span>
@@ -209,6 +195,10 @@ export default function CodingPage() {
             <span className="text-xs text-muted">{priceOf(model)}</span>
           )}
         </div>
+        <p className="text-[11px] text-muted">
+          Modelos mais fortes tendem a interpretar melhor contexto, tom, ironia, fundamentação bíblica e
+          linha argumentativa. Modelos econômicos servem para triagem, mas exigem revisão humana mais cuidadosa.
+        </p>
         <p className="text-[11px] text-muted">
           Cada pregação é analisada individualmente (prompt com regras metodológicas + régua 0–5 + transcrição).
           A resposta só é salva se passar na validação: JSON íntegro, scores 0–5, score ≥4 com evidência,

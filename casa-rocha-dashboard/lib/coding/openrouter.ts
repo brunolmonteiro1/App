@@ -82,36 +82,108 @@ export function extractJson(content: string): unknown {
   }
 }
 
+import {
+  MODEL_PRESETS,
+  presetFor,
+  providerOf,
+  type ModelProvider,
+  type ModelTag,
+} from "./model-presets";
+
 export interface ModelInfo {
   id: string;
   name: string;
+  provider: ModelProvider;
   promptPrice: number | null; // USD por 1M tokens
   completionPrice: number | null;
   contextLength: number | null;
+  tags: ModelTag[];
+  recommended: boolean;
 }
 
-let modelsCache: { at: number; models: ModelInfo[] } | null = null;
+// Enriquece um modelo cru (id + preços) com provedor, tags e recomendação vindos
+// dos presets. Preços/contexto reais da API têm precedência; presets preenchem lacunas.
+function enrich(raw: {
+  id: string;
+  name?: string;
+  promptPrice: number | null;
+  completionPrice: number | null;
+  contextLength: number | null;
+}): ModelInfo {
+  const preset = presetFor(raw.id);
+  return {
+    id: raw.id,
+    name: raw.name ?? preset?.name ?? raw.id,
+    provider: providerOf(raw.id),
+    promptPrice: raw.promptPrice ?? preset?.promptPrice ?? null,
+    completionPrice: raw.completionPrice ?? preset?.completionPrice ?? null,
+    contextLength: raw.contextLength ?? preset?.contextLength ?? null,
+    tags: preset?.tags ?? [],
+    recommended: preset?.recommended ?? false,
+  };
+}
 
+const PRESET_MODELS: ModelInfo[] = MODEL_PRESETS.map((p) =>
+  enrich({
+    id: p.id,
+    name: p.name,
+    promptPrice: p.promptPrice,
+    completionPrice: p.completionPrice,
+    contextLength: p.contextLength,
+  })
+);
+
+export interface ModelCatalog {
+  models: ModelInfo[];
+  source: "openrouter" | "fallback";
+  fetchedAt: string;
+  error?: string;
+}
+
+const CACHE_TTL_MS = Number(process.env.OPENROUTER_MODELS_TTL_MS ?? 60 * 60 * 1000);
+let catalogCache: { at: number; catalog: ModelCatalog } | null = null;
+
+export async function listCatalog(): Promise<ModelCatalog> {
+  if (catalogCache && Date.now() - catalogCache.at < CACHE_TTL_MS) return catalogCache.catalog;
+
+  let catalog: ModelCatalog;
+  try {
+    const res = await fetch(`${BASE_URL}/models`, {
+      headers: process.env.OPENROUTER_API_KEY
+        ? { Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}` }
+        : {},
+    });
+    if (!res.ok) throw new Error(`OpenRouter /models ${res.status}`);
+    const json = await res.json();
+    const models: ModelInfo[] = (json?.data ?? [])
+      .map((m: { id: string; name?: string; pricing?: { prompt?: string; completion?: string }; context_length?: number }) =>
+        enrich({
+          id: m.id,
+          name: m.name,
+          promptPrice: m.pricing?.prompt ? Number(m.pricing.prompt) * 1_000_000 : null,
+          completionPrice: m.pricing?.completion ? Number(m.pricing.completion) * 1_000_000 : null,
+          contextLength: m.context_length ?? null,
+        })
+      )
+      .sort((a: ModelInfo, b: ModelInfo) => a.id.localeCompare(b.id));
+    if (models.length === 0) throw new Error("OpenRouter /models retornou lista vazia");
+    catalog = { models, source: "openrouter", fetchedAt: new Date().toISOString() };
+  } catch (e) {
+    // Fallback local: presets curados (§21.4). Disponibilidade/preços podem ter mudado.
+    catalog = {
+      models: PRESET_MODELS,
+      source: "fallback",
+      fetchedAt: new Date().toISOString(),
+      error: e instanceof Error ? e.message : String(e),
+    };
+  }
+  catalogCache = { at: Date.now(), catalog };
+  return catalog;
+}
+
+// Mantido por compatibilidade: só a lista de modelos.
 export async function listModels(): Promise<ModelInfo[]> {
-  if (modelsCache && Date.now() - modelsCache.at < 60 * 60 * 1000) return modelsCache.models;
-  const res = await fetch(`${BASE_URL}/models`, {
-    headers: process.env.OPENROUTER_API_KEY
-      ? { Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}` }
-      : {},
-  });
-  if (!res.ok) throw new Error(`OpenRouter /models ${res.status}`);
-  const json = await res.json();
-  const models: ModelInfo[] = (json?.data ?? [])
-    .map((m: { id: string; name?: string; pricing?: { prompt?: string; completion?: string }; context_length?: number }) => ({
-      id: m.id,
-      name: m.name ?? m.id,
-      promptPrice: m.pricing?.prompt ? Number(m.pricing.prompt) * 1_000_000 : null,
-      completionPrice: m.pricing?.completion ? Number(m.pricing.completion) * 1_000_000 : null,
-      contextLength: m.context_length ?? null,
-    }))
-    .sort((a: ModelInfo, b: ModelInfo) => a.id.localeCompare(b.id));
-  modelsCache = { at: Date.now(), models };
-  return models;
+  return (await listCatalog()).models;
 }
 
 // Sugestões exibidas em destaque na UI (o usuário pode digitar qualquer id).
