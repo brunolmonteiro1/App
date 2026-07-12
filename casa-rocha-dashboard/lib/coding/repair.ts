@@ -5,11 +5,17 @@
 // Invariante: nenhum score é alterado automaticamente.
 import { z } from "zod";
 import { prisma } from "../db";
-import { locateEvidence } from "./locate-evidence";
+import { detectCompositeQuote, locateEvidence } from "./locate-evidence";
 import { chatCompletion, extractJson } from "./openrouter";
 import { buildRepairPrompt } from "./repairPrompt";
-import { computeNeedsReview, CodingResponseSchema, type CodingResponse } from "./schema";
-import { AGGREGATE_SCORE_FIELDS, applicationModeToOntological, axisComponentFields, SCORE_FIELD_NAMES } from "./score-fields";
+import { applyConditionalApplicability, computeNeedsReview, CodingResponseSchema, type CodingResponse } from "./schema";
+import {
+  AGGREGATE_SCORE_FIELDS,
+  applicationModeToOntological,
+  axisComponentFields,
+  RISK_EVIDENCE_THRESHOLDS,
+  SCORE_FIELD_NAMES,
+} from "./score-fields";
 import { PROMPT_VERSION, SCHEMA_VERSION } from "./analyze";
 
 const RepairResponseSchema = z.object({
@@ -66,26 +72,41 @@ export async function repairEvidence(attemptId: string, model: string): Promise<
   const transcript = attempt.sermon.transcriptText;
 
   // Localiza as evidências ORIGINAIS que de fato existem na transcrição.
+  // Evidência de agregado NUNCA é reaproveitada (descarte incondicional).
   const originalLocated: { campo: string; citacao: string; comentario: string; startIndex: number; endIndex: number }[] = [];
   for (const ev of original.evidencias) {
+    if (AGGREGATE_SCORE_FIELDS.has(ev.campo)) continue;
     const loc = locateEvidence(transcript, ev.citacao);
     if (loc) originalLocated.push({ campo: ev.campo, citacao: loc.exactQuote, comentario: ev.comentario, startIndex: loc.startIndex, endIndex: loc.endIndex });
   }
   const locatedFields = new Set(originalLocated.map((e) => e.campo));
 
-  // Campos que precisam de evidência: score >=4 sem evidência LOCALIZÁVEL.
-  // Agregados de eixo não precisam de citação própria — ficam satisfeitos se
-  // alguma categoria específica do mesmo eixo já tem evidência localizada.
+  // Auditoria de coerência ANTES de caçar evidência (§10): score semanticamente
+  // incoerente (ex.: crítica baixa + reconstrução alta) não deve ganhar uma
+  // citação "qualquer" — vira sugestão pendente para decisão humana.
+  const conditional = applyConditionalApplicability(original);
+  const incoherentFields = new Set(conditional.reviewTriggers.map((t) => t.field));
+
+  // Campos que precisam de evidência: score >= limiar (4 geral; 3 para riscos —
+  // RISK_EVIDENCE_THRESHOLDS) sem evidência LOCALIZÁVEL. Agregados de eixo não
+  // precisam de citação própria — ficam satisfeitos se alguma categoria
+  // específica do mesmo eixo já tem evidência localizada.
   const needing = Object.entries(original.scores)
     .filter(([field, score]) => {
-      if (score === null || score < 4) return false;
+      if (score === null) return false;
+      const threshold = RISK_EVIDENCE_THRESHOLDS[field] ?? 4;
+      if (score < threshold) return false;
       if (locatedFields.has(field)) return false;
       if (AGGREGATE_SCORE_FIELDS.has(field)) {
         return !axisComponentFields(field).some((c) => locatedFields.has(c));
       }
       return true;
     })
-    .map(([field, score]) => ({ field, score }));
+    .map(([field, score]) => ({ field, score: score as number }));
+
+  // Separa os incoerentes: não entram na busca de evidência.
+  const coherentNeeding = needing.filter((n) => !incoherentFields.has(n.field));
+  const incoherentNeeding = needing.filter((n) => incoherentFields.has(n.field));
 
   const recordAttempt = async (status: string, extras: Record<string, unknown>) =>
     prisma.codingAttempt.create({
@@ -101,29 +122,55 @@ export async function repairEvidence(attemptId: string, model: string): Promise<
       },
     });
 
-  // 1. Chamar o modelo pedindo apenas evidências
-  let repairRaw;
-  try {
-    const { system, user } = buildRepairPrompt({ transcript, fieldsNeedingEvidence: needing });
-    repairRaw = await chatCompletion({ model, system, user });
-  } catch (e) {
-    await recordAttempt("FAILED_OPENROUTER", { failStage: "reparo: chamada ao provedor" });
-    return { ok: false, flow: "ERROR", message: e instanceof Error ? e.message : String(e) };
+  // 0. Fluxo C antecipado: campos incoerentes viram sugestão PENDING para
+  // decisão humana — o reparo NÃO procura evidência para sustentá-los.
+  let suggestionsCreated = 0;
+  for (const n of incoherentNeeding) {
+    const trigger = conditional.reviewTriggers.find((t) => t.field === n.field);
+    await prisma.codingRepairSuggestion.create({
+      data: {
+        sermonId,
+        codingAttemptId: attemptId,
+        scoreField: n.field,
+        originalScore: n.score,
+        suggestedScore: null,
+        suggestionReason: null,
+        missingEvidenceReason: trigger?.message ?? "score incoerente com os campos relacionados — revisar antes de buscar evidência",
+        suggestedByModel: null,
+        promptVersion: PROMPT_VERSION,
+        status: "PENDING",
+      },
+    });
+    suggestionsCreated++;
   }
 
-  let repair;
-  try {
-    repair = RepairResponseSchema.parse(extractJson(repairRaw.content));
-  } catch (e) {
-    await recordAttempt("FAILED_SCHEMA", { failStage: "reparo: JSON", rawResponseText: repairRaw.content });
-    return { ok: false, flow: "ERROR", message: "resposta de reparo inválida: " + (e instanceof Error ? e.message : String(e)) };
+  // 1. Chamar o modelo pedindo apenas evidências (só para os campos coerentes)
+  let repairRaw: Awaited<ReturnType<typeof chatCompletion>> | null = null;
+  let repair: z.infer<typeof RepairResponseSchema> = { evidencias: [], camposSemEvidencia: [], scoreSuggestions: [] };
+  if (coherentNeeding.length > 0) {
+    try {
+      const { system, user } = buildRepairPrompt({ transcript, fieldsNeedingEvidence: coherentNeeding });
+      repairRaw = await chatCompletion({ model, system, user });
+    } catch (e) {
+      await recordAttempt("FAILED_OPENROUTER", { failStage: "reparo: chamada ao provedor" });
+      return { ok: false, flow: "ERROR", message: e instanceof Error ? e.message : String(e) };
+    }
+    try {
+      repair = RepairResponseSchema.parse(extractJson(repairRaw.content));
+    } catch (e) {
+      await recordAttempt("FAILED_SCHEMA", { failStage: "reparo: JSON", rawResponseText: repairRaw.content });
+      return { ok: false, flow: "ERROR", message: "resposta de reparo inválida: " + (e instanceof Error ? e.message : String(e)) };
+    }
   }
 
-  // 2. Localizar cada evidência candidata na transcrição
+  // 2. Localizar cada evidência candidata na transcrição (agregados e citações
+  // compostas nunca entram)
   const located: { campo: string; citacao: string; comentario: string; startIndex: number; endIndex: number }[] = [];
   const foundFields = new Set<string>();
   for (const ev of repair.evidencias) {
     if (!SCORE_FIELD_NAMES.includes(ev.campo)) continue;
+    if (AGGREGATE_SCORE_FIELDS.has(ev.campo)) continue;
+    if (detectCompositeQuote(ev.citacao).isComposite) continue;
     const loc = locateEvidence(transcript, ev.citacao);
     if (loc) {
       located.push({ campo: ev.campo, citacao: loc.exactQuote, comentario: ev.comentario, startIndex: loc.startIndex, endIndex: loc.endIndex });
@@ -131,8 +178,7 @@ export async function repairEvidence(attemptId: string, model: string): Promise<
     }
   }
 
-  // 3. Sempre registrar sugestões de score como PENDING (fluxo C) — nunca aplicar
-  let suggestionsCreated = 0;
+  // 3. Sempre registrar sugestões de score do modelo como PENDING (fluxo C) — nunca aplicar
   for (const s of repair.scoreSuggestions) {
     if (!SCORE_FIELD_NAMES.includes(s.field)) continue;
     await prisma.codingRepairSuggestion.create({
@@ -151,19 +197,27 @@ export async function repairEvidence(attemptId: string, model: string): Promise<
     suggestionsCreated++;
   }
 
-  const stillMissing = needing.filter((n) => !foundFields.has(n.field));
+  const stillMissing = coherentNeeding.filter((n) => !foundFields.has(n.field));
 
-  // 4B. Evidência não localizada para algum campo obrigatório → mantém falha
-  if (stillMissing.length > 0) {
+  // 4B. Evidência não localizada OU campo incoerente pendente → mantém falha
+  if (stillMissing.length > 0 || incoherentNeeding.length > 0) {
     await recordAttempt("REPAIRABLE_EVIDENCE_GAP", {
-      failStage: "reparo: evidência não localizada",
-      rawResponseText: repairRaw.content,
-      evidenceValidationJson: JSON.stringify(stillMissing.map((m) => ({ campo: m.field, found: false }))),
+      failStage: incoherentNeeding.length > 0 ? "reparo: coerência a revisar" : "reparo: evidência não localizada",
+      rawResponseText: repairRaw?.content ?? null,
+      evidenceValidationJson: JSON.stringify([
+        ...stillMissing.map((m) => ({ campo: m.field, found: false })),
+        ...incoherentNeeding.map((m) => ({ campo: m.field, found: false, reason: "incoerência semântica — sugestão pendente" })),
+      ]),
     });
+    const parts: string[] = [];
+    if (stillMissing.length > 0) parts.push(`A IA não encontrou evidência literal para ${stillMissing.length} campo(s).`);
+    if (incoherentNeeding.length > 0) parts.push(`${incoherentNeeding.length} campo(s) com score incoerente foram encaminhados para revisão humana (sem busca de evidência).`);
+    parts.push("Nenhum score foi alterado.");
+    if (suggestionsCreated) parts.push(`Foram criadas ${suggestionsCreated} sugestão(ões) para decisão humana.`);
     return {
       ok: false,
       flow: "B_GAP",
-      message: `A IA não encontrou evidência literal para ${stillMissing.length} campo(s). Nenhum score foi alterado. ${suggestionsCreated ? `Foram criadas ${suggestionsCreated} sugestão(ões) para decisão humana.` : "Revise manualmente ou recodifique."}`,
+      message: parts.join(" "),
       suggestionsCreated,
     };
   }
@@ -175,7 +229,10 @@ export async function repairEvidence(attemptId: string, model: string): Promise<
   // Reaproveita as evidências originais localizáveis + as novas do reparo
   const allEvidence = [...originalLocated, ...located];
 
-  const { needs, reason } = computeNeedsReview(original);
+  const base = computeNeedsReview(original);
+  const triggerReasons = conditional.reviewTriggers.map((t) => t.message);
+  const needs = base.needs || triggerReasons.length > 0;
+  const reason = [base.reason, ...triggerReasons].filter(Boolean).join("; ") || null;
   const analysisFields = {
     confidenceGlobal: original.confianca,
     biblicalMainText: original.texto_biblico_principal,
@@ -228,7 +285,7 @@ export async function repairEvidence(attemptId: string, model: string): Promise<
 
   const rec = await recordAttempt("SUCCESS", {
     failStage: null,
-    rawResponseText: repairRaw.content,
+    rawResponseText: repairRaw?.content ?? null,
     evidenceValidationJson: JSON.stringify(allEvidence.map((e) => ({ campo: e.campo, found: true }))),
   });
 

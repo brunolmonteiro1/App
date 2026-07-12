@@ -38,7 +38,8 @@ REGRAS INEGOCIÁVEIS:
 - não invente dados; não use conhecimento externo à transcrição;
 - analise apenas evidências textuais desta transcrição;
 - quando não houver evidência, use score 0 ou null e NÃO crie evidência;
-- todo score 4 ou 5 em uma categoria ESPECÍFICA DEVE ter uma evidência com citação LITERAL da transcrição (copie o trecho exatamente como está, 15-60 palavras);
+- todo score 4 ou 5 em uma categoria ESPECÍFICA DEVE ter uma evidência com citação LITERAL da transcrição;
+- REGRAS DE CITAÇÃO (obrigatórias): cada citação é UM trecho CONTÍNUO da transcrição, copiado exatamente como está (12-80 palavras). NUNCA use "[...]" nem una passagens distantes numa mesma citação. NUNCA corrija gramática, pontuação ou erros da transcrição. Duas passagens diferentes = dois objetos separados no array "evidencias" (múltiplas evidências para o mesmo campo são permitidas);
 - EXCEÇÃO — campos agregados de eixo (os rotulados "agregado do eixo" e "Saúde bíblica geral": biblicalHealthScore, orthodoxyScore, orthopraxyScore, spiritualityScore, pastoralHealthScore) são SÍNTESES do eixo: pontue-os normalmente, mas NÃO crie evidência para eles no array "evidencias" — NÃO invente nem parafraseie uma citação "resumo" para o agregado (ex.: não descreva a referência bíblica em vez de citar a fala do pregador). A evidência real fica nas categorias específicas daquele eixo. Só dê nota alta ao agregado se ao menos uma categoria específica do mesmo eixo também estiver alta e com evidência;
 - campo incerto → confiança baixa;
 - não estime percentuais globais nem faça conclusão geral sobre a igreja.

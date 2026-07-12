@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { CodingResponseSchema, validateBusinessRules, computeNeedsReview } from "@/lib/coding/schema";
+import {
+  applyConditionalApplicability,
+  CodingResponseSchema,
+  computeNeedsReview,
+  normalizeEnums,
+  validateBusinessRules,
+} from "@/lib/coding/schema";
 
 // §40.2 Codificação e schema + regra de evidência ciente de agregados.
 
@@ -93,6 +99,129 @@ describe("validateBusinessRules — agregados de eixo (correção do caso #03)",
       })
     );
     expect(validateBusinessRules(parsed)).toHaveLength(0);
+  });
+});
+
+describe("validateBusinessRules — pós-localização (evidência fabricada não satisfaz)", () => {
+  it("score 4 com evidência FORNECIDA mas NÃO LOCALIZADA falha quando locatedFields é passado", () => {
+    const parsed = CodingResponseSchema.parse(
+      baseResponse({
+        scores: { christologyScore: 4 },
+        evidencias: [{ campo: "christologyScore", citacao: "citação fabricada que não existe na transcrição", comentario: "" }],
+      })
+    );
+    // Sem locatedFields (pré-localização): passa — a evidência foi fornecida.
+    expect(validateBusinessRules(parsed)).toHaveLength(0);
+    // Com locatedFields vazio (nada localizado): falha — fabricada não conta.
+    const issues = validateBusinessRules(parsed, new Set());
+    expect(issues.some((i) => i.field === "christologyScore")).toBe(true);
+  });
+
+  it("agregado com evidência própria (mesmo localizada) NÃO se auto-sustenta — precisa de componente do eixo", () => {
+    const parsed = CodingResponseSchema.parse(
+      baseResponse({
+        scores: { orthodoxyScore: 4 },
+        evidencias: [{ campo: "orthodoxyScore", citacao: "uma citação qualquer do agregado aqui", comentario: "" }],
+      })
+    );
+    const issues = validateBusinessRules(parsed, new Set(["orthodoxyScore"]));
+    expect(issues.some((i) => i.field === "orthodoxyScore")).toBe(true);
+  });
+
+  it("caso real #03: agregado com evidência fabricada + categoria específica localizada → passa", () => {
+    const parsed = CodingResponseSchema.parse(
+      baseResponse({
+        scores: { biblicalHealthScore: 4, christologyScore: 4 },
+        evidencias: [
+          { campo: "christologyScore", citacao: "e disse Deus façamos o ser humano a nossa imagem", comentario: "" },
+          { campo: "biblicalHealthScore", citacao: "gênesis capítulo dois versos 16 e 17 paráfrase fabricada", comentario: "" },
+        ],
+      })
+    );
+    // biblicalHealthScore está no eixo 1; christologyScore (eixo 2) localizada
+    // não sustenta o eixo 1 — mas christocentricReadingScore sim. Simulamos a
+    // localização apenas da evidência válida de cristologia:
+    const issues = validateBusinessRules(parsed, new Set(["christologyScore"]));
+    // christologyScore ok; biblicalHealthScore (agregado eixo 1) sem componente
+    // do eixo 1 localizado → falha (exige categoria específica do MESMO eixo).
+    expect(issues.some((i) => i.field === "christologyScore")).toBe(false);
+    expect(issues.some((i) => i.field === "biblicalHealthScore")).toBe(true);
+  });
+});
+
+describe("normalizeEnums — normalização explícita e registrada", () => {
+  it("valor canônico não gera normalização", () => {
+    const { normalizations } = normalizeEnums({ critic_target: "legalismo" });
+    expect(normalizations).toHaveLength(0);
+  });
+
+  it("caixa/acento/espaço são normalizados com registro", () => {
+    const { value, normalizations } = normalizeEnums({ critic_target: "Hipocrisia Religiosa" });
+    expect((value as Record<string, unknown>).critic_target).toBe("hipocrisia_religiosa");
+    expect(normalizations).toHaveLength(1);
+    expect(normalizations[0].received).toBe("Hipocrisia Religiosa");
+  });
+
+  it("alias conhecido mapeia para categoria canônica", () => {
+    const { value, normalizations } = normalizeEnums({ critic_target: "farisaismo" });
+    expect((value as Record<string, unknown>).critic_target).toBe("hipocrisia_religiosa");
+    expect(normalizations[0].reason).toBe("alias conhecido");
+  });
+
+  it("categoria desconhecida cai no fallback COM valor original preservado (não expande o catálogo)", () => {
+    const { value, normalizations } = normalizeEnums({ critic_target: "categoria_inventada_xyz" });
+    expect((value as Record<string, unknown>).critic_target).toBe("outro");
+    expect(normalizations[0].received).toBe("categoria_inventada_xyz");
+    expect(normalizations[0].reason).toBe("categoria não canônica");
+  });
+
+  it("hipocrisia_religiosa agora é canônica (caso real observado)", () => {
+    const { normalizations } = normalizeEnums({ critic_target: "hipocrisia_religiosa" });
+    expect(normalizations).toHaveLength(0);
+  });
+});
+
+describe("applyConditionalApplicability — §6.1 (incoerência ≠ falha técnica)", () => {
+  it("crítica 0 com reconstrução 4 → reviewTrigger (não error)", () => {
+    const parsed = CodingResponseSchema.parse(
+      baseResponse({ scores: { contextualCritiqueIntensityScore: 0, reconstructionAfterCritiqueScore: 4 } })
+    );
+    const r = applyConditionalApplicability(parsed);
+    expect(r.errors).toHaveLength(0);
+    expect(r.reviewTriggers.some((t) => t.field === "reconstructionAfterCritiqueScore")).toBe(true);
+  });
+
+  it("crítica 2 com reconstrução 4 → reviewTrigger de coerência (caso real #03)", () => {
+    const parsed = CodingResponseSchema.parse(
+      baseResponse({ scores: { contextualCritiqueIntensityScore: 2, reconstructionAfterCritiqueScore: 4 } })
+    );
+    const r = applyConditionalApplicability(parsed);
+    expect(r.reviewTriggers.some((t) => t.field === "reconstructionAfterCritiqueScore")).toBe(true);
+  });
+
+  it("crítica 0 com critic_target preenchido → warning (não bloqueia)", () => {
+    const parsed = CodingResponseSchema.parse(
+      baseResponse({ scores: { contextualCritiqueIntensityScore: 0 }, critic_target: "legalismo" })
+    );
+    const r = applyConditionalApplicability(parsed);
+    expect(r.warnings.some((w) => w.field === "critic_target")).toBe(true);
+    expect(r.reviewTriggers.filter((t) => t.field === "critic_target")).toHaveLength(0);
+  });
+
+  it("crítica alta (4) com reconstrução alta é coerente — nada disparado", () => {
+    const parsed = CodingResponseSchema.parse(
+      baseResponse({ scores: { contextualCritiqueIntensityScore: 4, reconstructionAfterCritiqueScore: 4 } })
+    );
+    const r = applyConditionalApplicability(parsed);
+    expect(r.reviewTriggers).toHaveLength(0);
+  });
+
+  it("scores nulos não disparam nada", () => {
+    const parsed = CodingResponseSchema.parse(baseResponse({ scores: {} }));
+    const r = applyConditionalApplicability(parsed);
+    expect(r.errors).toHaveLength(0);
+    expect(r.warnings).toHaveLength(0);
+    expect(r.reviewTriggers).toHaveLength(0);
   });
 });
 

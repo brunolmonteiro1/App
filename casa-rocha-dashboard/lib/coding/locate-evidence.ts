@@ -40,6 +40,25 @@ export interface EvidenceLocation {
   exactQuote: string; // trecho real da transcrição
 }
 
+export interface CompositeQuoteCheck {
+  isComposite: boolean;
+  reason: "square_bracket_ellipsis" | "editorial_omission" | "none";
+}
+
+// Detecta apenas marcadores EDITORIAIS de costura entre passagens não contíguas
+// ("[...]", "[…]", "[trecho omitido]"). Reticências naturais de fala ("...")
+// NÃO invalidam a citação: o folding abaixo ignora pontuação, então uma citação
+// com "..." só localiza se os fragmentos forem de fato contíguos na transcrição.
+export function detectCompositeQuote(quote: string): CompositeQuoteCheck {
+  if (/\[\s*(\.{2,}|…)\s*\]/.test(quote)) {
+    return { isComposite: true, reason: "square_bracket_ellipsis" };
+  }
+  if (/\[[^\]]*(omitid|suprimid|cortad|trecho|continua)[^\]]*\]/i.test(quote)) {
+    return { isComposite: true, reason: "editorial_omission" };
+  }
+  return { isComposite: false, reason: "none" };
+}
+
 export function locateEvidence(transcript: string, quote: string): EvidenceLocation | null {
   const needle = foldNeedle(quote);
   if (needle.length < 10) return null;

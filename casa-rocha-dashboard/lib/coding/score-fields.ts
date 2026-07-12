@@ -154,7 +154,11 @@ export const CRITIQUE_SHARE = ["none", "low", "moderate", "high", "dominant"] as
 export const CRITIC_TARGETS = [
   "abuso_religioso", "legalismo", "moralismo", "mercado_gospel", "barganha_financeira",
   "lideranca_abusiva", "institucionalismo", "clericalismo", "ativismo_religioso",
-  "politica_religiosa", "idolatria_politica", "outro", "nao_identificavel",
+  "politica_religiosa", "idolatria_politica",
+  // Categorias empiricamente relevantes (observadas em codificações reais)
+  "hipocrisia_religiosa", "triunfalismo", "performatividade_religiosa",
+  "sectarismo", "espiritualizacao_abusiva",
+  "outro", "nao_identificavel",
 ] as const;
 
 export const CRITIC_TONES = [

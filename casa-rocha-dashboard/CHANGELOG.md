@@ -4,6 +4,35 @@ Registro das mudanças relevantes. Datas no formato AAAA-MM-DD.
 
 ## [Não lançado]
 
+### Rodada H — refatoração metodológica multi-etapas (2026-07-12)
+
+**Commit 1 — correções de evidência e validação (Fase 1 do blueprint de refatoração)**
+- `analyze.ts` processa **todas** as evidências antes de decidir (uma evidência inválida
+  não apaga as válidas): classificação `located` / `unlocated` / `ignored_aggregate` /
+  `composite_rejected` gravada em `evidenceValidationJson`.
+- `validateBusinessRules` agora roda **após** a localização: só evidência realmente
+  localizada na transcrição satisfaz a regra do limiar — citação fabricada não conta.
+  Agregados deixam de se auto-sustentar: exigem componente específico do mesmo eixo
+  com evidência **localizada**.
+- `detectCompositeQuote`: citações costuradas com `[...]`/`[…]`/"[trecho omitido]" são
+  rejeitadas com razão explícita; reticências naturais de fala não invalidam.
+- `applyConditionalApplicability` (§6.1): incoerência semântica (ex.: crítica contextual
+  ≤2 com reconstrução ≥4) vira **gatilho de revisão humana**, não falha técnica —
+  fluxo errors/warnings/reviewTriggers; nenhum score é alterado.
+- Normalização de enums explícita e registrada (`normalizeEnums`): aliases conhecidos,
+  valor original preservado, fallback auditável — fim do `.catch()` silencioso. Novos
+  alvos canônicos de crítica: `hipocrisia_religiosa`, `triunfalismo`,
+  `performatividade_religiosa`, `sectarismo`, `espiritualizacao_abusiva`.
+- Reparo (`repair.ts`): usa os limiares corretos (`RISK_EVIDENCE_THRESHOLDS`, incl.
+  limiar 3), roda checagem de coerência ANTES de buscar evidência (campo incoerente →
+  sugestão pendente para decisão humana, sem caça de citação) e nunca reaproveita nem
+  salva evidência de agregado.
+- Prompt (`codebook-v1.1`): regras de citação obrigatórias — trecho contínuo, nunca
+  `[...]`, nunca combinar passagens, sem correção de gramática, 12–80 palavras,
+  múltiplas evidências por campo permitidas.
+- Testes: 49 vitest (20 novos), incluindo os dois casos reais observados com
+  Sonnet 4.5 (evidência fabricada de agregado; reconstrução 4 com crítica baixa).
+
 ### Leva 2 do Blueprint Mestre v2 — operação e diagnóstico (2026-07-12)
 
 **Rodada E — UX do seletor de modelos OpenRouter (§21)**

@@ -3,14 +3,24 @@
 // Regra invariante: nenhum score é alterado automaticamente; falha só rejeita.
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../db";
-import { locateEvidence } from "./locate-evidence";
+import { detectCompositeQuote, locateEvidence } from "./locate-evidence";
 import { chatCompletion, extractJson, type ChatResult } from "./openrouter";
 import { buildCodingPrompt } from "./prompt";
-import { computeNeedsReview, CodingResponseSchema, validateBusinessRules, type CodingResponse } from "./schema";
+import {
+  applyConditionalApplicability,
+  computeNeedsReview,
+  CodingResponseSchema,
+  normalizeEnums,
+  validateBusinessRules,
+  type CodingResponse,
+} from "./schema";
 import { AGGREGATE_SCORE_FIELDS, applicationModeToOntological, SCORE_FIELD_NAMES } from "./score-fields";
 
-export const PROMPT_VERSION = "codebook-v1";
+export const PROMPT_VERSION = "codebook-v1.1";
 export const SCHEMA_VERSION = "coding-v1";
+
+// Status de cada evidência candidata processada (nenhuma interrompe o loop).
+export type EvidenceStatus = "located" | "unlocated" | "ignored_aggregate" | "composite_rejected";
 
 export interface AnalyzeResult {
   ok: boolean;
@@ -112,60 +122,47 @@ export async function analyzeSermon(sermonId: string, model: string): Promise<An
   }
   const extractedStr = JSON.stringify(extracted);
 
-  // 3. Schema Zod
-  const zres = CodingResponseSchema.safeParse(extracted);
+  // 3. Normalização explícita de enums (registrada, nunca silenciosa) + schema Zod
+  const { value: normalizedRaw, normalizations } = normalizeEnums(extracted);
+  const zres = CodingResponseSchema.safeParse(normalizedRaw);
   if (!zres.success) {
     const issues = zres.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`);
     return await fail("FAILED_SCHEMA", "validação de schema", `JSON inválido: ${issues.slice(0, 3).join("; ")}`, {
       rawResponseText: raw.content,
       extractedJson: extractedStr,
-      validationIssuesJson: JSON.stringify(issues),
+      validationIssuesJson: JSON.stringify({ schemaIssues: issues, enumNormalizations: normalizations }),
       openrouterMetaJson: meta,
     });
   }
   const parsed: CodingResponse = zres.data;
 
-  // 4. Regras de negócio (score>=4 exige evidência etc.)
-  const bizIssues = validateBusinessRules(parsed);
-  if (bizIssues.length > 0) {
-    return await fail(
-      "FAILED_VALIDATION",
-      "regras de negócio",
-      `regras violadas: ${bizIssues.slice(0, 3).map((i) => i.message).join("; ")}`,
-      {
-        rawResponseText: raw.content,
-        extractedJson: extractedStr,
-        businessRuleIssuesJson: JSON.stringify(bizIssues),
-        openrouterMetaJson: meta,
-      }
-    );
-  }
+  // 4. Aplicabilidade condicional (§6.1): incoerência semântica NÃO é falha
+  // técnica — vira gatilho de revisão humana. Nenhum score é alterado.
+  const conditional = applyConditionalApplicability(parsed);
 
-  // 5. Localizar TODAS as evidências na transcrição (anti-alucinação)
+  // 5. Processar TODAS as evidências (anti-alucinação) — nenhuma falha
+  // individual interrompe o loop; uma evidência inválida não apaga as válidas.
   const located: { campo: string; citacao: string; comentario: string; startIndex: number; endIndex: number }[] = [];
-  const evidenceReport: { campo: string; found: boolean; citacao: string }[] = [];
+  const evidenceReport: { campo: string; status: EvidenceStatus; citacao: string; reason?: string }[] = [];
   for (const ev of parsed.evidencias) {
-    const loc = locateEvidence(sermon.transcriptText, ev.citacao);
-    evidenceReport.push({ campo: ev.campo, found: Boolean(loc), citacao: ev.citacao.slice(0, 120) });
-    if (!loc) {
-      // Agregados de eixo não exigem citação própria (fundamentam-se pelas
-      // categorias do eixo — ver validateBusinessRules). Se o modelo mandou uma
-      // evidência supérflua para um agregado e ela não localiza (comum: paráfrase
-      // da referência bíblica, não fala literal do pregador), descarta só essa
-      // evidência em vez de reprovar a pregação inteira.
-      if (AGGREGATE_SCORE_FIELDS.has(ev.campo)) continue;
-      return await fail(
-        "FAILED_EVIDENCE_LOCATION",
-        "localização de evidência",
-        `evidência não encontrada na transcrição (campo ${ev.campo}): "${ev.citacao.slice(0, 80)}…"`,
-        {
-          rawResponseText: raw.content,
-          extractedJson: extractedStr,
-          evidenceValidationJson: JSON.stringify(evidenceReport),
-          openrouterMetaJson: meta,
-        }
-      );
+    const short = ev.citacao.slice(0, 120);
+    // Agregados de eixo NUNCA têm evidência própria — descarte incondicional
+    // (localizável ou não); a fundamentação vem das categorias específicas.
+    if (AGGREGATE_SCORE_FIELDS.has(ev.campo)) {
+      evidenceReport.push({ campo: ev.campo, status: "ignored_aggregate", citacao: short });
+      continue;
     }
+    const comp = detectCompositeQuote(ev.citacao);
+    if (comp.isComposite) {
+      evidenceReport.push({ campo: ev.campo, status: "composite_rejected", citacao: short, reason: comp.reason });
+      continue;
+    }
+    const loc = locateEvidence(sermon.transcriptText, ev.citacao);
+    if (!loc) {
+      evidenceReport.push({ campo: ev.campo, status: "unlocated", citacao: short });
+      continue;
+    }
+    evidenceReport.push({ campo: ev.campo, status: "located", citacao: short });
     located.push({
       campo: ev.campo,
       citacao: loc.exactQuote,
@@ -174,14 +171,47 @@ export async function analyzeSermon(sermonId: string, model: string): Promise<An
       endIndex: loc.endIndex,
     });
   }
+  const locatedFields = new Set(located.map((e) => e.campo));
 
-  // 6. Gravar em transação (substitui codificação IA anterior; preserva 'dictionary')
+  // 6. Regras de negócio APÓS a localização: só evidência realmente localizada
+  // satisfaz a exigência — citação fabricada/composta não conta.
+  const bizIssues = validateBusinessRules(parsed, locatedFields);
+  if (bizIssues.length > 0) {
+    // Se algum campo violado tinha candidata que falhou na localização, a etapa
+    // amigável é "localização de evidência"; senão, "regras de negócio".
+    const failedCandidateFields = new Set(
+      evidenceReport.filter((r) => r.status === "unlocated" || r.status === "composite_rejected").map((r) => r.campo)
+    );
+    const dueToLocation = bizIssues.some((i) => failedCandidateFields.has(i.field));
+    return await fail(
+      dueToLocation ? "FAILED_EVIDENCE_LOCATION" : "FAILED_VALIDATION",
+      dueToLocation ? "localização de evidência" : "regras de negócio",
+      `regras violadas: ${bizIssues.slice(0, 3).map((i) => i.message).join("; ")}`,
+      {
+        rawResponseText: raw.content,
+        extractedJson: extractedStr,
+        businessRuleIssuesJson: JSON.stringify(bizIssues),
+        evidenceValidationJson: JSON.stringify(evidenceReport),
+        validationIssuesJson: JSON.stringify({
+          enumNormalizations: normalizations,
+          warnings: conditional.warnings,
+          reviewTriggers: conditional.reviewTriggers,
+        }),
+        openrouterMetaJson: meta,
+      }
+    );
+  }
+
+  // 7. Gravar em transação (substitui codificação IA anterior; preserva 'dictionary')
   const scoresData: Record<string, number | null> = {};
   for (const f of SCORE_FIELD_NAMES) {
     scoresData[f] = parsed.scores[f] ?? null;
   }
 
-  const { needs, reason } = computeNeedsReview(parsed);
+  const base = computeNeedsReview(parsed);
+  const triggerReasons = conditional.reviewTriggers.map((t) => t.message);
+  const needs = base.needs || triggerReasons.length > 0;
+  const reason = [base.reason, ...triggerReasons].filter(Boolean).join("; ") || null;
   // Campos da análise (compartilhados entre create e update)
   const analysisFields = {
     confidenceGlobal: parsed.confianca,
@@ -260,6 +290,14 @@ export async function analyzeSermon(sermonId: string, model: string): Promise<An
     rawResponseText: raw.content,
     extractedJson: extractedStr,
     evidenceValidationJson: JSON.stringify(evidenceReport),
+    validationIssuesJson:
+      normalizations.length || conditional.warnings.length || conditional.reviewTriggers.length
+        ? JSON.stringify({
+            enumNormalizations: normalizations,
+            warnings: conditional.warnings,
+            reviewTriggers: conditional.reviewTriggers,
+          })
+        : null,
     openrouterMetaJson: meta,
   });
 
