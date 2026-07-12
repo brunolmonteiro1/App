@@ -8,7 +8,8 @@ import crypto from "node:crypto";
 import { prisma } from "../db";
 import { locateAnchors } from "./locate-anchors";
 import { chatCompletion, extractJson } from "./openrouter";
-import { buildStructurePrompt, parseStructureResponse } from "./structurePrompt";
+import { buildInterpretationPrompt, parseInterpretationResponse } from "./interpretationPrompt";
+import { buildStructurePrompt, compactStructureMap, parseStructureResponse, type StructureResponse } from "./structurePrompt";
 import {
   PIPELINE_STAGES,
   PIPELINE_VERSION,
@@ -231,11 +232,152 @@ function defaultModel(modelConfigurationJson: string | null): string {
   }
 }
 
+// Helper genérico: chamada de IA de uma etapa com falhas registradas
+// (CodingAttempt imutável) e run marcado como failed — reduz boilerplate.
+async function stageCall(opts: {
+  sermonId: string;
+  runId: string;
+  stage: PipelineStage;
+  model: string;
+  system: string;
+  user: string;
+  version: string;
+}): Promise<
+  | { ok: true; raw: Awaited<ReturnType<typeof chatCompletion>>; extracted: unknown; meta: string | null }
+  | { ok: false; error: string }
+> {
+  let raw;
+  try {
+    raw = await chatCompletion({ model: opts.model, system: opts.system, user: opts.user });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await recordStageAttempt({
+      sermonId: opts.sermonId, runId: opts.runId, stage: opts.stage, model: opts.model,
+      status: "FAILED_OPENROUTER", failStage: `${opts.stage}: chamada ao provedor`, promptVersion: opts.version,
+    });
+    await failRun(opts.runId, `${opts.stage}: ${msg}`);
+    return { ok: false, error: msg };
+  }
+  const meta = raw.usage ? JSON.stringify(raw.usage) : null;
+  let extracted: unknown;
+  try {
+    extracted = extractJson(raw.content);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await recordStageAttempt({
+      sermonId: opts.sermonId, runId: opts.runId, stage: opts.stage, model: opts.model,
+      status: "FAILED_JSON", failStage: `${opts.stage}: extração de JSON`, promptVersion: opts.version,
+      extras: { rawResponseText: raw.content, openrouterMetaJson: meta },
+    });
+    await failRun(opts.runId, `${opts.stage}: ${msg}`);
+    return { ok: false, error: msg };
+  }
+  return { ok: true, raw, extracted, meta };
+}
+
+async function recordSchemaFailure(opts: {
+  sermonId: string;
+  runId: string;
+  stage: PipelineStage;
+  model: string;
+  version: string;
+  rawContent: string;
+  extracted: unknown;
+  issues: string[];
+  normalizations: unknown[];
+  meta: string | null;
+}): Promise<string> {
+  const msg = `${opts.stage}: schema inválido: ${opts.issues.slice(0, 3).join("; ")}`;
+  await recordStageAttempt({
+    sermonId: opts.sermonId, runId: opts.runId, stage: opts.stage, model: opts.model,
+    status: "FAILED_SCHEMA", failStage: `${opts.stage}: validação de schema`, promptVersion: opts.version,
+    extras: {
+      rawResponseText: opts.rawContent,
+      extractedJson: JSON.stringify(opts.extracted),
+      validationIssuesJson: JSON.stringify({ schemaIssues: opts.issues, enumNormalizations: opts.normalizations }),
+      openrouterMetaJson: opts.meta,
+    },
+  });
+  await failRun(opts.runId, msg);
+  return msg;
+}
+
+// ── Etapa B — interpretação (hermenêutica/argumentação/homilética) ──────────
+export async function runInterpretationStage(runId: string, modelOverride?: string): Promise<StageResult> {
+  const run = await prisma.analysisRun.findUnique({
+    where: { id: runId },
+    include: {
+      structure: { select: { structureJson: true } },
+      interpretation: { select: { id: true } },
+      sermon: { select: { id: true, title: true, series: true, year: true, transcriptText: true } },
+    },
+  });
+  if (!run) return { ok: false, runId, stage: "interpretation", error: "run não encontrado" };
+  if (run.interpretation) return { ok: true, runId, stage: "interpretation", skipped: true };
+  if (!run.structure) return { ok: false, runId, stage: "interpretation", error: "estrutura ausente — execute a Etapa A primeiro" };
+
+  const model = modelOverride ?? defaultModel(run.modelConfigurationJson);
+  const startedAt = Date.now();
+  const structure = JSON.parse(run.structure.structureJson) as StructureResponse;
+  const { system, user, version } = buildInterpretationPrompt({
+    title: run.sermon.title,
+    series: run.sermon.series,
+    year: run.sermon.year,
+    transcriptText: run.sermon.transcriptText,
+    structureMap: compactStructureMap(structure),
+  });
+
+  const call = await stageCall({ sermonId: run.sermonId, runId, stage: "interpretation", model, system, user, version });
+  if (!call.ok) return { ok: false, runId, stage: "interpretation", error: call.error };
+
+  const parsed = parseInterpretationResponse(call.extracted);
+  if (!parsed.success) {
+    const msg = await recordSchemaFailure({
+      sermonId: run.sermonId, runId, stage: "interpretation", model, version,
+      rawContent: call.raw.content, extracted: call.extracted, issues: parsed.issues,
+      normalizations: parsed.normalizations, meta: call.meta,
+    });
+    return { ok: false, runId, stage: "interpretation", error: msg };
+  }
+
+  const attemptId = await recordStageAttempt({
+    sermonId: run.sermonId, runId, stage: "interpretation", model, status: "SUCCESS", promptVersion: version,
+    extras: {
+      rawResponseText: call.raw.content,
+      extractedJson: JSON.stringify(parsed.data),
+      validationIssuesJson: parsed.normalizations.length
+        ? JSON.stringify({ enumNormalizations: parsed.normalizations })
+        : null,
+      openrouterMetaJson: call.meta,
+    },
+  });
+
+  await prisma.sermonInterpretationAnalysis.create({
+    data: {
+      analysisRunId: runId,
+      hermeneuticsJson: JSON.stringify(parsed.data.hermeneutics),
+      argumentationJson: JSON.stringify(parsed.data.argumentation),
+      homileticsJson: JSON.stringify(parsed.data.homiletics),
+      model,
+      promptVersion: version,
+      inputHash: sha256(system + "\n" + user),
+      outputHash: sha256(call.raw.content),
+      tokenUsageJson: call.meta,
+      durationMs: Date.now() - startedAt,
+    },
+  });
+  await accumulateUsage(runId, call.raw.usage as Usage);
+  await prisma.analysisRun.update({ where: { id: runId }, data: { currentStage: "formative" } });
+
+  return { ok: true, runId, stage: "interpretation", attemptId };
+}
+
 // ── Driver genérico ──────────────────────────────────────────────────────────
 // Registro de executores por etapa; as etapas B–E entram nos Commits 4–7.
 type StageRunner = (runId: string, modelOverride?: string) => Promise<StageResult>;
 const STAGE_RUNNERS: Partial<Record<PipelineStage, StageRunner>> = {
   structure: runStructureStage,
+  interpretation: runInterpretationStage,
 };
 
 export function registerStageRunner(stage: PipelineStage, runner: StageRunner) {
