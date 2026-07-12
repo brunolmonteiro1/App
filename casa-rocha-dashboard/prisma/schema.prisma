@@ -41,6 +41,7 @@ model Sermon {
   references BiblicalReference[]
   lexical    LexicalMetric[]
   saturation SaturationMetric?
+  attempts   CodingAttempt[]
 
   @@index([year])
   @@index([series])
@@ -287,4 +288,34 @@ model ImportRun {
   createdAt      DateTime  @default(now())
 
   @@map("import_runs")
+}
+
+// ─────────────────────────────────────────────
+// Tentativas de IA (BLUEPRINT_MESTRE_v2 §8.7/§19) — IMUTÁVEIS, nunca sobrescritas.
+// Toda chamada de codificação/reparo/auditoria grava uma linha ANTES da validação.
+// NUNCA persistir a chave da API aqui.
+// ─────────────────────────────────────────────
+model CodingAttempt {
+  id                    String   @id @default(cuid())
+  sermonId              String
+  parentAttemptId       String?  // encadeia RETRY/EVIDENCE_REPAIR/AUDIT ao INITIAL_CODING
+  attemptType           String   // INITIAL_CODING | RETRY | EVIDENCE_REPAIR | AUDIT
+  model                 String
+  status                String   // SUCCESS | FAILED_JSON | FAILED_SCHEMA | FAILED_VALIDATION | FAILED_EVIDENCE_LOCATION | FAILED_OPENROUTER | REPAIRABLE_EVIDENCE_GAP | HUMAN_REVIEW_REQUIRED
+  failStage             String?  // etapa amigável em que falhou
+  rawResponseText       String?  // resposta bruta do modelo
+  extractedJson         String?  // JSON extraído (pode falhar)
+  validationIssuesJson  String?  // erros Zod
+  businessRuleIssuesJson String? // regras de negócio violadas
+  evidenceValidationJson String? // resultado da localização de evidências
+  openrouterMetaJson    String?  // usage/tokens retornados pelo provedor
+  promptVersion         String?
+  schemaVersion         String?
+  createdAt             DateTime @default(now())
+
+  sermon Sermon @relation(fields: [sermonId], references: [id])
+
+  @@index([sermonId])
+  @@index([status])
+  @@map("coding_attempts")
 }

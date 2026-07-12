@@ -25,6 +25,18 @@ export async function GET() {
     }),
   ]);
 
+  // Última tentativa por pregação com falha (para o link "Ver resposta da IA")
+  const failedIds = pending.filter((s) => s.analysis?.aiError).map((s) => s.id);
+  const latestAttempts = failedIds.length
+    ? await prisma.codingAttempt.findMany({
+        where: { sermonId: { in: failedIds } },
+        orderBy: { createdAt: "desc" },
+        select: { id: true, sermonId: true },
+      })
+    : [];
+  const attemptBySermon = new Map<string, string>();
+  for (const at of latestAttempts) if (!attemptBySermon.has(at.sermonId)) attemptBySermon.set(at.sermonId, at.id);
+
   return NextResponse.json({
     hasApiKey: hasApiKey(),
     pending: pending.map((s) => ({
@@ -33,6 +45,7 @@ export async function GET() {
       year: s.year,
       series: s.series,
       aiError: s.analysis?.aiError ?? null,
+      latestAttemptId: attemptBySermon.get(s.id) ?? null,
     })),
     counts: { pending: pending.length, coded, reviewed, failed },
     reviewQueue: codedList.map((a) => ({

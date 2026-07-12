@@ -16,9 +16,19 @@ export default async function SermonPage({ params }: { params: Promise<{ id: str
       saturation: true,
       evidence: { where: { analysisMethod: "dictionary" }, orderBy: { evidenceStartIndex: "asc" } },
       analysis: true,
+      attempts: { orderBy: { createdAt: "desc" }, take: 10 },
     },
   });
   if (!sermon) notFound();
+
+  const ATTEMPT_STATUS: Record<string, string> = {
+    SUCCESS: "sucesso",
+    FAILED_JSON: "falha de JSON",
+    FAILED_SCHEMA: "falha de schema",
+    FAILED_VALIDATION: "regra violada",
+    FAILED_EVIDENCE_LOCATION: "evidência não localizada",
+    FAILED_OPENROUTER: "falha no provedor",
+  };
 
   const refSummary = new Map<string, number>();
   for (const r of sermon.references) refSummary.set(r.book, (refSummary.get(r.book) ?? 0) + 1);
@@ -126,6 +136,24 @@ export default async function SermonPage({ params }: { params: Promise<{ id: str
                 <p className="text-[11px] text-muted mt-1">
                   termo: <strong>{e.keywordMatched}</strong> · método: dicionário · confiança: {e.confidence}
                 </p>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+
+      {sermon.attempts.length > 0 && (
+        <Card title="Histórico de tentativas de IA" footnote="Toda tentativa fica registrada e não é sobrescrita (auditoria). Clique para ver a resposta completa.">
+          <ul className="text-sm space-y-1">
+            {sermon.attempts.map((at) => (
+              <li key={at.id} className="flex items-center gap-2 border-b border-hairline last:border-0 py-1">
+                <span>{at.status === "SUCCESS" ? "✅" : "❌"}</span>
+                <Link href={`/coding/attempts/${at.id}`} className="hover:underline flex-1">
+                  {ATTEMPT_STATUS[at.status] ?? at.status}
+                  <span className="text-muted"> · {at.attemptType.toLowerCase()}</span>
+                </Link>
+                <span className="text-xs text-muted font-mono">{at.model}</span>
+                <span className="text-xs text-muted">{new Date(at.createdAt).toISOString().slice(0, 16).replace("T", " ")}</span>
               </li>
             ))}
           </ul>

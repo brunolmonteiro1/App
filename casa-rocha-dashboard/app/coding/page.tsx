@@ -12,6 +12,7 @@ interface PendingItem {
   year: number | null;
   series: string | null;
   aiError: string | null;
+  latestAttemptId: string | null;
 }
 interface ReviewItem {
   id: string;
@@ -269,7 +270,14 @@ export default function CodingPage() {
           <ul className="text-sm space-y-1">
             {status.pending.filter((p) => p.aiError).map((p) => (
               <li key={p.id} className="border-b border-hairline last:border-0 py-1">
-                <span className="font-medium">{p.title}</span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-medium">{p.title}</span>
+                  {p.latestAttemptId && (
+                    <Link href={`/coding/attempts/${p.latestAttemptId}`} className="text-xs underline text-secondary">
+                      ver resposta da IA
+                    </Link>
+                  )}
+                </div>
                 <p className="text-xs text-red-700">{p.aiError}</p>
               </li>
             ))}
