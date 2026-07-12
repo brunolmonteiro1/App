@@ -2,7 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import Badge from "@/components/Badge";
 import { Card } from "@/components/Card";
+import RepairButton from "@/components/coding/RepairButton";
 import { prisma } from "@/lib/db";
+
+const REPAIRABLE = new Set(["FAILED_VALIDATION", "FAILED_EVIDENCE_LOCATION", "REPAIRABLE_EVIDENCE_GAP"]);
 
 export const dynamic = "force-dynamic";
 
@@ -78,6 +81,11 @@ export default async function AttemptPage({ params }: { params: Promise<{ id: st
           <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
             {FRIENDLY[a.status]}
           </p>
+        )}
+        {REPAIRABLE.has(a.status) && a.extractedJson && (
+          <div className="mt-3 border-t border-hairline pt-3">
+            <RepairButton attemptId={a.id} model={a.model} />
+          </div>
         )}
       </Card>
 

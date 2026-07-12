@@ -23,10 +23,15 @@ export async function POST(req: NextRequest) {
   }
 
   if (action === "reject") {
-    await prisma.sermonAnalysis.update({
-      where: { sermonId },
-      data: { analysisStatus: "pending", reviewStatus: "rejected", reviewedBy: reviewedBy ?? null, reviewedAt: new Date() },
-    });
+    await prisma.$transaction([
+      prisma.sermonAnalysis.update({
+        where: { sermonId },
+        data: { analysisStatus: "pending", reviewStatus: "rejected", reviewedBy: reviewedBy ?? null, reviewedAt: new Date() },
+      }),
+      prisma.humanReviewEvent.create({
+        data: { sermonId, entityType: "analysis", action: "reject", performedBy: reviewedBy ?? "revisor" },
+      }),
+    ]);
     return NextResponse.json({ ok: true, status: "pending" });
   }
 
@@ -39,16 +44,29 @@ export async function POST(req: NextRequest) {
       else if (Number.isInteger(v) && v >= 0 && v <= 5) clean[k] = v;
       else return NextResponse.json({ ok: false, error: `score inválido em ${k}: ${v}` }, { status: 400 });
     }
-    await prisma.sermonScores.upsert({
-      where: { sermonId },
-      create: { sermonId, ...clean },
-      update: clean,
-    });
-    // Marca evidências ajustadas como revisão humana (proveniência)
-    await prisma.sermonEvidence.updateMany({
-      where: { sermonId, analysisMethod: "ai_coding" },
-      data: { analysisMethod: "human_review" },
-    });
+    // Registra evento por score alterado (antes/depois) — BLUEPRINT v2 §20.2
+    const prev = await prisma.sermonScores.findUnique({ where: { sermonId } });
+    const prevRec = (prev as unknown as Record<string, number | null>) ?? {};
+    const events = Object.entries(clean)
+      .filter(([k, v]) => (prevRec[k] ?? null) !== v)
+      .map(([k, v]) => ({
+        sermonId,
+        entityType: "score",
+        action: "change_score",
+        fieldName: k,
+        oldValueJson: JSON.stringify(prevRec[k] ?? null),
+        newValueJson: JSON.stringify(v),
+        performedBy: reviewedBy || "revisor",
+      }));
+    await prisma.$transaction([
+      prisma.sermonScores.upsert({ where: { sermonId }, create: { sermonId, ...clean }, update: clean }),
+      // Marca evidências ajustadas como revisão humana (proveniência)
+      prisma.sermonEvidence.updateMany({
+        where: { sermonId, analysisMethod: { in: ["ai_coding", "ai_repair"] } },
+        data: { analysisMethod: "human_review" },
+      }),
+      ...(events.length ? [prisma.humanReviewEvent.createMany({ data: events })] : []),
+    ]);
   }
 
   const editableFields = ["mainTheme", "biblicalMainText", "sermonType", "doctrineMain", "ontologicalVsPragmatic", "summary3Lines", "mainApplication", "possibleFormativeGap", "confidenceGlobal"];

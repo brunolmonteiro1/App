@@ -42,6 +42,8 @@ model Sermon {
   lexical    LexicalMetric[]
   saturation SaturationMetric?
   attempts   CodingAttempt[]
+  repairs    CodingRepairSuggestion[]
+  reviewEvents HumanReviewEvent[]
 
   @@index([year])
   @@index([series])
@@ -318,4 +320,57 @@ model CodingAttempt {
   @@index([sermonId])
   @@index([status])
   @@map("coding_attempts")
+}
+
+// ─────────────────────────────────────────────
+// Sugestões de reparo de score (BLUEPRINT v2 §8.8/§18) — NUNCA aplicadas
+// automaticamente. Criar a sugestão não altera sermon_scores. Só ação humana
+// autorizada aplica, gerando evento de revisão com antes/depois.
+// ─────────────────────────────────────────────
+model CodingRepairSuggestion {
+  id                    String    @id @default(cuid())
+  sermonId              String
+  codingAttemptId       String?
+  scoreField            String
+  originalScore         Int?
+  suggestedScore        Int?
+  suggestionReason      String?
+  missingEvidenceReason String?
+  suggestedByModel      String?
+  promptVersion         String?
+  status                String    @default("PENDING") // PENDING | APPLIED | REJECTED | SUPERSEDED
+  reviewedBy            String?
+  reviewedAt            DateTime?
+  reviewNote            String?
+  createdAt             DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  sermon Sermon @relation(fields: [sermonId], references: [id])
+
+  @@index([sermonId])
+  @@index([status])
+  @@map("coding_repair_suggestions")
+}
+
+// ─────────────────────────────────────────────
+// Eventos de revisão humana (BLUEPRINT v2 §8.9) — trilha antes/depois de toda
+// mudança de score/evidência/aplicação de sugestão.
+// ─────────────────────────────────────────────
+model HumanReviewEvent {
+  id           String   @id @default(cuid())
+  sermonId     String
+  entityType   String   // score | evidence | suggestion | analysis
+  entityId     String?
+  action       String   // change_score | approve | reject | apply_suggestion | reject_suggestion
+  fieldName    String?
+  oldValueJson String?
+  newValueJson String?
+  reason       String?
+  performedBy  String?
+  performedAt  DateTime @default(now())
+
+  sermon Sermon @relation(fields: [sermonId], references: [id])
+
+  @@index([sermonId])
+  @@map("human_review_events")
 }

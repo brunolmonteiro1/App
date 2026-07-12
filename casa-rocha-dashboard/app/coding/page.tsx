@@ -5,6 +5,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import SuggestionsPanel from "@/components/coding/SuggestionsPanel";
 
 interface PendingItem {
   id: string;
@@ -241,6 +242,8 @@ export default function CodingPage() {
           </ul>
         </section>
       )}
+
+      <SuggestionsPanel />
 
       <section className="rounded-xl border border-hairline bg-surface p-4">
         <h2 className="text-sm font-medium text-secondary mb-2">
