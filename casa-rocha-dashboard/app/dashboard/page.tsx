@@ -1,10 +1,12 @@
+import AboutDashboard from "@/components/AboutDashboard";
 import Badge from "@/components/Badge";
 import CalendarHeatmap from "@/components/CalendarHeatmap";
 import { Card, StatTile } from "@/components/Card";
+import MethodologyTooltip from "@/components/MethodologyTooltip";
 import BarChartLink from "@/components/charts/BarChartLink";
 import IscTimeline from "@/components/charts/IscTimeline";
 import { prisma } from "@/lib/db";
-import { ISC_DEFAULT_THRESHOLD } from "@/lib/dictionaries";
+import { critiqueSignalThreshold, CRITIQUE_SIGNAL_LABEL, CRITIQUE_SIGNAL_WARNING } from "@/lib/dictionaries";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +36,7 @@ export default async function DashboardPage() {
       prisma.importRun.findFirst({ orderBy: { createdAt: "desc" } }),
     ]);
 
-  const threshold = Number(process.env.ISC_THRESHOLD ?? ISC_DEFAULT_THRESHOLD);
+  const threshold = critiqueSignalThreshold();
   const yearsCovered = byYear.map((r) => r.year as number);
   const iscByYear = new Map<number, { sum: number; n: number }>();
   for (const r of satRows) {
@@ -51,6 +53,8 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      <AboutDashboard />
+
       <div className="flex items-baseline justify-between flex-wrap gap-2">
         <h1 className="text-xl font-semibold tracking-tight">Visão geral</h1>
         <div className="flex gap-2 items-center text-xs text-muted">
@@ -95,11 +99,19 @@ export default async function DashboardPage() {
       </div>
 
       <Card
-        title={`Índice de Saturação Crítica (ISC) — média anual · limiar ${threshold}%`}
-        footnote="Métrica lexical: proporção entre menções de crítica ao sistema religioso e menções do Evangelho (cruz + cristologia). Hipótese a validar — não mede intenção. Denominadores no tooltip."
+        title={`${CRITIQUE_SIGNAL_LABEL} — média anual · limiar ${threshold}%`}
+        footnote={CRITIQUE_SIGNAL_WARNING}
       >
-        <div className="mb-2 flex gap-2">
+        <div className="mb-2 flex gap-2 items-center">
           <Badge kind="lexical" />
+          <MethodologyTooltip
+            title={CRITIQUE_SIGNAL_LABEL}
+            question="A ênfase de vocabulário crítico à religião mudou ao longo dos anos?"
+            source="Camada lexical (dicionários) — determinística"
+            methodology="(menções de crítica ao sistema ÷ menções do Evangelho: cruz + cristologia) × 100, por pregação, média por ano. Denominador mínimo de 5 menções."
+            interpretation="Sinal preliminar de vocabulário — ponto de partida, nunca conclusão. A crítica contextual (com evidência) está no painel Pastoral."
+            limitations="Não mede intenção, tom, fundamentação bíblica nem efeito pastoral."
+          />
         </div>
         <IscTimeline data={iscData} threshold={threshold} />
       </Card>

@@ -50,7 +50,7 @@ export default function IscTimeline({
           }}
           formatter={(v, _n, item) => [
             `${Number(v).toFixed(1)}% (média de ${(item?.payload as IscYearDatum | undefined)?.n ?? "?"} pregações)`,
-            "ISC médio",
+            "sinal lexical médio",
           ]}
           labelStyle={{ color: "var(--text-secondary)" }}
         />

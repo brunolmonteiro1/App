@@ -94,4 +94,16 @@ export const DICTIONARIES: ThemeDictionary[] = [
 export const ISC_CRITIC_THEME = "critica_ao_sistema";
 export const ISC_GOSPEL_THEMES = ["cruz_soteriologia", "cristologia_trindade"];
 export const ISC_MIN_MENTIONS = 5; // denominador mínimo; abaixo, nao_calculavel
-export const ISC_DEFAULT_THRESHOLD = 30; // % — configurável via env ISC_THRESHOLD
+export const ISC_DEFAULT_THRESHOLD = 30; // % — configurável via env
+
+// Nome canônico do indicador (BLUEPRINT v2 §3.2): "Sinalizador lexical de crítica religiosa".
+export const CRITIQUE_SIGNAL_LABEL = "Sinalizador lexical de crítica religiosa";
+export const CRITIQUE_SIGNAL_WARNING =
+  "Sinalizador lexical preliminar: identifica vocabulário associado à crítica religiosa, mas não mede intenção, tom, fundamentação bíblica, efeito pastoral ou maturidade da argumentação. Use apenas como ponto de partida para investigação.";
+
+// Limiar: aceita CRITIQUE_LEXICAL_SIGNAL_THRESHOLD (novo) ou ISC_THRESHOLD (compat.).
+export function critiqueSignalThreshold(): number {
+  return Number(
+    process.env.CRITIQUE_LEXICAL_SIGNAL_THRESHOLD ?? process.env.ISC_THRESHOLD ?? ISC_DEFAULT_THRESHOLD
+  );
+}

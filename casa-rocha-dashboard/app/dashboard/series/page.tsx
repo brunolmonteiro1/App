@@ -64,7 +64,7 @@ export default async function SeriesPage({
 
       <Card
         title="Todas as séries (métricas determinísticas + lexicais)"
-        footnote="ISC médio é métrica lexical (hipótese a validar). Clique no nome para abrir as pregações; use os botões A/B/C para comparar no radar."
+        footnote="O sinal lexical de crítica médio é métrica lexical (hipótese a validar). Clique no nome para abrir as pregações; use os botões A/B/C para comparar no radar."
       >
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -74,7 +74,7 @@ export default async function SeriesPage({
                 <th className="py-2 pr-3 font-medium">Pregações</th>
                 <th className="py-2 pr-3 font-medium">Período</th>
                 <th className="py-2 pr-3 font-medium">Palavras (média)</th>
-                <th className="py-2 pr-3 font-medium">ISC médio (lexical)</th>
+                <th className="py-2 pr-3 font-medium">Sinal lexical de crítica (médio)</th>
                 <th className="py-2 pr-3 font-medium">Codificadas</th>
                 <th className="py-2 font-medium">Comparar</th>
               </tr>

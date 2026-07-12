@@ -77,14 +77,14 @@ export default async function SermonPage({ params }: { params: Promise<{ id: str
         <StatTile label="palavras na transcrição" value={sermon.transcriptWordCount.toLocaleString("pt-BR")} />
         <StatTile label="referências bíblicas detectadas" value={sermon.references.length} hint="motor regex — determinístico" />
         <StatTile
-          label="ISC (lexical)"
+          label="sinal lexical de crítica"
           value={sermon.saturation?.iscRatio != null ? `${sermon.saturation.iscRatio.toFixed(1)}%` : "n/c"}
           hint={sermon.saturation ? `${sermon.saturation.criticRawCount} crítica / ${sermon.saturation.gospelRawCount} evangelho` : undefined}
         />
         <div className="rounded-xl border border-hairline bg-surface p-4">
           <div className="mt-1">{sermon.saturation?.saturationLabel && <Badge kind={sermon.saturation.saturationLabel} />}</div>
-          <div className="text-sm text-secondary mt-2">rótulo de saturação crítica</div>
-          <div className="text-[11px] text-muted mt-1">hipótese lexical — não mede intenção</div>
+          <div className="text-sm text-secondary mt-2">rótulo do sinal lexical de crítica</div>
+          <div className="text-[11px] text-muted mt-1">vocabulário lexical — não mede intenção</div>
         </div>
       </div>
 

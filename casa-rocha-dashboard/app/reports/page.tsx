@@ -178,7 +178,7 @@ export default async function ReportsPage({
           )}
 
           <p className="text-xs text-muted max-w-3xl">
-            O arquivo .md inclui tudo desta página + funil de maturidade, ISC anual e a seção fixa de
+            O arquivo .md inclui tudo desta página + funil de maturidade, sinal lexical de crítica anual e a seção fixa de
             limitações. Todo dado é auditável na página <Link href="/evidence" className="underline">Evidências</Link>.
           </p>
         </>

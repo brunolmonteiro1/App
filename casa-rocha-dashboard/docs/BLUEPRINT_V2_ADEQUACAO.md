@@ -50,6 +50,11 @@ conservador do que o v2 supõe.
 
 ## 5. Plano de implementação adaptado
 
+> **Status Leva 1 (2026-07-12): CONCLUÍDA.** Rodadas A–D implementadas, testadas e no branch.
+> Nota: a auditoria por IA sob demanda ("Auditar com IA", §17) foi movida para a Leva 2 (junto
+> ao Master View), pois é operacional, não metodológica-crítica; a validação determinística
+> (§17.3) já roda em toda codificação.
+
 ### Leva 1 — Núcleo metodológico
 
 **Rodada A — Tentativas auditáveis**

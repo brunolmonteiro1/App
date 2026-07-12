@@ -12,8 +12,9 @@ services:
       # Senha de acesso ao painel (recomendado em servidor público).
       # Deixe vazio para acesso aberto (ex.: uso só na sua máquina).
       - APP_PASSWORD=${APP_PASSWORD:-}
-      # Limiar do Índice de Saturação Crítica, em % (padrão 30).
-      - ISC_THRESHOLD=${ISC_THRESHOLD:-30}
+      # Limiar do sinalizador lexical de crítica religiosa, em % (padrão 30).
+      # ISC_THRESHOLD é aceito como alias de compatibilidade.
+      - CRITIQUE_LEXICAL_SIGNAL_THRESHOLD=${CRITIQUE_LEXICAL_SIGNAL_THRESHOLD:-${ISC_THRESHOLD:-30}}
       # Chave da API do OpenRouter (https://openrouter.ai/keys) — habilita a
       # codificação por IA na página /coding. Sem ela, o restante funciona normalmente.
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}

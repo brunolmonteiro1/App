@@ -4,9 +4,9 @@
 
 import { prisma } from "../lib/db";
 import {
+  critiqueSignalThreshold,
   DICTIONARIES,
   ISC_CRITIC_THEME,
-  ISC_DEFAULT_THRESHOLD,
   ISC_GOSPEL_THEMES,
   ISC_MIN_MENTIONS,
 } from "../lib/dictionaries";
@@ -36,7 +36,7 @@ function findTerm(foldedText: string, term: string): TermHit[] {
 }
 
 async function main() {
-  const threshold = Number(process.env.ISC_THRESHOLD ?? ISC_DEFAULT_THRESHOLD);
+  const threshold = critiqueSignalThreshold();
   const sermons = await prisma.sermon.findMany({
     where: { isSermon: true },
     select: { id: true, transcriptText: true, transcriptWordCount: true },

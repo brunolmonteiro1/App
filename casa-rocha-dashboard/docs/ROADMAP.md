@@ -93,6 +93,13 @@ O MVP está pronto quando:
 
 ## 5. Evolução pós-MVP
 
+**Leva 1 do Blueprint Mestre v2 (2026-07-12) — núcleo metodológico** (ver `BLUEPRINT_V2_ADEQUACAO.md`):
+- Rodada A — tentativas de IA imutáveis e auditáveis (`CodingAttempt`, "Ver resposta da IA").
+- Rodada B — reparo seguro por evidência + sugestões de score pendentes de aprovação humana (`CodingRepairSuggestion`, `HumanReviewEvent`); a IA nunca altera score automaticamente.
+- Rodada C — campos contextuais novos (crítica contextual, diaconia orgânica × ação institucional + gap diaconal, `applicationMode`/`discourseMode`, idolatria política, `needsHumanReview`); evidência obrigatória por limiar de risco.
+- Rodada D — proveniência e didática: ISC renomeado para "Sinalizador lexical de crítica religiosa" (env `CRITIQUE_LEXICAL_SIGNAL_THRESHOLD`), Home didática recolhível, `MethodologyTooltip`.
+- Pendente (Leva 2): OpenRouter UX (§21), Master Diagnostic View (§29–35) com senha dupla, auditoria por IA sob demanda, testes vitest completos.
+
 **Rodada 7 (2026-07-11) — base teológica executável:** rubrica 0–5 por categoria (`lib/coding/rubric.ts`) + glossário operacional (`lib/coding/glossary.ts`) + padrão confessional editável (`docs/THEOLOGY_BASELINE.md`, lido em runtime) embutidos em todo prompt — a base teológica fica no sistema, não no treinamento do modelo. Nova página `/dashboard/ortodoxia` (ranking de doutrinas com centralidade, heatmap doutrina×ano, tipos de pregação, testamento) e seção de doutrinas no relatório executivo.
 
 - Migração SQLite → PostgreSQL/Supabase (multiusuário, deploy);
