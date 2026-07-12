@@ -45,6 +45,14 @@ export default async function PastoralPage({
   const passivity = average(rows, "passivityRiskScore");
   const method = average(rows, "practicalMethodScore");
 
+  // Diaconia orgânica × ação institucional + gap (BLUEPRINT v2 §12.5/§24.5)
+  const organic = average(rows, "organicDiaconiaScore");
+  const institutional = average(rows, "institutionalActionScore");
+  const diaconalGap =
+    organic.n > 0 && institutional.n > 0 ? organic.value - institutional.value : null;
+  const critiqueIntensity = average(rows, "contextualCritiqueIntensityScore");
+  const critiqueGrounding = average(rows, "biblicalGroundingOfCritiqueScore");
+
   const ontoCounts = new Map<string, number>();
   for (const r of rows) {
     const v = r.analysis?.ontologicalVsPragmatic ?? "nao_identificavel";
@@ -80,6 +88,51 @@ export default async function PastoralPage({
                 </li>
               ))}
             </ul>
+          </Card>
+
+          <Card
+            title="Diaconia orgânica × ação institucional estruturada"
+            footnote="A dor '1.500 vs 50': o serviço é ensinado como identidade orgânica (ser servo) mas raramente como estrutura (projetos, escalas, trilhas)? Gap positivo = orgânico maior que institucional."
+          >
+            <div className="grid grid-cols-3 gap-4 text-center">
+              <div className="rounded-xl border border-hairline bg-background p-4">
+                <div className="text-3xl font-semibold tabular-nums">{organic.n ? organic.value.toFixed(2) : "—"}</div>
+                <div className="text-xs text-secondary mt-1">diaconia orgânica</div>
+                <div className="text-[11px] text-muted">n={organic.n}</div>
+              </div>
+              <div className="rounded-xl border border-hairline bg-background p-4">
+                <div className="text-3xl font-semibold tabular-nums">{institutional.n ? institutional.value.toFixed(2) : "—"}</div>
+                <div className="text-xs text-secondary mt-1">ação institucional</div>
+                <div className="text-[11px] text-muted">n={institutional.n}</div>
+              </div>
+              <div className="rounded-xl border border-hairline bg-background p-4">
+                <div className="text-3xl font-semibold tabular-nums">{diaconalGap != null ? (diaconalGap > 0 ? "+" : "") + diaconalGap.toFixed(2) : "—"}</div>
+                <div className="text-xs text-secondary mt-1">gap diaconal</div>
+                <div className="text-[11px] text-muted">orgânico − institucional</div>
+              </div>
+            </div>
+          </Card>
+
+          <Card
+            title="Crítica religiosa contextual — intensidade × fundamentação bíblica"
+            footnote="Diferente do sinalizador lexical: mede a crítica na linha argumentativa (com evidência). A crítica é ancorada na Bíblia? Vem acompanhada de reconstrução e ativação?"
+          >
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+              {(
+                [
+                  ["Intensidade da crítica", critiqueIntensity],
+                  ["Fundamentação bíblica", critiqueGrounding],
+                  ["Reconstrução após crítica", average(rows, "reconstructionAfterCritiqueScore")],
+                  ["Ativação após crítica", average(rows, "activationAfterCritiqueScore")],
+                ] as const
+              ).map(([label, agg]) => (
+                <div key={label} className="rounded-xl border border-hairline bg-background p-4">
+                  <div className="text-2xl font-semibold tabular-nums">{agg.n ? agg.value.toFixed(2) : "—"}</div>
+                  <div className="text-xs text-secondary mt-1">{label}</div>
+                  <div className="text-[11px] text-muted">n={agg.n}</div>
+                </div>
+              ))}
+            </div>
           </Card>
 
           <Card

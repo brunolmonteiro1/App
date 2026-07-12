@@ -67,6 +67,14 @@ FORMATO DE SAÍDA: responda APENAS com um objeto JSON válido (sem markdown, sem
   "temas_secundarios": ["…"],
   "doutrina_principal": "…" | null,
   "ontological_vs_pragmatic": "ontologico|equilibrado|pragmatico|nao_identificavel",
+  "application_mode": "identity_being|generic_exhortation|concrete_practice|structured_method|balanced|not_identifiable",
+  "discourse_mode": "expository|doctrinal|pastoral|therapeutic|prophetic|apologetic|systemic_critique|reconstructive_formative|devotional|mixed",
+  "critique_share_estimate": "none|low|moderate|high|dominant",
+  "critic_target": "abuso_religioso|legalismo|moralismo|mercado_gospel|barganha_financeira|lideranca_abusiva|institucionalismo|clericalismo|ativismo_religioso|politica_religiosa|idolatria_politica|outro|nao_identificavel",
+  "critic_tone": "pastoral|profetico|terapeutico|ironico|combativo|academico|desmobilizador|misto|nao_identificavel",
+  "healthy_or_demobilizing_critique": "healthy|potentially_demobilizing|mixed|not_identifiable",
+  "political_critique_target": "partidarismo_religioso|messianismo_politico|nacionalismo_religioso|teologia_do_poder|confusao_igreja_estado|idolatria_de_lider_politico|uso_eleitoral_da_fe|outro|nao_identificavel",
+  "sensitivity_level": "baixa|media|alta",
   "resumo_3_linhas": "…",
   "aplicacao_principal": "…" | null,
   "possivel_lacuna_formativa": "redigida como hipótese, nunca acusação" | null,
@@ -74,7 +82,14 @@ FORMATO DE SAÍDA: responda APENAS com um objeto JSON válido (sem markdown, sem
   "confianca": "alta|media|baixa",
   "scores": { "<campo>": 0-5 | null, … (todos os campos do catálogo) },
   "evidencias": [ { "campo": "<campo de score>", "citacao": "trecho LITERAL da transcrição", "comentario": "por que sustenta o score" } ]
-}`;
+}
+
+Notas sobre os campos contextuais:
+- application_mode: identity_being (só identidade/ser) · generic_exhortation (chamado amplo sem passo) · concrete_practice (ação reconhecível) · structured_method (passos/trilha/grupo) · balanced.
+- discourse_mode é diferente de tipo_de_pregacao (é o MODO do discurso).
+- critic_* só se houver crítica religiosa; senão use "nao_identificavel"/"none".
+- political_critique_target: NÃO classifique a pregação como direita/esquerda — apenas o fenômeno.
+- sensitivity_level alta quando houver trechos que exijam cuidado pastoral no manuseio.`;
 
   const user = `PREGAÇÃO A CODIFICAR
 Título: ${sermon.title}

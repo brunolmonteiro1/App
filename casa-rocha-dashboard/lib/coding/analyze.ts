@@ -6,8 +6,8 @@ import { prisma } from "../db";
 import { locateEvidence } from "./locate-evidence";
 import { chatCompletion, extractJson, type ChatResult } from "./openrouter";
 import { buildCodingPrompt } from "./prompt";
-import { CodingResponseSchema, validateBusinessRules, type CodingResponse } from "./schema";
-import { SCORE_FIELD_NAMES } from "./score-fields";
+import { computeNeedsReview, CodingResponseSchema, validateBusinessRules, type CodingResponse } from "./schema";
+import { applicationModeToOntological, SCORE_FIELD_NAMES } from "./score-fields";
 
 export const PROMPT_VERSION = "codebook-v1";
 export const SCHEMA_VERSION = "coding-v1";
@@ -175,6 +175,35 @@ export async function analyzeSermon(sermonId: string, model: string): Promise<An
     scoresData[f] = parsed.scores[f] ?? null;
   }
 
+  const { needs, reason } = computeNeedsReview(parsed);
+  // Campos da análise (compartilhados entre create e update)
+  const analysisFields = {
+    confidenceGlobal: parsed.confianca,
+    biblicalMainText: parsed.texto_biblico_principal,
+    sermonType: parsed.tipo_de_pregacao,
+    mainTheme: parsed.tema_central,
+    secondaryThemes: JSON.stringify(parsed.temas_secundarios),
+    doctrineMain: parsed.doutrina_principal,
+    // ontologicalVsPragmatic derivado de applicationMode (compat.), com fallback ao campo antigo
+    ontologicalVsPragmatic:
+      parsed.application_mode !== "not_identifiable"
+        ? applicationModeToOntological(parsed.application_mode)
+        : parsed.ontological_vs_pragmatic,
+    applicationMode: parsed.application_mode,
+    discourseMode: parsed.discourse_mode,
+    critiqueShareEstimate: parsed.critique_share_estimate,
+    criticTarget: parsed.critic_target,
+    criticTone: parsed.critic_tone,
+    healthyOrDemobilizingCritique: parsed.healthy_or_demobilizing_critique,
+    politicalCritiqueTarget: parsed.political_critique_target,
+    sensitivityLevel: parsed.sensitivity_level,
+    needsHumanReview: needs,
+    reviewReason: reason,
+    summary3Lines: parsed.resumo_3_linhas,
+    mainApplication: parsed.aplicacao_principal,
+    possibleFormativeGap: parsed.possivel_lacuna_formativa,
+  };
+
   await prisma.$transaction([
     prisma.sermonAnalysis.upsert({
       where: { sermonId },
@@ -185,16 +214,7 @@ export async function analyzeSermon(sermonId: string, model: string): Promise<An
         aiCodedAt: new Date(),
         aiError: null,
         aiScoresJson: JSON.stringify(scoresData),
-        confidenceGlobal: parsed.confianca,
-        biblicalMainText: parsed.texto_biblico_principal,
-        sermonType: parsed.tipo_de_pregacao,
-        mainTheme: parsed.tema_central,
-        secondaryThemes: JSON.stringify(parsed.temas_secundarios),
-        doctrineMain: parsed.doutrina_principal,
-        ontologicalVsPragmatic: parsed.ontological_vs_pragmatic,
-        summary3Lines: parsed.resumo_3_linhas,
-        mainApplication: parsed.aplicacao_principal,
-        possibleFormativeGap: parsed.possivel_lacuna_formativa,
+        ...analysisFields,
       },
       update: {
         analysisStatus: "ai_coded",
@@ -205,16 +225,7 @@ export async function analyzeSermon(sermonId: string, model: string): Promise<An
         reviewStatus: null,
         reviewedBy: null,
         reviewedAt: null,
-        confidenceGlobal: parsed.confianca,
-        biblicalMainText: parsed.texto_biblico_principal,
-        sermonType: parsed.tipo_de_pregacao,
-        mainTheme: parsed.tema_central,
-        secondaryThemes: JSON.stringify(parsed.temas_secundarios),
-        doctrineMain: parsed.doutrina_principal,
-        ontologicalVsPragmatic: parsed.ontological_vs_pragmatic,
-        summary3Lines: parsed.resumo_3_linhas,
-        mainApplication: parsed.aplicacao_principal,
-        possibleFormativeGap: parsed.possivel_lacuna_formativa,
+        ...analysisFields,
       },
     }),
     prisma.sermonScores.upsert({

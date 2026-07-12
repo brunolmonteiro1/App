@@ -35,6 +35,14 @@ export default function ReviewForm({
     sermonType: string | null;
     doctrineMain: string | null;
     ontologicalVsPragmatic: string | null;
+    applicationMode: string | null;
+    discourseMode: string | null;
+    criticTarget: string | null;
+    criticTone: string | null;
+    healthyOrDemobilizingCritique: string | null;
+    needsHumanReview: boolean;
+    reviewReason: string | null;
+    sensitivityLevel: string | null;
     summary3Lines: string | null;
     mainApplication: string | null;
     possibleFormativeGap: string | null;
@@ -170,10 +178,20 @@ export default function ReviewForm({
         <section className="space-y-4">
           <div className="rounded-xl border border-hairline bg-surface p-4 text-sm space-y-1">
             <h2 className="text-sm font-medium text-secondary mb-1">Análise interpretativa (IA)</h2>
+            {analysis.needsHumanReview && (
+              <p className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900 mb-2">
+                ⚠ Marcada para revisão humana obrigatória: {analysis.reviewReason ?? "—"}
+              </p>
+            )}
             <p><span className="text-muted">Tema central:</span> {analysis.mainTheme}</p>
             <p><span className="text-muted">Texto bíblico:</span> {analysis.biblicalMainText ?? "—"}</p>
-            <p><span className="text-muted">Tipo:</span> {analysis.sermonType} · <span className="text-muted">Doutrina:</span> {analysis.doctrineMain ?? "—"}</p>
-            <p><span className="text-muted">Ser × fazer:</span> {analysis.ontologicalVsPragmatic}</p>
+            <p><span className="text-muted">Tipo:</span> {analysis.sermonType} · <span className="text-muted">Modo discursivo:</span> {analysis.discourseMode ?? "—"}</p>
+            <p><span className="text-muted">Doutrina:</span> {analysis.doctrineMain ?? "—"}</p>
+            <p><span className="text-muted">Modo de aplicação (ser×fazer):</span> {analysis.applicationMode ?? analysis.ontologicalVsPragmatic}</p>
+            {(analysis.criticTarget && analysis.criticTarget !== "nao_identificavel") && (
+              <p><span className="text-muted">Crítica:</span> alvo {analysis.criticTarget?.replace(/_/g, " ")} · tom {analysis.criticTone?.replace(/_/g, " ")} · {analysis.healthyOrDemobilizingCritique?.replace(/_/g, " ")}</p>
+            )}
+            <p><span className="text-muted">Sensibilidade:</span> {analysis.sensitivityLevel ?? "—"}</p>
             <p><span className="text-muted">Resumo:</span> {analysis.summary3Lines}</p>
             {analysis.mainApplication && <p><span className="text-muted">Aplicação:</span> {analysis.mainApplication}</p>}
             {analysis.possibleFormativeGap && <p><span className="text-muted">Hipótese de lacuna:</span> {analysis.possibleFormativeGap}</p>}

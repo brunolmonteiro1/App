@@ -8,8 +8,8 @@ import { prisma } from "../db";
 import { locateEvidence } from "./locate-evidence";
 import { chatCompletion, extractJson } from "./openrouter";
 import { buildRepairPrompt } from "./repairPrompt";
-import { CodingResponseSchema, type CodingResponse } from "./schema";
-import { SCORE_FIELD_NAMES } from "./score-fields";
+import { computeNeedsReview, CodingResponseSchema, type CodingResponse } from "./schema";
+import { applicationModeToOntological, SCORE_FIELD_NAMES } from "./score-fields";
 import { PROMPT_VERSION, SCHEMA_VERSION } from "./analyze";
 
 const RepairResponseSchema = z.object({
@@ -166,26 +166,44 @@ export async function repairEvidence(attemptId: string, model: string): Promise<
   // Reaproveita as evidências originais localizáveis + as novas do reparo
   const allEvidence = [...originalLocated, ...located];
 
+  const { needs, reason } = computeNeedsReview(original);
+  const analysisFields = {
+    confidenceGlobal: original.confianca,
+    biblicalMainText: original.texto_biblico_principal,
+    sermonType: original.tipo_de_pregacao,
+    mainTheme: original.tema_central,
+    secondaryThemes: JSON.stringify(original.temas_secundarios),
+    doctrineMain: original.doutrina_principal,
+    ontologicalVsPragmatic:
+      original.application_mode !== "not_identifiable"
+        ? applicationModeToOntological(original.application_mode)
+        : original.ontological_vs_pragmatic,
+    applicationMode: original.application_mode,
+    discourseMode: original.discourse_mode,
+    critiqueShareEstimate: original.critique_share_estimate,
+    criticTarget: original.critic_target,
+    criticTone: original.critic_tone,
+    healthyOrDemobilizingCritique: original.healthy_or_demobilizing_critique,
+    politicalCritiqueTarget: original.political_critique_target,
+    sensitivityLevel: original.sensitivity_level,
+    needsHumanReview: needs,
+    reviewReason: reason,
+    summary3Lines: original.resumo_3_linhas,
+    mainApplication: original.aplicacao_principal,
+    possibleFormativeGap: original.possivel_lacuna_formativa,
+  };
+
   await prisma.$transaction([
     prisma.sermonAnalysis.upsert({
       where: { sermonId },
       create: {
         sermonId, analysisStatus: "ai_coded", aiModel: model, aiCodedAt: new Date(), aiError: null,
-        aiScoresJson: JSON.stringify(scoresData), confidenceGlobal: original.confianca,
-        biblicalMainText: original.texto_biblico_principal, sermonType: original.tipo_de_pregacao,
-        mainTheme: original.tema_central, secondaryThemes: JSON.stringify(original.temas_secundarios),
-        doctrineMain: original.doutrina_principal, ontologicalVsPragmatic: original.ontological_vs_pragmatic,
-        summary3Lines: original.resumo_3_linhas, mainApplication: original.aplicacao_principal,
-        possibleFormativeGap: original.possivel_lacuna_formativa,
+        aiScoresJson: JSON.stringify(scoresData), ...analysisFields,
       },
       update: {
         analysisStatus: "ai_coded", aiModel: model, aiCodedAt: new Date(), aiError: null,
         aiScoresJson: JSON.stringify(scoresData), reviewStatus: null, reviewedBy: null, reviewedAt: null,
-        confidenceGlobal: original.confianca, biblicalMainText: original.texto_biblico_principal,
-        sermonType: original.tipo_de_pregacao, mainTheme: original.tema_central,
-        secondaryThemes: JSON.stringify(original.temas_secundarios), doctrineMain: original.doutrina_principal,
-        ontologicalVsPragmatic: original.ontological_vs_pragmatic, summary3Lines: original.resumo_3_linhas,
-        mainApplication: original.aplicacao_principal, possibleFormativeGap: original.possivel_lacuna_formativa,
+        ...analysisFields,
       },
     }),
     prisma.sermonScores.upsert({ where: { sermonId }, create: { sermonId, ...scoresData }, update: scoresData }),

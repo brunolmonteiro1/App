@@ -104,4 +104,22 @@ export const RUBRIC: Record<string, string> = {
   // ── Transversal ──────────────────────────────────────────────────────
   practicalMethodScore:
     "Há CAMINHO PRÁTICO aplicável? 0: nenhum método. 1-2: princípio sem passo. 3: direção aplicável geral. 4-5: passos claros e acionáveis ('faça X assim'). Mede o modo FAZER, independente do tema.",
+
+  // ── Crítica religiosa contextual (BLUEPRINT v2 §12) ──────────────────
+  contextualCritiqueIntensityScore:
+    "Presença REAL da crítica à religião abusiva na linha argumentativa INTEIRA (considere alvo, tom, proporção do discurso, fundamentação). Difere do sinal lexical: 4-5 = a crítica ao sistema estrutura a mensagem; 1-2 = alfinetada pontual. Score ≥4 exige evidência.",
+  biblicalGroundingOfCritiqueScore:
+    "A crítica é ANCORADA no texto bíblico (Jesus e fariseus, mercadores no templo, Mamon) ou é opinião/ironia sem base? 4-5: crítica claramente derivada da Escritura exposta. 0-2: crítica sem fundamentação bíblica no texto.",
+  reconstructionAfterCritiqueScore:
+    "Depois de criticar, a mensagem RECONSTRÓI (aponta o caminho positivo: cruz, graça, comunidade, serviço)? 4-5: reconstrução clara e desenvolvida. 0-2: permanece na denúncia.",
+  activationAfterCritiqueScore:
+    "Depois de criticar/reconstruir, há CHAMADO PRÁTICO à ação (servir, discipular, participar)? 4-5: convocação concreta. 0-2: sem ativação.",
+  politicalIdolatryCritiqueScore:
+    "Crítica à IDOLATRIA POLÍTICA (messianismo político, nacionalismo religioso, confusão igreja-Estado, uso eleitoral da fé). NÃO classifique a pregação como direita/esquerda — meça apenas o fenômeno. Score ≥3 exige evidência.",
+
+  // ── Diaconia orgânica × institucional (BLUEPRINT v2 §12.5) ───────────
+  organicDiaconiaScore:
+    "Serviço COTIDIANO e orgânico: mutualidade, amor ao próximo, bacia e toalha, repartir pão, vida cristã como serviço espontâneo. 4-5: é eixo forte da mensagem.",
+  institutionalActionScore:
+    "Ação ESTRUTURADA: projetos, ministérios, equipes, escalas, grupos, trilhas, voluntariado organizado, mecanismos de engajamento. NÃO pontue alto só porque a mensagem fala em 'servir' — exige caminho institucional concreto. 0-2 é comum neste corpus (aversão a método).",
 };

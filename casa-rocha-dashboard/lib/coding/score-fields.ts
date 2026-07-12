@@ -67,6 +67,17 @@ export const SCORE_FIELDS: ScoreFieldDef[] = [
 
   // Eixo transversal
   { field: "practicalMethodScore", label: "Método prático (há passo aplicável?)", axis: "Transversal: ser × fazer" },
+
+  // Crítica religiosa contextual (BLUEPRINT v2 §12) — eixo pastoral
+  { field: "contextualCritiqueIntensityScore", label: "Intensidade da crítica religiosa (contextual)", axis: "8. Saúde pastoral" },
+  { field: "biblicalGroundingOfCritiqueScore", label: "Fundamentação bíblica da crítica", axis: "8. Saúde pastoral" },
+  { field: "reconstructionAfterCritiqueScore", label: "Reconstrução após a crítica", axis: "8. Saúde pastoral" },
+  { field: "activationAfterCritiqueScore", label: "Ativação prática após a crítica", axis: "8. Saúde pastoral" },
+  { field: "politicalIdolatryCritiqueScore", label: "Crítica à idolatria política", axis: "8. Saúde pastoral" },
+
+  // Diaconia orgânica × ação institucional (BLUEPRINT v2 §12.5) — eixo ortopraxia
+  { field: "organicDiaconiaScore", label: "Diaconia orgânica (serviço cotidiano)", axis: "3. Ortopraxia" },
+  { field: "institutionalActionScore", label: "Ação institucional estruturada", axis: "3. Ortopraxia" },
 ];
 
 export const SCORE_FIELD_NAMES = SCORE_FIELDS.map((f) => f.field);
@@ -91,3 +102,77 @@ export const ONTOLOGICAL_VALUES = [
   "pragmatico",
   "nao_identificavel",
 ] as const;
+
+// Campos categóricos contextuais (BLUEPRINT v2 §12)
+export const APPLICATION_MODES = [
+  "identity_being",
+  "generic_exhortation",
+  "concrete_practice",
+  "structured_method",
+  "balanced",
+  "not_identifiable",
+] as const;
+
+export const DISCOURSE_MODES = [
+  "expository",
+  "doctrinal",
+  "pastoral",
+  "therapeutic",
+  "prophetic",
+  "apologetic",
+  "systemic_critique",
+  "reconstructive_formative",
+  "devotional",
+  "mixed",
+] as const;
+
+export const CRITIQUE_SHARE = ["none", "low", "moderate", "high", "dominant"] as const;
+
+export const CRITIC_TARGETS = [
+  "abuso_religioso", "legalismo", "moralismo", "mercado_gospel", "barganha_financeira",
+  "lideranca_abusiva", "institucionalismo", "clericalismo", "ativismo_religioso",
+  "politica_religiosa", "idolatria_politica", "outro", "nao_identificavel",
+] as const;
+
+export const CRITIC_TONES = [
+  "pastoral", "profetico", "terapeutico", "ironico", "combativo", "academico",
+  "desmobilizador", "misto", "nao_identificavel",
+] as const;
+
+export const CRITIQUE_HEALTH = [
+  "healthy", "potentially_demobilizing", "mixed", "not_identifiable",
+] as const;
+
+export const POLITICAL_TARGETS = [
+  "partidarismo_religioso", "messianismo_politico", "nacionalismo_religioso",
+  "teologia_do_poder", "confusao_igreja_estado", "idolatria_de_lider_politico",
+  "uso_eleitoral_da_fe", "outro", "nao_identificavel",
+] as const;
+
+export const SENSITIVITY_LEVELS = ["baixa", "media", "alta"] as const;
+
+// Mapeia applicationMode → ontologicalVsPragmatic (compat. retroativa da UI antiga)
+export function applicationModeToOntological(mode: string | null | undefined): string {
+  switch (mode) {
+    case "identity_being":
+    case "generic_exhortation":
+      return "ontologico";
+    case "concrete_practice":
+    case "structured_method":
+      return "pragmatico";
+    case "balanced":
+      return "equilibrado";
+    default:
+      return "nao_identificavel";
+  }
+}
+
+// Campos de score que exigem evidência a partir de um limiar mais baixo (riscos, §16.1)
+export const RISK_EVIDENCE_THRESHOLDS: Record<string, number> = {
+  contextualCritiqueIntensityScore: 4,
+  passivityRiskScore: 3,
+  cynicismElitismRiskScore: 3,
+  politicalIdolatryCritiqueScore: 3,
+  reconstructionAfterCritiqueScore: 3,
+  institutionalActionScore: 3,
+};

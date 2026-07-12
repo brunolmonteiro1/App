@@ -77,6 +77,17 @@ model SermonAnalysis {
   theologicalLevel           String?
   languageComplexityScore    Int?
   ontologicalVsPragmatic     String?
+  // Campos categóricos contextuais novos (BLUEPRINT v2 §12/§8.4)
+  applicationMode              String?
+  discourseMode                String?
+  critiqueShareEstimate        String?
+  criticTarget                 String?
+  criticTone                   String?
+  healthyOrDemobilizingCritique String?
+  politicalCritiqueTarget      String?
+  needsHumanReview             Boolean  @default(false)
+  reviewReason                 String?
+  sensitivityLevel             String?
   summary3Lines              String?
   mainApplication            String?
   possibleFormativeGap       String?
@@ -143,6 +154,15 @@ model SermonScores {
   coresponsibilityScore           Int?
   passivityRiskScore              Int?
   cynicismElitismRiskScore        Int?
+
+  // Campos contextuais novos (BLUEPRINT v2 §12) — todos nullable (aditivos)
+  contextualCritiqueIntensityScore Int?
+  biblicalGroundingOfCritiqueScore Int?
+  reconstructionAfterCritiqueScore Int?
+  activationAfterCritiqueScore     Int?
+  organicDiaconiaScore             Int?
+  institutionalActionScore         Int?
+  politicalIdolatryCritiqueScore   Int?
 
   practicalMethodScore Int?
 

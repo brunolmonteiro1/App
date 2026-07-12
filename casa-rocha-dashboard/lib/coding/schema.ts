@@ -1,6 +1,19 @@
 // Schema Zod da resposta da IA (PIPELINE.md §4): valida ANTES de salvar.
 import { z } from "zod";
-import { ONTOLOGICAL_VALUES, SCORE_FIELD_NAMES, SERMON_TYPES } from "./score-fields";
+import {
+  APPLICATION_MODES,
+  CRITIC_TARGETS,
+  CRITIC_TONES,
+  CRITIQUE_HEALTH,
+  CRITIQUE_SHARE,
+  DISCOURSE_MODES,
+  ONTOLOGICAL_VALUES,
+  POLITICAL_TARGETS,
+  RISK_EVIDENCE_THRESHOLDS,
+  SCORE_FIELD_NAMES,
+  SENSITIVITY_LEVELS,
+  SERMON_TYPES,
+} from "./score-fields";
 
 const score = z.number().int().min(0).max(5).nullable();
 
@@ -17,6 +30,15 @@ export const CodingResponseSchema = z.object({
   temas_secundarios: z.array(z.string()).default([]),
   doutrina_principal: z.string().nullable().default(null),
   ontological_vs_pragmatic: z.enum(ONTOLOGICAL_VALUES).catch("nao_identificavel"),
+  // Campos categóricos contextuais novos (BLUEPRINT v2 §12) — tolerantes (catch)
+  application_mode: z.enum(APPLICATION_MODES).catch("not_identifiable"),
+  discourse_mode: z.enum(DISCOURSE_MODES).catch("mixed"),
+  critique_share_estimate: z.enum(CRITIQUE_SHARE).catch("none"),
+  critic_target: z.enum(CRITIC_TARGETS).catch("nao_identificavel"),
+  critic_tone: z.enum(CRITIC_TONES).catch("nao_identificavel"),
+  healthy_or_demobilizing_critique: z.enum(CRITIQUE_HEALTH).catch("not_identifiable"),
+  political_critique_target: z.enum(POLITICAL_TARGETS).catch("nao_identificavel"),
+  sensitivity_level: z.enum(SENSITIVITY_LEVELS).catch("baixa"),
   resumo_3_linhas: z.string().min(10),
   aplicacao_principal: z.string().nullable().default(null),
   possivel_lacuna_formativa: z.string().nullable().default(null),
@@ -33,7 +55,8 @@ export interface ValidationIssue {
   message: string;
 }
 
-// Regras além do shape: campos de score conhecidos; todo score >=4 tem evidência do campo.
+// Regras além do shape: campos de score conhecidos; evidência obrigatória a partir
+// do limiar (score>=4 geral, ou limiar mais baixo para riscos — §16.1).
 export function validateBusinessRules(resp: CodingResponse): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   const known = new Set(SCORE_FIELD_NAMES);
@@ -44,8 +67,13 @@ export function validateBusinessRules(resp: CodingResponse): ValidationIssue[] {
       issues.push({ field, message: `campo de score desconhecido: ${field}` });
       continue;
     }
-    if (value !== null && value >= 4 && !evidenceFields.has(field)) {
-      issues.push({ field, message: `score ${value} exige evidência textual (nenhuma fornecida para ${field})` });
+    if (value === null) continue;
+    const threshold = RISK_EVIDENCE_THRESHOLDS[field] ?? 4;
+    if (value >= threshold && !evidenceFields.has(field)) {
+      issues.push({
+        field,
+        message: `score ${value} em ${field} exige evidência textual (limiar ${threshold}) — nenhuma fornecida`,
+      });
     }
   }
   for (const e of resp.evidencias) {
@@ -54,4 +82,19 @@ export function validateBusinessRules(resp: CodingResponse): ValidationIssue[] {
     }
   }
   return issues;
+}
+
+// Gatilhos de revisão humana obrigatória (BLUEPRINT v2 §20.3).
+export function computeNeedsReview(resp: CodingResponse): { needs: boolean; reason: string | null } {
+  const reasons: string[] = [];
+  const s = resp.scores;
+  const ge = (f: string, n: number) => (s[f] ?? 0) >= n;
+  if (ge("contextualCritiqueIntensityScore", 4)) reasons.push("crítica contextual intensa (≥4)");
+  if (resp.healthy_or_demobilizing_critique === "potentially_demobilizing") reasons.push("crítica potencialmente desmobilizadora");
+  if (ge("passivityRiskScore", 3)) reasons.push("risco de passividade (≥3)");
+  if (ge("cynicismElitismRiskScore", 3)) reasons.push("risco de cinismo/elitismo (≥3)");
+  if (ge("politicalIdolatryCritiqueScore", 4)) reasons.push("crítica à idolatria política (≥4)");
+  if (resp.confianca === "baixa") reasons.push("confiança global baixa");
+  if (resp.sensitivity_level === "alta") reasons.push("sensibilidade alta");
+  return { needs: reasons.length > 0, reason: reasons.length ? reasons.join("; ") : null };
 }
