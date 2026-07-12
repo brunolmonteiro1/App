@@ -91,7 +91,7 @@ const ENUM_FIELD_SPECS: { key: string; allowed: readonly string[]; fallback: str
   { key: "sensitivity_level", allowed: SENSITIVITY_LEVELS, fallback: "baixa" },
 ];
 
-function foldEnumValue(v: string): string {
+export function foldEnumValue(v: string): string {
   return v.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\s-]+/g, "_");
 }
 
