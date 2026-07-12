@@ -170,6 +170,16 @@ model SermonScores {
 
   practicalMethodScore Int?
 
+  // Família QUALIDADE derivada da Etapa B do pipeline multi-etapas (Rodada H).
+  // null = não aplicável/impossível avaliar; escala 1–5 (NUNCA 0).
+  hermeneuticalFidelityScore      Int?
+  textApplicationIntegrationScore Int?
+  argumentativeCoherenceScore     Int?
+  dynamicUnityScore               Int?
+  progressionScore                Int?
+  transitionsScore                Int?
+  closureScore                    Int?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

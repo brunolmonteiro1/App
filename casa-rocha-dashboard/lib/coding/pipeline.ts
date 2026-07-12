@@ -8,7 +8,15 @@ import crypto from "node:crypto";
 import { prisma } from "../db";
 import { locateAnchors } from "./locate-anchors";
 import { chatCompletion, extractJson } from "./openrouter";
-import { buildInterpretationPrompt, parseInterpretationResponse } from "./interpretationPrompt";
+import { buildFormativePrompt, parseFormativeResponse } from "./formativePrompt";
+import {
+  buildInterpretationPrompt,
+  compactInterpretationSummary,
+  parseInterpretationResponse,
+  type InterpretationResponse,
+} from "./interpretationPrompt";
+import { applyConditionalApplicability } from "./schema";
+import { AGGREGATE_SCORE_FIELDS, RISK_EVIDENCE_THRESHOLDS, SCORE_FIELDS } from "./score-fields";
 import { buildStructurePrompt, compactStructureMap, parseStructureResponse, type StructureResponse } from "./structurePrompt";
 import {
   PIPELINE_STAGES,
@@ -372,12 +380,125 @@ export async function runInterpretationStage(runId: string, modelOverride?: stri
   return { ok: true, runId, stage: "interpretation", attemptId };
 }
 
+// ── Etapa C — formação e scores por família ─────────────────────────────────
+// Status inicial de evidência por campo (§12): definido AQUI, refinado na Etapa D.
+function initialScoreMetadata(parsed: { scores: Record<string, number | null>; confianca: string }) {
+  const meta: Record<string, { confidence: string; evidenceStatus: string; evidenceBasis: string | null }> = {};
+  for (const f of SCORE_FIELDS) {
+    const v = parsed.scores[f.field];
+    if (v == null) continue;
+    if (AGGREGATE_SCORE_FIELDS.has(f.field)) {
+      meta[f.field] = { confidence: parsed.confianca, evidenceStatus: "aggregate_derived", evidenceBasis: "aggregate_derived" };
+      continue;
+    }
+    const threshold = RISK_EVIDENCE_THRESHOLDS[f.field] ?? 4;
+    meta[f.field] =
+      v >= threshold
+        ? { confidence: parsed.confianca, evidenceStatus: "evidence_pending", evidenceBasis: null }
+        : { confidence: parsed.confianca, evidenceStatus: "evidence_not_required", evidenceBasis: null };
+  }
+  return meta;
+}
+
+export async function runFormativeStage(runId: string, modelOverride?: string): Promise<StageResult> {
+  const run = await prisma.analysisRun.findUnique({
+    where: { id: runId },
+    include: {
+      structure: { select: { structureJson: true } },
+      interpretation: { select: { hermeneuticsJson: true, argumentationJson: true, homileticsJson: true } },
+      formative: { select: { id: true } },
+      sermon: { select: { id: true, title: true, series: true, year: true, transcriptText: true } },
+    },
+  });
+  if (!run) return { ok: false, runId, stage: "formative", error: "run não encontrado" };
+  if (run.formative) return { ok: true, runId, stage: "formative", skipped: true };
+  if (!run.structure || !run.interpretation) {
+    return { ok: false, runId, stage: "formative", error: "etapas A/B ausentes — execute-as primeiro" };
+  }
+
+  const model = modelOverride ?? defaultModel(run.modelConfigurationJson);
+  const startedAt = Date.now();
+  const structure = JSON.parse(run.structure.structureJson) as StructureResponse;
+  const interpretation = {
+    hermeneutics: JSON.parse(run.interpretation.hermeneuticsJson),
+    argumentation: JSON.parse(run.interpretation.argumentationJson),
+    homiletics: JSON.parse(run.interpretation.homileticsJson),
+  } as InterpretationResponse;
+
+  const { system, user, version } = buildFormativePrompt({
+    title: run.sermon.title,
+    series: run.sermon.series,
+    year: run.sermon.year,
+    transcriptText: run.sermon.transcriptText,
+    structureMap: compactStructureMap(structure),
+    interpretationSummary: compactInterpretationSummary(interpretation),
+  });
+
+  const call = await stageCall({ sermonId: run.sermonId, runId, stage: "formative", model, system, user, version });
+  if (!call.ok) return { ok: false, runId, stage: "formative", error: call.error };
+
+  const parsed = parseFormativeResponse(call.extracted);
+  if (!parsed.success) {
+    const msg = await recordSchemaFailure({
+      sermonId: run.sermonId, runId, stage: "formative", model, version,
+      rawContent: call.raw.content, extracted: call.extracted, issues: parsed.issues,
+      normalizations: parsed.normalizations, meta: call.meta,
+    });
+    return { ok: false, runId, stage: "formative", error: msg };
+  }
+
+  // Aplicabilidade condicional: incoerência → gatilho de revisão (nunca falha
+  // técnica; nenhum score alterado). Persistido para as etapas D/E.
+  const conditional = applyConditionalApplicability(parsed.data);
+  const scoreMetadata = initialScoreMetadata(parsed.data);
+
+  const { formation, gap_analysis, ...categorical } = parsed.data;
+
+  const attemptId = await recordStageAttempt({
+    sermonId: run.sermonId, runId, stage: "formative", model, status: "SUCCESS", promptVersion: version,
+    extras: {
+      rawResponseText: call.raw.content,
+      extractedJson: JSON.stringify(parsed.data),
+      validationIssuesJson:
+        parsed.normalizations.length || conditional.warnings.length || conditional.reviewTriggers.length
+          ? JSON.stringify({
+              enumNormalizations: parsed.normalizations,
+              warnings: conditional.warnings,
+              reviewTriggers: conditional.reviewTriggers,
+            })
+          : null,
+      openrouterMetaJson: call.meta,
+    },
+  });
+
+  await prisma.sermonFormativeAnalysis.create({
+    data: {
+      analysisRunId: runId,
+      formationJson: JSON.stringify(formation),
+      categoricalFieldsJson: JSON.stringify(categorical),
+      gapAnalysisJson: JSON.stringify(gap_analysis),
+      scoreMetadataJson: JSON.stringify(scoreMetadata),
+      model,
+      promptVersion: version,
+      inputHash: sha256(system + "\n" + user),
+      outputHash: sha256(call.raw.content),
+      tokenUsageJson: call.meta,
+      durationMs: Date.now() - startedAt,
+    },
+  });
+  await accumulateUsage(runId, call.raw.usage as Usage);
+  await prisma.analysisRun.update({ where: { id: runId }, data: { currentStage: "evidence" } });
+
+  return { ok: true, runId, stage: "formative", attemptId };
+}
+
 // ── Driver genérico ──────────────────────────────────────────────────────────
 // Registro de executores por etapa; as etapas B–E entram nos Commits 4–7.
 type StageRunner = (runId: string, modelOverride?: string) => Promise<StageResult>;
 const STAGE_RUNNERS: Partial<Record<PipelineStage, StageRunner>> = {
   structure: runStructureStage,
   interpretation: runInterpretationStage,
+  formative: runFormativeStage,
 };
 
 export function registerStageRunner(stage: PipelineStage, runner: StageRunner) {

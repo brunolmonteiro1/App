@@ -14,7 +14,7 @@ const AXIS_ORDER = [
   "Transversal: ser × fazer",
 ];
 
-function scoreCatalog(): string {
+export function scoreCatalog(): string {
   const byAxis = new Map<string, string[]>();
   for (const f of SCORE_FIELDS) {
     const list = byAxis.get(f.axis) ?? [];
