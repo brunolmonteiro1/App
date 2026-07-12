@@ -39,7 +39,7 @@ REGRAS INEGOCIÁVEIS:
 - analise apenas evidências textuais desta transcrição;
 - quando não houver evidência, use score 0 ou null e NÃO crie evidência;
 - todo score 4 ou 5 em uma categoria ESPECÍFICA DEVE ter uma evidência com citação LITERAL da transcrição (copie o trecho exatamente como está, 15-60 palavras);
-- EXCEÇÃO — campos agregados de eixo (os rotulados "agregado do eixo" e "Saúde bíblica geral": biblicalHealthScore, orthodoxyScore, orthopraxyScore, spiritualityScore, pastoralHealthScore) são SÍNTESES do eixo: pontue-os normalmente, mas NÃO precisa de citação própria para eles — a evidência vai nas categorias específicas daquele eixo. Só dê nota alta ao agregado se ao menos uma categoria específica do mesmo eixo também estiver alta e com evidência;
+- EXCEÇÃO — campos agregados de eixo (os rotulados "agregado do eixo" e "Saúde bíblica geral": biblicalHealthScore, orthodoxyScore, orthopraxyScore, spiritualityScore, pastoralHealthScore) são SÍNTESES do eixo: pontue-os normalmente, mas NÃO crie evidência para eles no array "evidencias" — NÃO invente nem parafraseie uma citação "resumo" para o agregado (ex.: não descreva a referência bíblica em vez de citar a fala do pregador). A evidência real fica nas categorias específicas daquele eixo. Só dê nota alta ao agregado se ao menos uma categoria específica do mesmo eixo também estiver alta e com evidência;
 - campo incerto → confiança baixa;
 - não estime percentuais globais nem faça conclusão geral sobre a igreja.
 

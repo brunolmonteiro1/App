@@ -7,7 +7,7 @@ import { locateEvidence } from "./locate-evidence";
 import { chatCompletion, extractJson, type ChatResult } from "./openrouter";
 import { buildCodingPrompt } from "./prompt";
 import { computeNeedsReview, CodingResponseSchema, validateBusinessRules, type CodingResponse } from "./schema";
-import { applicationModeToOntological, SCORE_FIELD_NAMES } from "./score-fields";
+import { AGGREGATE_SCORE_FIELDS, applicationModeToOntological, SCORE_FIELD_NAMES } from "./score-fields";
 
 export const PROMPT_VERSION = "codebook-v1";
 export const SCHEMA_VERSION = "coding-v1";
@@ -148,6 +148,12 @@ export async function analyzeSermon(sermonId: string, model: string): Promise<An
     const loc = locateEvidence(sermon.transcriptText, ev.citacao);
     evidenceReport.push({ campo: ev.campo, found: Boolean(loc), citacao: ev.citacao.slice(0, 120) });
     if (!loc) {
+      // Agregados de eixo não exigem citação própria (fundamentam-se pelas
+      // categorias do eixo — ver validateBusinessRules). Se o modelo mandou uma
+      // evidência supérflua para um agregado e ela não localiza (comum: paráfrase
+      // da referência bíblica, não fala literal do pregador), descarta só essa
+      // evidência em vez de reprovar a pregação inteira.
+      if (AGGREGATE_SCORE_FIELDS.has(ev.campo)) continue;
       return await fail(
         "FAILED_EVIDENCE_LOCATION",
         "localização de evidência",
