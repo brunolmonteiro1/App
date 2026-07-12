@@ -9,7 +9,7 @@ import { locateEvidence } from "./locate-evidence";
 import { chatCompletion, extractJson } from "./openrouter";
 import { buildRepairPrompt } from "./repairPrompt";
 import { computeNeedsReview, CodingResponseSchema, type CodingResponse } from "./schema";
-import { applicationModeToOntological, SCORE_FIELD_NAMES } from "./score-fields";
+import { AGGREGATE_SCORE_FIELDS, applicationModeToOntological, axisComponentFields, SCORE_FIELD_NAMES } from "./score-fields";
 import { PROMPT_VERSION, SCHEMA_VERSION } from "./analyze";
 
 const RepairResponseSchema = z.object({
@@ -74,8 +74,17 @@ export async function repairEvidence(attemptId: string, model: string): Promise<
   const locatedFields = new Set(originalLocated.map((e) => e.campo));
 
   // Campos que precisam de evidência: score >=4 sem evidência LOCALIZÁVEL.
+  // Agregados de eixo não precisam de citação própria — ficam satisfeitos se
+  // alguma categoria específica do mesmo eixo já tem evidência localizada.
   const needing = Object.entries(original.scores)
-    .filter(([field, score]) => score !== null && score >= 4 && !locatedFields.has(field))
+    .filter(([field, score]) => {
+      if (score === null || score < 4) return false;
+      if (locatedFields.has(field)) return false;
+      if (AGGREGATE_SCORE_FIELDS.has(field)) {
+        return !axisComponentFields(field).some((c) => locatedFields.has(c));
+      }
+      return true;
+    })
     .map(([field, score]) => ({ field, score }));
 
   const recordAttempt = async (status: string, extras: Record<string, unknown>) =>

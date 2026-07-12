@@ -115,8 +115,17 @@ conservador do que o v2 supõe.
   `/admin/master-diagnosis` com login próprio. Smoke: gate on/off, login allow/deny, payload
   (263 no filtro, 17 cards, 6 tensões), generate rejeita sem codificação, trilha de segurança
   gravada.
-- **Rodada G:** testes vitest completos (§40), CHANGELOG.md, SECURITY.md, INSTALL §39,
-  varredura da Definition of Done (§43) aplicável.
+- **Rodada G ✅ (2026-07-12):** auditoria por IA sob demanda (§17: `auditPrompt.ts` +
+  `audit.ts` + `/api/coding/audit` + botão "Auditar com IA" na revisão — só relata, nunca
+  altera score, registrada como tentativa `AUDIT`); testes vitest (§40) das regras críticas
+  (schema/evidência incl. agregados, localização de evidência, tensões, relatório master,
+  token master) — 29 testes; `CHANGELOG.md` e `SECURITY.md`.
+- **Correção metodológica (Rodada G, motivada por teste real):** scores AGREGADOS de eixo
+  (`biblicalHealthScore`, `orthodoxyScore`, `orthopraxyScore`, `spiritualityScore`,
+  `pastoralHealthScore`) não exigem mais citação própria — ficam fundamentados quando alguma
+  categoria específica do mesmo eixo tem evidência. Elimina rejeições falsas de pregações
+  inteiras (caso #03 observado em teste do usuário). `validateBusinessRules`, o prompt e o
+  fluxo de reparo foram alinhados; coberto por testes.
 
 ## 6. Regras de segurança de migração (invariantes de todas as rodadas)
 

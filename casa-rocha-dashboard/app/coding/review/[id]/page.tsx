@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import ReviewForm from "@/components/coding/ReviewForm";
+import AuditButton from "@/components/coding/AuditButton";
 import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -34,6 +35,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
   }
 
   return (
+    <div className="space-y-4">
     <ReviewForm
       sermon={{
         id: sermon.id,
@@ -76,5 +78,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
       }))}
       nextId={next?.sermonId ?? null}
     />
+    <AuditButton sermonId={sermon.id} />
+    </div>
   );
 }

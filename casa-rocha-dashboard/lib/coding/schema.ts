@@ -1,7 +1,9 @@
 // Schema Zod da resposta da IA (PIPELINE.md §4): valida ANTES de salvar.
 import { z } from "zod";
 import {
+  AGGREGATE_SCORE_FIELDS,
   APPLICATION_MODES,
+  axisComponentFields,
   CRITIC_TARGETS,
   CRITIC_TONES,
   CRITIQUE_HEALTH,
@@ -69,7 +71,24 @@ export function validateBusinessRules(resp: CodingResponse): ValidationIssue[] {
     }
     if (value === null) continue;
     const threshold = RISK_EVIDENCE_THRESHOLDS[field] ?? 4;
-    if (value >= threshold && !evidenceFields.has(field)) {
+    if (value < threshold) continue;
+
+    // Campos AGREGADOS de eixo (ortodoxia, saúde bíblica geral…) são sínteses:
+    // não exigem citação própria; ficam fundamentados quando o próprio agregado
+    // OU alguma categoria específica do mesmo eixo trouxe evidência (§16.1 adaptado).
+    if (AGGREGATE_SCORE_FIELDS.has(field)) {
+      const supported =
+        evidenceFields.has(field) || axisComponentFields(field).some((c) => evidenceFields.has(c));
+      if (!supported) {
+        issues.push({
+          field,
+          message: `agregado ${field}=${value} sem evidência em nenhuma categoria do eixo — codifique ao menos uma categoria específica com citação`,
+        });
+      }
+      continue;
+    }
+
+    if (!evidenceFields.has(field)) {
       issues.push({
         field,
         message: `score ${value} em ${field} exige evidência textual (limiar ${threshold}) — nenhuma fornecida`,

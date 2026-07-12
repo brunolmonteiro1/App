@@ -82,6 +82,29 @@ export const SCORE_FIELDS: ScoreFieldDef[] = [
 
 export const SCORE_FIELD_NAMES = SCORE_FIELDS.map((f) => f.field);
 
+// Campos AGREGADOS de eixo: sínteses (roll-up) do eixo, não categorias específicas.
+// A evidência literal vive nas categorias do eixo; o agregado é fundamentado quando
+// alguma categoria do MESMO eixo tem evidência (não exige citação própria). Ver
+// validateBusinessRules e o prompt.
+export const AGGREGATE_SCORE_FIELDS = new Set<string>([
+  "biblicalHealthScore",
+  "orthodoxyScore",
+  "orthopraxyScore",
+  "spiritualityScore",
+  "pastoralHealthScore",
+]);
+
+const AXIS_OF = new Map(SCORE_FIELDS.map((f) => [f.field, f.axis]));
+
+// Campos (não-agregados) que pertencem ao mesmo eixo de um dado campo agregado.
+export function axisComponentFields(aggregateField: string): string[] {
+  const axis = AXIS_OF.get(aggregateField);
+  if (!axis) return [];
+  return SCORE_FIELDS.filter(
+    (f) => f.axis === axis && f.field !== aggregateField && !AGGREGATE_SCORE_FIELDS.has(f.field)
+  ).map((f) => f.field);
+}
+
 export const SERMON_TYPES = [
   "expositiva_sequencial",
   "expositiva_isolada",
