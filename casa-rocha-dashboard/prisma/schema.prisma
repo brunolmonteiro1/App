@@ -394,3 +394,56 @@ model HumanReviewEvent {
   @@index([sermonId])
   @@map("human_review_events")
 }
+
+// ─────────────────────────────────────────────
+// Relatório do Modo Diagnóstico Interno (Master Diagnostic View, BLUEPRINT v2
+// §8.10/§35). Persistido e versionado — nova versão nunca apaga a anterior.
+// ─────────────────────────────────────────────
+model MasterDiagnosticReport {
+  id                        String   @id @default(cuid())
+  generatedBy               String?
+  filtersJson               String?
+  inputMetricsHash          String?
+  inputDenominatorJson      String?
+  promptVersion             String?
+  model                     String?
+  hardnessLevel             String   @default("MODERATE") // MODERATE | DIRECT | VERY_DIRECT
+  datasetJson               String?  // payload agregado enviado ao modelo (snapshot)
+  reportJson                String?  // saída validada
+  rawResponseText           String?
+  source                    String   @default("deterministic") // deterministic | ai
+  includesPreliminaryData   Boolean  @default(false)
+  reviewedOnly              Boolean  @default(true)
+  includesLexicalSignals    Boolean  @default(false)
+  includesSensitiveSnippets Boolean  @default(false)
+  status                    String   @default("GENERATED") // GENERATED | REVIEWED | ARCHIVED
+  notes                     String?
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  @@index([status])
+  @@map("master_diagnostic_reports")
+}
+
+// ─────────────────────────────────────────────
+// Trilha de segurança (BLUEPRINT v2 §8.11/§7.4) — acessos e ações no Modo
+// Diagnóstico Interno, permitidos e negados. Nunca registra transcrições nem
+// segredos; metadataJson guarda apenas contexto não sensível.
+// ─────────────────────────────────────────────
+model SecurityAuditLog {
+  id            String   @id @default(cuid())
+  userLabel     String?  // rótulo informado no login master (não é conta de e-mail)
+  action        String   // master_login | master_login_denied | master_view | master_generate | master_review | master_logout
+  resourceType  String?
+  resourceId    String?
+  route         String?
+  result        String   // allowed | denied
+  metadataJson  String?
+  ipHash        String?
+  userAgent     String?
+  createdAt     DateTime @default(now())
+
+  @@index([action])
+  @@index([createdAt])
+  @@map("security_audit_logs")
+}

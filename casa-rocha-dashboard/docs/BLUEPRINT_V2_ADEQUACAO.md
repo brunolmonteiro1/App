@@ -102,10 +102,19 @@ conservador do que o v2 supõe.
   tags/recomendado + modo avançado), preferência de modelo por função em `AppSetting`
   (`lib/coding/model-preference.ts`; reparo/auditoria herdam de codificação). Endpoint
   `/api/coding/models` devolve catálogo com `source` (openrouter|fallback).
-- **Rodada F:** Master Diagnostic View (§29–35): `MASTER_PASSWORD` em middleware + APIs,
-  `SecurityAuditLog`, agregador determinístico de tensões (§33, thresholds versionados em
-  config), cards, prompt master, `MasterDiagnosticReport` persistido/versionado, revisão,
-  export confidencial. Nível de dureza altera só linguagem (testado).
+- **Rodada F ✅ (2026-07-12):** Master Diagnostic View (§29–35). `MASTER_PASSWORD` em middleware
+  (cookie HMAC via Web Crypto, vale em edge e node) + gate server-side na página + `requireMaster`
+  em todas as APIs; recurso desabilitado → 404 discreto. `SecurityAuditLog` registra acessos
+  permitidos/negados (login, view, generate, review) sem transcrições nem segredos.
+  `lib/diagnostics/tensions-config.ts` (thresholds versionados `tensions-v1`) + `tensions.ts`
+  (detector determinístico) + `master-aggregate.ts` (cards §31, denominadores §30.4, gaps,
+  snippets rastreáveis, hash do input). Prompt canônico `masterPrompt.ts` + Zod `masterSchema.ts`
+  (valida denominador e IDs de fonte). Gerador `generate.ts`: determinístico (custo zero) ou por
+  IA sob demanda; nunca publica automático (nasce GENERATED). `MasterDiagnosticReport` versionado
+  + revisão (revisar/arquivar/notas). Nível de dureza altera só linguagem. Página
+  `/admin/master-diagnosis` com login próprio. Smoke: gate on/off, login allow/deny, payload
+  (263 no filtro, 17 cards, 6 tensões), generate rejeita sem codificação, trilha de segurança
+  gravada.
 - **Rodada G:** testes vitest completos (§40), CHANGELOG.md, SECURITY.md, INSTALL §39,
   varredura da Definition of Done (§43) aplicável.
 

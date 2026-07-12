@@ -56,6 +56,20 @@ echo "APP_PASSWORD=escolha-uma-senha-forte-aqui" > .env.deploy
 
 (Se preferir sem senha — por exemplo, testando na sua própria máquina — pule este passo.)
 
+### Senha do Modo Diagnóstico Interno (opcional)
+
+Há um painel interno separado — o **Modo Diagnóstico Interno** (`/admin/master-diagnosis`),
+com a leitura estratégica mais direta e confidencial. Ele tem senha própria, distinta da
+senha geral. Enquanto `MASTER_PASSWORD` estiver vazia, a rota nem existe (responde 404).
+Para habilitar (use pelo menos 6 caracteres):
+
+```bash
+echo "MASTER_PASSWORD=outra-senha-forte-so-para-diagnostico" >> .env.deploy
+```
+
+Todo acesso a esse modo — inclusive tentativas com senha errada — fica registrado numa
+trilha de segurança interna.
+
 ## Passo 4b — Ativar a análise por IA (OpenRouter)
 
 A página **Codificação** analisa cada pregação com o modelo de IA que você escolher
