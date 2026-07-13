@@ -33,6 +33,29 @@ Registro das mudanças relevantes. Datas no formato AAAA-MM-DD.
 - Testes: 49 vitest (20 novos), incluindo os dois casos reais observados com
   Sonnet 4.5 (evidência fabricada de agregado; reconstrução 4 com crítica baixa).
 
+**Commits 2–8 — pipeline `coding-v3-multistage`**
+- `AnalysisRun` (entidade-raiz de cada execução; histórico preservado, `isCurrent`)
+  + tabelas por etapa (`SermonStructureAnalysis`, `SermonInterpretationAnalysis`,
+  `SermonFormativeAnalysis`, `EvidenceCandidate`) com `analysisRunId @unique`;
+  `derivePipelineStatus` como fonte única de status; versionamento por etapa.
+- Etapa A — reconstrução estrutural fluida (sem imposição de 3 pontos; digressão
+  integrada ≠ falha; sem inferência de preparação mental); anchors localizados
+  deterministicamente (exact/normalized/ambiguous/not_found).
+- Etapa B — hermenêutica, argumentação e homilética; scores de qualidade 1–5\|null
+  (0 → null com registro).
+- Etapa C — formação (crer/ser/amar/fazer/como/com quem/enviado), famílias de score
+  (presence/quality/applicability/risk/aggregate), lacuna formativa revisada
+  (não-desenvolvido ≠ falha), agregados derivados (`derived-scores.ts`).
+- Etapa D — extração direcionada em lotes (agregados nunca entram); todas as
+  candidatas em `EvidenceCandidate`, só as validadas em `SermonEvidence`;
+  `scoreMetadata` por campo (§12); troca de `isCurrent`.
+- Etapa E — auditoria semântica (entrada sem transcrição integral); só relata,
+  nunca altera scores; finaliza o run.
+- UI: `/api/coding/pipeline`; abas na página da pregação (Estrutura · Fios ·
+  Argumentação · Hermenêutica · Homilética · Teologia · Formação · Evidências ·
+  Auditoria · Histórico) com destaque de trechos na transcrição; fallback v1.
+- Custo estimado ≈ US$0,40–0,50/pregação (Sonnet 4.5). 95 testes vitest.
+
 ### Leva 2 do Blueprint Mestre v2 — operação e diagnóstico (2026-07-12)
 
 **Rodada E — UX do seletor de modelos OpenRouter (§21)**

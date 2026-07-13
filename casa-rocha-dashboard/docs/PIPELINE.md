@@ -2,6 +2,22 @@
 
 Scripts em TypeScript (`scripts/`), executados via `tsx`. Ordem: importar → analisar lexicalmente → codificar em lotes → revisar → só então agregar.
 
+## 0. Codificação multi-etapas (Rodada H — `coding-v3-multistage`)
+
+A codificação por IA evoluiu de uma chamada única (v1, `analyzeSermon`) para um **pipeline de 5 etapas** (`lib/coding/pipeline.ts`), disparado por `/api/coding/pipeline`. Princípio: **COMPREENDER → INTERPRETAR → PONTUAR → PROVAR → REVISAR → AGREGAR**. Cada execução é um `AnalysisRun` (histórico preservado; `isCurrent` marca o run vigente); cada chamada de IA grava um `CodingAttempt` imutável vinculado ao run; falha numa etapa preserva as anteriores (retomável por `resumeRun`). Nenhum score é alterado automaticamente em etapa alguma.
+
+| Etapa | Arquivo | Entrada | Saída | Versão |
+|---|---|---|---|---|
+| A · Estrutura | `structurePrompt.ts` | transcrição | reconstrução do discurso fluido (tese, fios, unidades, arco); anchors localizados deterministicamente (`locate-anchors.ts`) | `structure-v1-fluid-discourse` |
+| B · Interpretação | `interpretationPrompt.ts` | transcrição + mapa compacto de A | hermenêutica, argumentação, homilética (scores de QUALIDADE 1–5\|null) | `interpretation-v1-hermeneutic-homiletic` |
+| C · Formativo | `formativePrompt.ts` | transcrição + resumos A/B | scores por família + campos categóricos + formação + lacuna (§13); SEM evidências | `formative-v1-theological-health` |
+| D · Evidências | `evidencePrompt.ts` | transcrição + campos que exigem evidência (lotes ≤8; agregados nunca) | citações contínuas → `EvidenceCandidate` (todas) → `SermonEvidence` (só validadas) | `evidence-v2-contiguous-quotes` |
+| E · Auditoria | `auditStagePrompt.ts` | análises + scores + evidências localizadas (SEM transcrição integral) | parecer de coerência; só relata, eleva `needsHumanReview` | `audit-v1-semantic-coherence` |
+
+**Famílias de score** (`score-fields.ts`, `FAMILY_SEMANTICS`): presence · quality (null = não aplicável, nunca 0) · applicability · risk (fora das médias) · aggregate. **Agregados derivados** (`derived-scores.ts`): painel por eixo (média dos presentes × top-3 × amplitude × holístico da IA), calculado em runtime — nunca média simples. **Estado do run**: `derivePipelineStatus` (`run-status.ts`) é a fonte única. Custo estimado ≈ US$0,40–0,50/pregação (Sonnet 4.5).
+
+O fluxo v1 (`analyzeSermon`, `/api/coding/analyze`) permanece para compatibilidade; análises antigas seguem legíveis (`pipelineVersion` null).
+
 ## 1. Importação (`scripts/import-notebooklm-backup.ts`)
 
 ### 1.1 Ler o JSON

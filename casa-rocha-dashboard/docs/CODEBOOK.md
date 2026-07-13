@@ -4,6 +4,15 @@ Régua oficial de codificação. Toda análise (IA ou humana) segue este documen
 
 > **Rubrica executável:** as definições operacionais por categoria (o que distingue 1–2 / 3 / 4–5 em cada campo) vivem em `lib/coding/rubric.ts` e são embutidas em todo prompt de codificação, junto com o glossário (`lib/coding/glossary.ts`) e o padrão confessional (`docs/THEOLOGY_BASELINE.md`, lido em runtime). Este doc é a referência conceitual; o código é a fonte executável — alterar a rubrica implica bump de `analysisVersion`.
 
+> **Famílias de score (Rodada H):** a escala única 0–5 abaixo aplica-se à família **presence**. O pipeline multi-etapas (`coding-v3-multistage`) classifica cada campo em uma família com semântica própria (`lib/coding/score-fields.ts`, `FAMILY_SEMANTICS`):
+> - **presence** — 0 ausente · 1–5 presença→centralidade; score ≥4 exige citação direta; agrega por média dos presentes.
+> - **quality** — **não existe 0** (usar `null` = não aplicável/impossível avaliar); 1 muito frágil → 5 exemplar; agrega por média dos não-null. Campos: exposição, leitura cristocêntrica, aplicação bíblica, fundamentação da crítica, e os derivados da Etapa B (fidelidade hermenêutica, coerência argumentativa, unidade dinâmica, progressão, transições, fechamento).
+> - **applicability** — 0 ausente · 1 princípio abstrato → 5 método estruturado; score ≥ limiar exige citação que mostre a prática.
+> - **risk** — 0 sem risco · 1–5 intensidade; ≥3 exige múltiplas evidências/análise de cobertura, nunca frase isolada; **fica fora de todas as médias de eixo**.
+> - **aggregate** — os 5 sínteses de eixo: nunca têm evidência própria (sempre descartada); exibidos junto ao **painel derivado** (`derived-scores.ts`): média dos presentes × top-3 × amplitude, para não confundir ausência temática com baixa qualidade. O dashboard **nunca** trata `null` como zero.
+
+> **Tipos de evidência (`evidenceBasis`):** direct_quote · multiple_quotes · structural_analysis · derived_gap · whole_sermon_absence · paired_evidence · aggregate_derived · human_judgment. Alegações de ausência usam análise de cobertura do sermão inteiro, nunca "citação da ausência".
+
 ## 1. Escala 0–5 (todas as categorias)
 
 | Score | Definição |

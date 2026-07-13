@@ -103,6 +103,12 @@ O MVP está pronto quando:
 - Rodada F — Modo Diagnóstico Interno (§29–35): `MASTER_PASSWORD`, `SecurityAuditLog`, detector determinístico de tensões (thresholds versionados), gerador de relatório (determinístico ou IA) versionado e revisável.
 - Rodada G — auditoria por IA sob demanda (§17, só relata), testes vitest (§40, 29 testes), `CHANGELOG.md`/`SECURITY.md`, e correção metodológica: agregados de eixo não exigem citação própria (fim das rejeições falsas do tipo #03).
 
+**Rodada H (2026-07-13) — refatoração metodológica: pipeline multi-etapas** (blueprint de refatoração + 16 ajustes):
+- Fase 1 (Commit 1): correções de evidência — processa todas as evidências (uma inválida não apaga as válidas), validação pós-localização (citação fabricada não conta), `detectCompositeQuote` (rejeita só marcadores editoriais), aplicabilidade condicional (errors/warnings/reviewTriggers), normalização de enums registrada, reparo com limiares corretos.
+- Pipeline `coding-v3-multistage` (Commits 2–7): `AnalysisRun` + tabelas por etapa (histórico preservado); Etapas A (estrutura fluida), B (hermenêutica/argumentação/homilética), C (formação + famílias de score + lacuna), D (extração direcionada → `EvidenceCandidate`/`SermonEvidence`), E (auditoria semântica). Famílias de score, agregados derivados, versionamento por etapa, custo/tokens por etapa.
+- UI (Commit 8): abas da análise na página da pregação; `/api/coding/pipeline`; fallback v1.
+- Pendente: dashboards agregados sobre v3 (`/dashboard/homiletica` etc.) e adaptação do diagnóstico master — dependem de pregações recodificadas em v3.
+
 **Rodada 7 (2026-07-11) — base teológica executável:** rubrica 0–5 por categoria (`lib/coding/rubric.ts`) + glossário operacional (`lib/coding/glossary.ts`) + padrão confessional editável (`docs/THEOLOGY_BASELINE.md`, lido em runtime) embutidos em todo prompt — a base teológica fica no sistema, não no treinamento do modelo. Nova página `/dashboard/ortodoxia` (ranking de doutrinas com centralidade, heatmap doutrina×ano, tipos de pregação, testamento) e seção de doutrinas no relatório executivo.
 
 - Migração SQLite → PostgreSQL/Supabase (multiusuário, deploy);
