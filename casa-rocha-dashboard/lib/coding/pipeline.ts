@@ -886,6 +886,37 @@ export async function runPipeline(sermonId: string, model: string, requestedBy?:
   return await resumeRun(started.runId, model);
 }
 
+export interface StepResult {
+  ok: boolean;
+  runId: string;
+  ranStage?: PipelineStage;
+  nextStage: PipelineStage | null; // próxima etapa pendente (null = pipeline completo)
+  done: boolean;
+  error?: string;
+}
+
+// Executa EXATAMENTE UMA etapa pendente e retorna — para o cliente conduzir o
+// loop mostrando progresso por etapa (cada requisição HTTP = 1 chamada de IA,
+// dentro do limite de timeout). Idempotente: etapas já feitas são puladas.
+export async function advanceRun(runId: string, modelOverride?: string): Promise<StepResult> {
+  const run = await prisma.analysisRun.findUnique({ where: { id: runId }, select: { id: true } });
+  if (!run) return { ok: false, runId, nextStage: null, done: false, error: "run não encontrado" };
+
+  for (const stage of PIPELINE_STAGES) {
+    const runner = STAGE_RUNNERS[stage];
+    if (!runner) return { ok: false, runId, nextStage: stage, done: false, error: `etapa ${stage} não implementada` };
+    const res = await runner(runId, modelOverride);
+    if (res.skipped) continue; // já feita — tenta a próxima
+    if (!res.ok) return { ok: false, runId, ranStage: stage, nextStage: stage, done: false, error: res.error };
+    // Rodou esta etapa com sucesso — descobre a próxima pendente sem executá-la.
+    const idx = PIPELINE_STAGES.indexOf(stage);
+    const next = PIPELINE_STAGES[idx + 1] ?? null;
+    return { ok: true, runId, ranStage: stage, nextStage: next, done: next === null };
+  }
+  // Todas as etapas já estavam feitas.
+  return { ok: true, runId, nextStage: null, done: true };
+}
+
 export async function resumeRun(runId: string, modelOverride?: string): Promise<RunResult> {
   const run = await prisma.analysisRun.findUnique({ where: { id: runId }, select: { sermonId: true } });
   if (!run) return { ok: false, runId, sermonId: "", completedStages: [], error: "run não encontrado" };

@@ -42,9 +42,19 @@ export default function CodingPage() {
   const [model, setModel] = useState("");
   const [batch, setBatch] = useState(5);
   const [running, setRunning] = useState(false);
+  const [usePipeline, setUsePipeline] = useState(true);
   const [log, setLog] = useState<LogEntry[]>([]);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
+  const [stageMsg, setStageMsg] = useState("");
   const stopRef = useRef(false);
+
+  const STAGE_LABEL: Record<string, string> = {
+    structure: "estrutura",
+    interpretation: "interpretação",
+    formative: "formação/scores",
+    evidence: "evidências",
+    audit: "auditoria",
+  };
 
   const refresh = useCallback(async () => {
     const res = await fetch("/api/coding/status");
@@ -76,29 +86,67 @@ export default function CodingPage() {
     for (const item of queue) {
       if (stopRef.current) break;
       try {
-        const res = await fetch("/api/coding/analyze", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sermonId: item.id, model }),
-        });
-        const data = await res.json();
-        setLog((l) => [
-          {
-            title: item.title,
-            ok: data.ok,
-            detail: data.ok
-              ? `${data.scoresSaved} scores · ${data.evidenceSaved} evidências · confiança ${data.confidence}`
-              : data.error ?? "erro",
-          },
-          ...l,
-        ]);
+        if (usePipeline) {
+          await runPipelineForSermon(item);
+        } else {
+          const res = await fetch("/api/coding/analyze", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sermonId: item.id, model }),
+          });
+          const data = await res.json();
+          setLog((l) => [
+            {
+              title: item.title,
+              ok: data.ok,
+              detail: data.ok
+                ? `${data.scoresSaved} scores · ${data.evidenceSaved} evidências · confiança ${data.confidence}`
+                : data.error ?? "erro",
+            },
+            ...l,
+          ]);
+        }
       } catch (e) {
         setLog((l) => [{ title: item.title, ok: false, detail: String(e) }, ...l]);
       }
+      setStageMsg("");
       setProgress((p) => ({ ...p, done: p.done + 1 }));
     }
     setRunning(false);
     refresh();
+  };
+
+  // Conduz o pipeline multi-etapas de UMA pregação, uma etapa por requisição,
+  // mostrando o estágio corrente. Cada POST = 1 chamada de IA (evita timeout).
+  const runPipelineForSermon = async (item: PendingItem) => {
+    setStageMsg(`${item.title}: iniciando…`);
+    let res = await fetch("/api/coding/pipeline", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sermonId: item.id, model }),
+    });
+    let step = await res.json();
+    let runId: string | undefined = step.runId;
+
+    while (step.ok && !step.done && !stopRef.current) {
+      setStageMsg(`${item.title}: ${STAGE_LABEL[step.nextStage] ?? step.nextStage}…`);
+      res = await fetch("/api/coding/pipeline", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ runId, model }),
+      });
+      step = await res.json();
+      runId = step.runId ?? runId;
+    }
+
+    if (step.ok && step.done) {
+      setLog((l) => [{ title: item.title, ok: true, detail: "pipeline completo (5 etapas) — em revisão/auditoria" }, ...l]);
+    } else if (!step.ok) {
+      setLog((l) => [
+        { title: item.title, ok: false, detail: `${STAGE_LABEL[step.ranStage] ?? step.ranStage ?? "etapa"}: ${step.error ?? "erro"}` },
+        ...l,
+      ]);
+    }
   };
 
   const priceOf = (id: string) => {
@@ -195,6 +243,13 @@ export default function CodingPage() {
             <span className="text-xs text-muted">{priceOf(model)}</span>
           )}
         </div>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={usePipeline} onChange={(e) => setUsePipeline(e.target.checked)} disabled={running} />
+          <span>
+            Pipeline multi-etapas (v3) — recomendado
+            <span className="text-[11px] text-muted"> · reconstrói estrutura → interpreta → pontua → extrai evidência literal → audita (5 chamadas/pregação, ~US$0,45)</span>
+          </span>
+        </label>
         <p className="text-[11px] text-muted">
           Modelos mais fortes tendem a interpretar melhor contexto, tom, ironia, fundamentação bíblica e
           linha argumentativa. Modelos econômicos servem para triagem, mas exigem revisão humana mais cuidadosa.
@@ -221,6 +276,7 @@ export default function CodingPage() {
             </div>
             <span className="text-xs text-muted">{progress.done}/{progress.total}</span>
           </div>
+          {stageMsg && <p className="text-xs text-secondary">{stageMsg}</p>}
           <ul className="max-h-64 overflow-y-auto text-sm space-y-1">
             {log.map((e, i) => (
               <li key={i} className="flex gap-2 border-b border-hairline last:border-0 py-1">
