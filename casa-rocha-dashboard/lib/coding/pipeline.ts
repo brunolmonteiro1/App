@@ -8,6 +8,7 @@ import crypto from "node:crypto";
 import { prisma } from "../db";
 import { locateAnchors } from "./locate-anchors";
 import { chatCompletion, extractJson } from "./openrouter";
+import { buildAuditStagePrompt, parseAuditStageResponse } from "./auditStagePrompt";
 import { batchFields, buildEvidencePrompt, parseEvidenceResponse, type FieldNeedingEvidence } from "./evidencePrompt";
 import { buildFormativePrompt, parseFormativeResponse } from "./formativePrompt";
 import {
@@ -753,6 +754,115 @@ export async function runEvidenceStage(runId: string, modelOverride?: string): P
   return { ok: true, runId, stage: "evidence" };
 }
 
+// ── Etapa E — auditoria semântica (§11) ─────────────────────────────────────
+// Entrada SEM transcrição integral (custo): análises estruturadas + scores +
+// evidências localizadas + achados determinísticos. Só RELATA — nenhuma
+// correção é aplicada; incoerência apenas eleva needsHumanReview.
+export async function runAuditStage(runId: string, modelOverride?: string): Promise<StageResult> {
+  const run = await prisma.analysisRun.findUnique({
+    where: { id: runId },
+    include: {
+      structure: { select: { structureJson: true } },
+      interpretation: { select: { hermeneuticsJson: true, argumentationJson: true, homileticsJson: true } },
+      formative: { select: { categoricalFieldsJson: true, scoreMetadataJson: true } },
+      sermon: { select: { id: true, title: true } },
+    },
+  });
+  if (!run) return { ok: false, runId, stage: "audit", error: "run não encontrado" };
+  if (!run.structure || !run.interpretation || !run.formative) {
+    return { ok: false, runId, stage: "audit", error: "etapas anteriores ausentes — complete A–D primeiro" };
+  }
+  const done = await prisma.codingAttempt.findFirst({
+    where: { analysisRunId: runId, attemptType: "AUDIT", status: "SUCCESS" },
+    select: { id: true },
+  });
+  if (done) return { ok: true, runId, stage: "audit", skipped: true };
+
+  const model = modelOverride ?? defaultModel(run.modelConfigurationJson);
+  const structure = JSON.parse(run.structure.structureJson) as StructureResponse;
+  const interpretation = {
+    hermeneutics: JSON.parse(run.interpretation.hermeneuticsJson),
+    argumentation: JSON.parse(run.interpretation.argumentationJson),
+    homiletics: JSON.parse(run.interpretation.homileticsJson),
+  } as InterpretationResponse;
+  const catParse = CodingResponseSchema.safeParse(JSON.parse(run.formative.categoricalFieldsJson));
+  const categorical = catParse.success ? catParse.data : null;
+  const conditional = categorical ? applyConditionalApplicability(categorical) : { warnings: [], reviewTriggers: [] };
+
+  const savedEvidence = await prisma.sermonEvidence.findMany({
+    where: { analysisRunId: runId },
+    select: { scoreField: true, scoreValue: true, evidenceQuote: true },
+  });
+
+  const { system, user, version } = buildAuditStagePrompt({
+    title: run.sermon.title,
+    structureMap: compactStructureMap(structure),
+    interpretationSummary: compactInterpretationSummary(interpretation),
+    categoricalJson: run.formative.categoricalFieldsJson,
+    scoreMetadataJson: run.formative.scoreMetadataJson ?? "{}",
+    locatedEvidence: savedEvidence.map((e) => ({ field: e.scoreField, score: e.scoreValue, quote: e.evidenceQuote })),
+    conditionalFindings: [
+      ...conditional.warnings.map((w) => w.message),
+      ...conditional.reviewTriggers.map((t) => t.message),
+    ],
+  });
+
+  const call = await stageCall({ sermonId: run.sermonId, runId, stage: "audit", model, system, user, version });
+  if (!call.ok) return { ok: false, runId, stage: "audit", error: call.error };
+
+  const parsed = parseAuditStageResponse(call.extracted);
+  if (!parsed.success) {
+    const msg = await recordSchemaFailure({
+      sermonId: run.sermonId, runId, stage: "audit", model, version,
+      rawContent: call.raw.content, extracted: call.extracted, issues: parsed.issues,
+      normalizations: parsed.normalizations, meta: call.meta,
+    });
+    return { ok: false, runId, stage: "audit", error: msg };
+  }
+  const audit = parsed.data;
+
+  const attemptId = await recordStageAttempt({
+    sermonId: run.sermonId, runId, stage: "audit", model, status: "SUCCESS", promptVersion: version,
+    extras: {
+      rawResponseText: call.raw.content,
+      extractedJson: JSON.stringify(parsed.data),
+      evidenceValidationJson: JSON.stringify(audit),
+      openrouterMetaJson: call.meta,
+    },
+  });
+  await accumulateUsage(runId, call.raw.usage as Usage);
+
+  // A auditoria NUNCA altera scores — apenas eleva needsHumanReview e anota o
+  // parecer. O run é finalizado (completed / done).
+  const auditNeedsReview =
+    audit.needsHumanReview ||
+    audit.auditStatus === "needs_adjustment" ||
+    audit.auditStatus === "human_review_required" ||
+    audit.auditStatus === "rejected";
+
+  const existing = await prisma.sermonAnalysis.findUnique({
+    where: { sermonId: run.sermonId },
+    select: { needsHumanReview: true, reviewReason: true },
+  });
+  if (auditNeedsReview) {
+    const auditReason = `auditoria: ${audit.auditStatus}${audit.reviewReason ? ` — ${audit.reviewReason}` : ""}`;
+    await prisma.sermonAnalysis.update({
+      where: { sermonId: run.sermonId },
+      data: {
+        needsHumanReview: true,
+        reviewReason: [existing?.reviewReason, auditReason].filter(Boolean).join("; "),
+      },
+    });
+  }
+
+  await prisma.analysisRun.update({
+    where: { id: runId },
+    data: { currentStage: "done", status: "completed", completedAt: new Date() },
+  });
+
+  return { ok: true, runId, stage: "audit", attemptId };
+}
+
 // ── Driver genérico ──────────────────────────────────────────────────────────
 // Registro de executores por etapa; as etapas B–E entram nos Commits 4–7.
 type StageRunner = (runId: string, modelOverride?: string) => Promise<StageResult>;
@@ -761,6 +871,7 @@ const STAGE_RUNNERS: Partial<Record<PipelineStage, StageRunner>> = {
   interpretation: runInterpretationStage,
   formative: runFormativeStage,
   evidence: runEvidenceStage,
+  audit: runAuditStage,
 };
 
 export function registerStageRunner(stage: PipelineStage, runner: StageRunner) {
