@@ -2,9 +2,88 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import Badge from "@/components/Badge";
 import { Card, StatTile } from "@/components/Card";
+import SermonPipelineTabs, { type PipelineTabsData } from "@/components/sermon/SermonPipelineTabs";
+import { deriveAllAxisPanels } from "@/lib/coding/derived-scores";
 import { prisma } from "@/lib/db";
+import { SCORE_FIELD_NAMES } from "@/lib/coding/score-fields";
 
 export const dynamic = "force-dynamic";
+
+function safeParse(s: string | null | undefined): Record<string, unknown> | null {
+  if (!s) return null;
+  try {
+    return JSON.parse(s);
+  } catch {
+    return null;
+  }
+}
+
+// Monta os dados das abas do pipeline (run atual). null = pregação sem run v3.
+async function loadPipelineTabs(sermonId: string, transcript: string): Promise<PipelineTabsData | null> {
+  const run = await prisma.analysisRun.findFirst({
+    where: { sermonId, isCurrent: true },
+    include: { structure: true, interpretation: true, formative: true },
+  });
+  if (!run || !run.formative) return null;
+
+  const [evidence, attempts, scoresRow, analysis] = await Promise.all([
+    prisma.sermonEvidence.findMany({
+      where: { analysisRunId: run.id },
+      orderBy: { evidenceStartIndex: "asc" },
+      select: { id: true, scoreField: true, scoreValue: true, evidenceQuote: true, analyticalComment: true, evidenceStartIndex: true, evidenceEndIndex: true },
+    }),
+    prisma.codingAttempt.findMany({
+      where: { analysisRunId: run.id },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, attemptType: true, status: true, model: true, createdAt: true },
+    }),
+    prisma.sermonScores.findUnique({ where: { sermonId } }),
+    prisma.sermonAnalysis.findUnique({ where: { sermonId }, select: { scoreMetadataJson: true } }),
+  ]);
+
+  const scores: Record<string, number | null> = {};
+  const rec = (scoresRow ?? {}) as Record<string, unknown>;
+  for (const f of SCORE_FIELD_NAMES) scores[f] = typeof rec[f] === "number" ? (rec[f] as number) : null;
+
+  const auditAttempt = attempts.find((a) => a.attemptType === "AUDIT" && a.status === "SUCCESS");
+  const auditJson = auditAttempt
+    ? safeParse(
+        (await prisma.codingAttempt.findUnique({ where: { id: auditAttempt.id }, select: { evidenceValidationJson: true } }))?.evidenceValidationJson
+      )
+    : null;
+
+  return {
+    runId: run.id,
+    pipelineVersion: run.pipelineVersion,
+    status: run.status,
+    currentStage: run.currentStage,
+    totalTokens: run.totalTokens,
+    totalCostUsd: run.totalCostUsd,
+    structure: safeParse(run.structure?.structureJson),
+    anchors: (safeParse(run.structure?.anchorsLocatedJson) as unknown as PipelineTabsData["anchors"]) ?? null,
+    hermeneutics: safeParse(run.interpretation?.hermeneuticsJson),
+    argumentation: safeParse(run.interpretation?.argumentationJson),
+    homiletics: safeParse(run.interpretation?.homileticsJson),
+    formation: safeParse(run.formative.formationJson),
+    categorical: safeParse(run.formative.categoricalFieldsJson),
+    gapAnalysis: safeParse(run.formative.gapAnalysisJson),
+    scoreMetadata: safeParse(analysis?.scoreMetadataJson),
+    scores,
+    derivedPanels: deriveAllAxisPanels(scores),
+    evidence: evidence.map((e) => ({
+      id: e.id,
+      scoreField: e.scoreField,
+      scoreValue: e.scoreValue,
+      quote: e.evidenceQuote,
+      comment: e.analyticalComment,
+      startIndex: e.evidenceStartIndex,
+      endIndex: e.evidenceEndIndex,
+    })),
+    audit: auditJson,
+    attempts: attempts.map((a) => ({ id: a.id, attemptType: a.attemptType, status: a.status, model: a.model, createdAt: a.createdAt.toISOString() })),
+    transcript,
+  };
+}
 
 export default async function SermonPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -20,6 +99,8 @@ export default async function SermonPage({ params }: { params: Promise<{ id: str
     },
   });
   if (!sermon) notFound();
+
+  const pipelineTabs = await loadPipelineTabs(sermon.id, sermon.transcriptText);
 
   const ATTEMPT_STATUS: Record<string, string> = {
     SUCCESS: "sucesso",
@@ -123,6 +204,18 @@ export default async function SermonPage({ params }: { params: Promise<{ id: str
           </ul>
         </Card>
       </div>
+
+      {pipelineTabs ? (
+        <SermonPipelineTabs data={pipelineTabs} />
+      ) : sermon.analysis?.analysisStatus === "ai_coded" || sermon.analysis?.analysisStatus === "reviewed" ? (
+        <Card title="Análise metodologia v1">
+          <p className="text-sm text-secondary">
+            Esta pregação foi codificada pelo fluxo de chamada única (v1). Para ver a reconstrução
+            estrutural, hermenêutica, homilética e o painel de famílias de score, recodifique-a pelo
+            pipeline multi-etapas em <Link href="/coding" className="underline">/coding</Link>.
+          </p>
+        </Card>
+      ) : null}
 
       {sermon.evidence.length > 0 && (
         <Card
