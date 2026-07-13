@@ -22,10 +22,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "sermonId e model são obrigatórios" }, { status: 400 });
   }
   await setModelPreference("coding", model);
+  // Só cria o run (instantâneo) e devolve; o cliente conduz cada etapa via runId.
   const started = await startRun(sermonId, model);
   if (!started.ok) {
     return NextResponse.json({ ok: false, error: started.error, done: false, nextStage: null }, { status: 422 });
   }
-  const step = await advanceRun(started.runId, model);
-  return NextResponse.json(step, { status: step.ok ? 200 : 422 });
+  return NextResponse.json({ ok: true, runId: started.runId, ranStage: null, nextStage: "structure", done: false });
 }

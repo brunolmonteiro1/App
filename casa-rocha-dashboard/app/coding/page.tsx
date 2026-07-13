@@ -81,7 +81,8 @@ export default function CodingPage() {
     setRunning(true);
     stopRef.current = false;
     setLog([]);
-    setProgress({ done: 0, total: queue.length });
+    // No pipeline v3 a barra anda por ETAPA (5 por pregação); no v1, por pregação.
+    setProgress({ done: 0, total: queue.length * (usePipeline ? 5 : 1) });
 
     for (const item of queue) {
       if (stopRef.current) break;
@@ -105,47 +106,67 @@ export default function CodingPage() {
             },
             ...l,
           ]);
+          setProgress((p) => ({ ...p, done: p.done + 1 }));
         }
       } catch (e) {
         setLog((l) => [{ title: item.title, ok: false, detail: String(e) }, ...l]);
       }
       setStageMsg("");
-      setProgress((p) => ({ ...p, done: p.done + 1 }));
     }
     setRunning(false);
     refresh();
   };
 
-  // Conduz o pipeline multi-etapas de UMA pregação, uma etapa por requisição,
-  // mostrando o estágio corrente. Cada POST = 1 chamada de IA (evita timeout).
-  const runPipelineForSermon = async (item: PendingItem) => {
-    setStageMsg(`${item.title}: iniciando…`);
-    let res = await fetch("/api/coding/pipeline", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sermonId: item.id, model }),
-    });
-    let step = await res.json();
-    let runId: string | undefined = step.runId;
-
-    while (step.ok && !step.done && !stopRef.current) {
-      setStageMsg(`${item.title}: ${STAGE_LABEL[step.nextStage] ?? step.nextStage}…`);
-      res = await fetch("/api/coding/pipeline", {
+  // POST robusto: timeout explícito + erros legíveis (status HTTP, resposta não-JSON
+  // = página de erro do proxy). Nunca fica pendurado sem resposta nem falha em silêncio.
+  const postStep = async (body: Record<string, unknown>): Promise<Record<string, unknown>> => {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 280_000); // 280s por etapa
+    try {
+      const res = await fetch("/api/coding/pipeline", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ runId, model }),
+        body: JSON.stringify(body),
+        signal: ctrl.signal,
       });
-      step = await res.json();
-      runId = step.runId ?? runId;
+      const text = await res.text();
+      let parsed: Record<string, unknown> | null = null;
+      try { parsed = JSON.parse(text); } catch { /* resposta não-JSON */ }
+      if (!parsed) {
+        return { ok: false, error: `HTTP ${res.status} — resposta não-JSON (provável timeout/erro do proxy): ${text.slice(0, 120)}` };
+      }
+      if (!res.ok && parsed.ok === undefined) parsed.ok = false;
+      return parsed;
+    } catch (e) {
+      const aborted = e instanceof DOMException && e.name === "AbortError";
+      return { ok: false, error: aborted ? "etapa excedeu 280s (timeout do cliente)" : `falha de rede: ${String(e)}` };
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
+  // Conduz o pipeline multi-etapas de UMA pregação, uma etapa por requisição,
+  // mostrando o estágio corrente. Cada POST = 1 chamada de IA (evita timeout).
+  // A barra avança a cada etapa concluída (feedback contínuo, ~1 min/etapa).
+  const runPipelineForSermon = async (item: PendingItem) => {
+    const bumpStage = () => setProgress((p) => ({ ...p, done: p.done + 1 }));
+    setStageMsg(`${item.title}: criando análise…`);
+    let step = await postStep({ sermonId: item.id, model });
+    let runId = step.runId as string | undefined;
+
+    // Depois, cada POST roda UMA etapa (~1 min cada). A barra anda por etapa.
+    while (step.ok && !step.done && !stopRef.current) {
+      setStageMsg(`${item.title}: ${STAGE_LABEL[String(step.nextStage)] ?? step.nextStage}… (~1 min)`);
+      step = await postStep({ runId, model });
+      runId = (step.runId as string) ?? runId;
+      if (step.ok && step.ranStage) bumpStage();
     }
 
     if (step.ok && step.done) {
       setLog((l) => [{ title: item.title, ok: true, detail: "pipeline completo (5 etapas) — em revisão/auditoria" }, ...l]);
     } else if (!step.ok) {
-      setLog((l) => [
-        { title: item.title, ok: false, detail: `${STAGE_LABEL[step.ranStage] ?? step.ranStage ?? "etapa"}: ${step.error ?? "erro"}` },
-        ...l,
-      ]);
+      const stg = step.ranStage ? STAGE_LABEL[String(step.ranStage)] ?? String(step.ranStage) : "etapa";
+      setLog((l) => [{ title: item.title, ok: false, detail: `${stg}: ${step.error ?? "erro"}` }, ...l]);
     }
   };
 
