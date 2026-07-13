@@ -16,7 +16,7 @@ import {
 } from "./schema";
 import { AGGREGATE_SCORE_FIELDS, applicationModeToOntological, SCORE_FIELD_NAMES } from "./score-fields";
 
-export const PROMPT_VERSION = "codebook-v1.1";
+export const PROMPT_VERSION = "codebook-v1.2";
 export const SCHEMA_VERSION = "coding-v1";
 
 // Status de cada evidência candidata processada (nenhuma interrompe o loop).

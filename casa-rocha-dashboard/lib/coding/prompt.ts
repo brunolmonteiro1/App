@@ -58,6 +58,12 @@ DISTINÇÕES IMPORTANTES:
 - "ontological_vs_pragmatic": o tema aplicado dominante é ensinado como identidade/ser ("morra para o ego") = "ontologico"; como método/fazer ("faça X nesta semana") = "pragmatico"; ambos = "equilibrado".
 - Scores de "risco" (passividade, cinismo/elitismo) são riscos a monitorar no discurso, não acusações; exigem evidência como qualquer 4-5.
 
+CALIBRAÇÃO ANTIVIÉS (não subpontue o que é REAL mas disperso/não-sistemático):
+- DISPERSO ≠ AUSENTE. Tema desenvolvido em vários pontos, mesmo sem ser central nem sistematizado, é presença 3 — não 1. Reserve 1 para menção única e 0 para ausência real (ex.: Espírito Santo recorrente como agente da santificação = pneumatologia ≥3).
+- Não confunda CENTRALIDADE com PRESENÇA: um bloco desenvolvido no fechamento (igreja como comunidade, cuidado mútuo) é eclesiologia/mutualidade ≥3 mesmo sem ser o tema da mensagem.
+- practicalMethodScore: distinga método sistemático de práticas concretas dispersas. Ações reconhecíveis (orar, estudar a Palavra, confessar ao cônjuge, cuidar de alguém) sem trilha organizada = 3, nunca 1. Reserve 1–2 para exortação abstrata sem ação reconhecível. Na lacuna, escreva "há práticas, mas não sistematizadas" — nunca "não há caminho prático".
+- Analise a pregação INTEIRA, incluindo fechamento e movimentos espontâneos (ex.: restauração de Pedro → cuidar das ovelhas pode acrescentar envio/graça/cuidado) antes de concluir "pouca prática/pouco envio".
+
 CAMPOS DE SCORE (use exatamente estes nomes):
 ${scoreCatalog()}
 

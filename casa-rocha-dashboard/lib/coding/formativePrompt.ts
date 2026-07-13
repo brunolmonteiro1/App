@@ -155,7 +155,14 @@ ${GLOSSARY}
 CAMPOS DE SCORE (use exatamente estes nomes; rubrica por categoria):
 ${scoreCatalog()}
 
+CALIBRAÇÃO ANTIVIÉS (evite subpontuar o que é REAL mas disperso/não-sistemático):
+- DISPERSO ≠ AUSENTE. Um tema desenvolvido em VÁRIOS pontos da pregação, mesmo sem ser central nem sistematizado, é presença 3 (desenvolvido) — NÃO 1. Reserve 1 para menção única de passagem e 0 para ausência real. Ex.: se o Espírito Santo aparece repetidamente como agente da santificação (carne × Espírito, dependência diária, força do Espírito), pneumatologia é ≥3, ainda que não haja exposição sistemática da pessoa do Espírito.
+- Separe CENTRALIDADE de PRESENÇA: não ser o tema governante não rebaixa para 1. Um bloco desenvolvido no fechamento (ex.: igreja como comunidade de crucificados, cuidado mútuo, não condenar quem tropeça) é eclesiologia/mutualidade ≥3, mesmo que a mensagem não seja "sobre a igreja".
+- APLICABILIDADE (practicalMethodScore, practicalActivationScore etc.): distinga "método sistemático" de "práticas concretas dispersas". Ações reconhecíveis e datáveis (ajoelhar, orar, estudar a Palavra, confessar ao cônjuge, pedir perdão aos filhos, cuidar de alguém) SEM trilha organizada = 3 (direção reconhecível) ou 4 (prática concreta), NUNCA 1. Reserve 1–2 para princípio abstrato/exortação genérica sem ação reconhecível.
+- Considere a pregação INTEIRA, incluindo o fechamento e os movimentos aparentemente espontâneos: um bloco emergente (ex.: restauração de Pedro → cuidado das ovelhas) pode acrescentar envio, graça ao fracassado e cuidado pastoral que mudam scores de envio/missão/acolhimento. Não conclua "pouca prática/pouco envio" sem checar o final.
+
 LACUNA FORMATIVA (regras §13 — "não desenvolvido" NÃO significa "falha"):
+- NUNCA escreva "não há caminho prático" / "sem método concreto" quando existem práticas concretas dispersas na mensagem. A formulação correta é "há práticas concretas (…), mas não organizadas como trilha sistemática" — distinga ausência de prática de ausência de SISTEMATIZAÇÃO;
 - "notDevelopedInThisSermon": temas relevantes simplesmente não desenvolvidos NESTA mensagem (registro neutro de cobertura);
 - "formativeComplement.status": use "expected_but_not_developed" SOMENTE quando a própria pregação criar a expectativa (ex.: anuncia aplicação prática e não entrega); "strong_identity_weak_practice"/"strong_doctrine_weak_method" quando o contraste for interno à mensagem; senão "not_applicable" ou "optional_complement";
 - "corpusHypotheses": perguntas para verificar no CORPUS depois (ex.: "verificar se mensagens sobre santificação costumam ter identidade forte e método devocional baixo") — nunca conclusões.
