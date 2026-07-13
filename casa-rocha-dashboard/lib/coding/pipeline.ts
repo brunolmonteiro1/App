@@ -917,6 +917,104 @@ export async function advanceRun(runId: string, modelOverride?: string): Promise
   return { ok: true, runId, nextStage: null, done: true };
 }
 
+// ── Execução em segundo plano + snapshot de status ──────────────────────────
+// Etapas longas (a estrutura pode levar 3–5 min no Sonnet) NÃO seguram uma
+// conexão HTTP aberta: o servidor roda o pipeline em background e o cliente
+// faz polling do status (getRunSnapshot). Vale para deploy self-hosted
+// (`next start`), onde o processo Node é de vida longa.
+const ACTIVE_RUNS = new Set<string>();
+
+export function launchRunInBackground(runId: string, modelOverride?: string): { launched: boolean } {
+  if (ACTIVE_RUNS.has(runId)) return { launched: false };
+  ACTIVE_RUNS.add(runId);
+  void (async () => {
+    try {
+      let guard = 0;
+      // advanceRun roda UMA etapa por vez; loop até done/falha (máx. 8 por segurança)
+      while (guard++ < 8) {
+        const step = await advanceRun(runId, modelOverride);
+        if (!step.ok || step.done) break;
+      }
+    } catch (e) {
+      await failRun(runId, `background: ${e instanceof Error ? e.message : String(e)}`).catch(() => {});
+    } finally {
+      ACTIVE_RUNS.delete(runId);
+    }
+  })();
+  return { launched: true };
+}
+
+export interface RunSnapshot {
+  ok: boolean;
+  runId: string;
+  status: string; // running | completed | failed | superseded
+  currentStage: string | null;
+  processing: boolean; // background ativo neste processo
+  stagesDone: number; // 0–5
+  stages: Record<PipelineStage, boolean>;
+  failReason: string | null;
+  lastError: string | null; // último problema registrado (ex.: gap de evidência)
+  totalTokens: number | null;
+  totalCostUsd: number | null;
+  error?: string;
+}
+
+export async function getRunSnapshot(runId: string): Promise<RunSnapshot> {
+  const run = await prisma.analysisRun.findUnique({
+    where: { id: runId },
+    include: {
+      structure: { select: { id: true } },
+      interpretation: { select: { id: true } },
+      formative: { select: { id: true } },
+    },
+  });
+  if (!run) {
+    return {
+      ok: false, runId, status: "unknown", currentStage: null, processing: false,
+      stagesDone: 0, stages: { structure: false, interpretation: false, formative: false, evidence: false, audit: false },
+      failReason: null, lastError: null, totalTokens: null, totalCostUsd: null, error: "run não encontrado",
+    };
+  }
+  const [evidenceCount, auditAttempt, lastFailedAttempt] = await Promise.all([
+    prisma.sermonEvidence.count({ where: { analysisRunId: runId } }),
+    prisma.codingAttempt.findFirst({ where: { analysisRunId: runId, attemptType: "AUDIT", status: "SUCCESS" }, select: { id: true } }),
+    prisma.codingAttempt.findFirst({
+      where: { analysisRunId: runId, status: { not: "SUCCESS" } },
+      orderBy: { createdAt: "desc" },
+      select: { status: true, failStage: true, businessRuleIssuesJson: true },
+    }),
+  ]);
+  const stages: Record<PipelineStage, boolean> = {
+    structure: Boolean(run.structure),
+    interpretation: Boolean(run.interpretation),
+    formative: Boolean(run.formative),
+    evidence: evidenceCount > 0,
+    audit: Boolean(auditAttempt),
+  };
+  let lastError: string | null = null;
+  if (lastFailedAttempt) {
+    let detail = "";
+    try {
+      const issues = JSON.parse(lastFailedAttempt.businessRuleIssuesJson ?? "[]") as { message?: string }[];
+      detail = issues.slice(0, 2).map((i) => i.message).filter(Boolean).join("; ");
+    } catch { /* ignore */ }
+    lastError = `${lastFailedAttempt.failStage ?? lastFailedAttempt.status}${detail ? ` — ${detail}` : ""}`;
+  }
+  return {
+    ok: true,
+    runId,
+    status: run.status,
+    currentStage: run.currentStage,
+    processing: ACTIVE_RUNS.has(runId),
+    stagesDone: Object.values(stages).filter(Boolean).length,
+    stages,
+    failReason: run.failReason,
+    lastError,
+    totalTokens: run.totalTokens,
+    totalCostUsd: run.totalCostUsd,
+  };
+}
+
 export async function resumeRun(runId: string, modelOverride?: string): Promise<RunResult> {
   const run = await prisma.analysisRun.findUnique({ where: { id: runId }, select: { sermonId: true } });
   if (!run) return { ok: false, runId, sermonId: "", completedStages: [], error: "run não encontrado" };

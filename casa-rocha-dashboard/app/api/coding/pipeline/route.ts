@@ -1,31 +1,39 @@
 import { NextRequest, NextResponse } from "next/server";
 import { setModelPreference } from "@/lib/coding/model-preference";
-import { advanceRun, startRun } from "@/lib/coding/pipeline";
+import { getRunSnapshot, launchRunInBackground, startRun } from "@/lib/coding/pipeline";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 300;
+export const maxDuration = 60;
 
-// Pipeline multi-etapas (Rodada H) conduzido UMA ETAPA POR REQUISIÇÃO, para que
-// cada chamada HTTP seja uma única chamada de IA (dentro do timeout do proxy) e
-// o cliente possa mostrar progresso por etapa.
-//   - { sermonId, model }  → cria o run e roda a 1ª etapa (estrutura)
-//   - { runId, model }     → roda a próxima etapa pendente do run
+// Pipeline multi-etapas (Rodada H) em SEGUNDO PLANO + polling de status.
+// Etapas longas (a estrutura pode levar minutos) não seguram a conexão HTTP:
+// o servidor roda o pipeline em background e o cliente consulta o snapshot.
+//   - { sermonId, model }        → cria o run, dispara em background, devolve snapshot
+//   - { runId }                  → devolve o snapshot atual (polling)
+//   - { runId, action:"resume" } → re-dispara o background (retomar após restart)
 export async function POST(req: NextRequest) {
-  const { sermonId, model, runId } = await req.json().catch(() => ({}));
+  const { sermonId, model, runId, action } = await req.json().catch(() => ({}));
+
+  if (runId && action === "resume") {
+    launchRunInBackground(runId, model || undefined);
+    const snap = await getRunSnapshot(runId);
+    return NextResponse.json(snap, { status: snap.ok ? 200 : 404 });
+  }
 
   if (runId) {
-    const step = await advanceRun(runId, model || undefined);
-    return NextResponse.json(step, { status: step.ok ? 200 : 422 });
+    const snap = await getRunSnapshot(runId);
+    return NextResponse.json(snap, { status: snap.ok ? 200 : 404 });
   }
 
   if (!sermonId || !model) {
     return NextResponse.json({ ok: false, error: "sermonId e model são obrigatórios" }, { status: 400 });
   }
   await setModelPreference("coding", model);
-  // Só cria o run (instantâneo) e devolve; o cliente conduz cada etapa via runId.
   const started = await startRun(sermonId, model);
   if (!started.ok) {
-    return NextResponse.json({ ok: false, error: started.error, done: false, nextStage: null }, { status: 422 });
+    return NextResponse.json({ ok: false, error: started.error }, { status: 422 });
   }
-  return NextResponse.json({ ok: true, runId: started.runId, ranStage: null, nextStage: "structure", done: false });
+  launchRunInBackground(started.runId, model);
+  const snap = await getRunSnapshot(started.runId);
+  return NextResponse.json(snap, { status: 200 });
 }

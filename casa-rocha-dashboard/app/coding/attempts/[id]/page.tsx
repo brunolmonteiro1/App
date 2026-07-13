@@ -49,13 +49,41 @@ export default async function AttemptPage({ params }: { params: Promise<{ id: st
   });
   if (!a) notFound();
 
-  const bizIssues: { field: string; message: string }[] = a.businessRuleIssuesJson
-    ? JSON.parse(a.businessRuleIssuesJson)
-    : [];
-  const valIssues: string[] = a.validationIssuesJson ? JSON.parse(a.validationIssuesJson) : [];
-  const evReport: { campo: string; found: boolean; citacao: string }[] = a.evidenceValidationJson
-    ? JSON.parse(a.evidenceValidationJson)
-    : [];
+  // Tolerante aos formatos v1 (array de strings) e Rodada H (objeto com
+  // schemaIssues/enumNormalizations/warnings/reviewTriggers).
+  function safeJson<T>(s: string | null): T | null {
+    if (!s) return null;
+    try {
+      return JSON.parse(s) as T;
+    } catch {
+      return null;
+    }
+  }
+  const bizIssues: { field: string; message: string }[] = safeJson(a.businessRuleIssuesJson) ?? [];
+
+  const rawVal = safeJson<unknown>(a.validationIssuesJson);
+  const valIssues: string[] = [];
+  if (Array.isArray(rawVal)) {
+    for (const v of rawVal) valIssues.push(typeof v === "string" ? v : JSON.stringify(v));
+  } else if (rawVal && typeof rawVal === "object") {
+    const o = rawVal as Record<string, unknown>;
+    for (const s of (o.schemaIssues as string[]) ?? []) valIssues.push(String(s));
+    for (const n of (o.enumNormalizations as { field: string; received: string; normalized: string }[]) ?? [])
+      valIssues.push(`enum normalizado — ${n.field}: "${n.received}" → "${n.normalized}"`);
+    for (const w of (o.warnings as { field: string; message: string }[]) ?? [])
+      valIssues.push(`aviso — ${w.field}: ${w.message}`);
+    for (const t of (o.reviewTriggers as { field: string; message: string }[]) ?? [])
+      valIssues.push(`revisão humana — ${t.field}: ${t.message}`);
+  }
+
+  // Relatório de evidências: v1 usava {campo, found}; Rodada H usa {campo, status}.
+  const rawEv = safeJson<{ campo: string; found?: boolean; status?: string; citacao?: string }[]>(a.evidenceValidationJson) ?? [];
+  const evReport = (Array.isArray(rawEv) ? rawEv : []).map((e) => ({
+    campo: e.campo,
+    ok: e.status ? e.status === "located" : Boolean(e.found),
+    statusLabel: e.status ?? (e.found ? "located" : "unlocated"),
+    citacao: e.citacao ?? "",
+  }));
 
   return (
     <div className="space-y-5">
@@ -109,9 +137,10 @@ export default async function AttemptPage({ params }: { params: Promise<{ id: st
           <ul className="text-sm space-y-1">
             {evReport.map((e, n) => (
               <li key={n} className="flex items-start gap-2 border-b border-hairline last:border-0 py-1">
-                <span>{e.found ? "✅" : "❌"}</span>
+                <span>{e.ok ? "✅" : "❌"}</span>
                 <span className="font-mono text-xs shrink-0">{e.campo}</span>
-                <span className="text-secondary">“{e.citacao}…”</span>
+                {!e.ok && <span className="text-[10px] text-muted shrink-0">{e.statusLabel}</span>}
+                {e.citacao && <span className="text-secondary">“{e.citacao}…”</span>}
               </li>
             ))}
           </ul>

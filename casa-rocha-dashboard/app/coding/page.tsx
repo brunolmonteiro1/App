@@ -84,11 +84,13 @@ export default function CodingPage() {
     // No pipeline v3 a barra anda por ETAPA (5 por pregação); no v1, por pregação.
     setProgress({ done: 0, total: queue.length * (usePipeline ? 5 : 1) });
 
+    let baseDone = 0; // etapas/pregações já concluídas nesta rodada
     for (const item of queue) {
       if (stopRef.current) break;
       try {
         if (usePipeline) {
-          await runPipelineForSermon(item);
+          await runPipelinePolling(item, baseDone);
+          baseDone += 5;
         } else {
           const res = await fetch("/api/coding/analyze", {
             method: "POST",
@@ -106,22 +108,26 @@ export default function CodingPage() {
             },
             ...l,
           ]);
-          setProgress((p) => ({ ...p, done: p.done + 1 }));
+          baseDone += 1;
         }
       } catch (e) {
         setLog((l) => [{ title: item.title, ok: false, detail: String(e) }, ...l]);
+        baseDone += usePipeline ? 5 : 1;
       }
+      setProgress((p) => ({ ...p, done: baseDone }));
       setStageMsg("");
     }
     setRunning(false);
     refresh();
   };
 
-  // POST robusto: timeout explícito + erros legíveis (status HTTP, resposta não-JSON
-  // = página de erro do proxy). Nunca fica pendurado sem resposta nem falha em silêncio.
-  const postStep = async (body: Record<string, unknown>): Promise<Record<string, unknown>> => {
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+  // POST curto (start / poll / resume). Requisições são RÁPIDAS: o pipeline roda
+  // em segundo plano no servidor; aqui só disparamos e consultamos o snapshot.
+  const postPipeline = async (body: Record<string, unknown>): Promise<Record<string, unknown>> => {
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 280_000); // 280s por etapa
+    const timer = setTimeout(() => ctrl.abort(), 30_000);
     try {
       const res = await fetch("/api/coding/pipeline", {
         method: "POST",
@@ -130,43 +136,77 @@ export default function CodingPage() {
         signal: ctrl.signal,
       });
       const text = await res.text();
-      let parsed: Record<string, unknown> | null = null;
-      try { parsed = JSON.parse(text); } catch { /* resposta não-JSON */ }
-      if (!parsed) {
-        return { ok: false, error: `HTTP ${res.status} — resposta não-JSON (provável timeout/erro do proxy): ${text.slice(0, 120)}` };
+      try {
+        return JSON.parse(text);
+      } catch {
+        return { ok: false, error: `HTTP ${res.status} — resposta não-JSON (proxy/erro): ${text.slice(0, 120)}` };
       }
-      if (!res.ok && parsed.ok === undefined) parsed.ok = false;
-      return parsed;
     } catch (e) {
       const aborted = e instanceof DOMException && e.name === "AbortError";
-      return { ok: false, error: aborted ? "etapa excedeu 280s (timeout do cliente)" : `falha de rede: ${String(e)}` };
+      return { ok: false, error: aborted ? "sem resposta em 30s (servidor/proxy)" : `falha de rede: ${String(e)}` };
     } finally {
       clearTimeout(timer);
     }
   };
 
-  // Conduz o pipeline multi-etapas de UMA pregação, uma etapa por requisição,
-  // mostrando o estágio corrente. Cada POST = 1 chamada de IA (evita timeout).
-  // A barra avança a cada etapa concluída (feedback contínuo, ~1 min/etapa).
-  const runPipelineForSermon = async (item: PendingItem) => {
-    const bumpStage = () => setProgress((p) => ({ ...p, done: p.done + 1 }));
+  // Dispara o pipeline em background e faz POLLING do status a cada 3s — mostra
+  // etapa corrente AO VIVO. Nenhuma requisição fica pendurada (evita timeouts).
+  const STAGE_ORDER = ["structure", "interpretation", "formative", "evidence", "audit"];
+  const runPipelinePolling = async (item: PendingItem, baseDone: number) => {
     setStageMsg(`${item.title}: criando análise…`);
-    let step = await postStep({ sermonId: item.id, model });
-    let runId = step.runId as string | undefined;
-
-    // Depois, cada POST roda UMA etapa (~1 min cada). A barra anda por etapa.
-    while (step.ok && !step.done && !stopRef.current) {
-      setStageMsg(`${item.title}: ${STAGE_LABEL[String(step.nextStage)] ?? step.nextStage}… (~1 min)`);
-      step = await postStep({ runId, model });
-      runId = (step.runId as string) ?? runId;
-      if (step.ok && step.ranStage) bumpStage();
+    const start = await postPipeline({ sermonId: item.id, model });
+    if (!start.ok || !start.runId) {
+      setLog((l) => [{ title: item.title, ok: false, detail: String(start.error ?? "não foi possível iniciar") }, ...l]);
+      return;
     }
+    const runId = start.runId as string;
+    let resumedOnce = false;
+    let idleTicks = 0;
 
-    if (step.ok && step.done) {
-      setLog((l) => [{ title: item.title, ok: true, detail: "pipeline completo (5 etapas) — em revisão/auditoria" }, ...l]);
-    } else if (!step.ok) {
-      const stg = step.ranStage ? STAGE_LABEL[String(step.ranStage)] ?? String(step.ranStage) : "etapa";
-      setLog((l) => [{ title: item.title, ok: false, detail: `${stg}: ${step.error ?? "erro"}` }, ...l]);
+    while (!stopRef.current) {
+      await sleep(3000);
+      const snap = await postPipeline({ runId });
+      if (!snap.ok) {
+        setLog((l) => [{ title: item.title, ok: false, detail: String(snap.error ?? "erro no status") }, ...l]);
+        return;
+      }
+      const stagesDone = Number(snap.stagesDone ?? 0);
+      const processing = Boolean(snap.processing);
+      const st = String(snap.status);
+      const current = snap.currentStage ? STAGE_LABEL[String(snap.currentStage)] ?? String(snap.currentStage) : "…";
+      setProgress((p) => ({ ...p, done: baseDone + stagesDone }));
+      setStageMsg(
+        `${item.title}: ${stagesDone}/5 etapas · ${processing ? `processando ${current}… (pode levar minutos)` : `em ${current}`}`
+      );
+
+      // Terminais
+      if (st === "completed" || stagesDone >= 5) {
+        setLog((l) => [{ title: item.title, ok: true, detail: `pipeline completo (5 etapas)${snap.totalCostUsd ? ` · ~US$${Number(snap.totalCostUsd).toFixed(2)}` : ""} — em revisão` }, ...l]);
+        return;
+      }
+      if (st === "failed") {
+        setLog((l) => [{ title: item.title, ok: false, detail: String(snap.failReason ?? snap.lastError ?? "falha") }, ...l]);
+        return;
+      }
+      if (!processing && snap.lastError) {
+        // Parou por gap de evidência / regra — precisa de reparo ou revisão humana
+        const stg = STAGE_ORDER[stagesDone] ?? "etapa";
+        setLog((l) => [{ title: item.title, ok: false, detail: `${STAGE_LABEL[stg] ?? stg}: ${snap.lastError}` }, ...l]);
+        return;
+      }
+      if (!processing && st === "running" && stagesDone < 5) {
+        // Nada rodando (ex.: processo reiniciou) — retoma uma vez; se persistir, aborta
+        idleTicks++;
+        if (!resumedOnce) {
+          resumedOnce = true;
+          await postPipeline({ runId, action: "resume", model });
+        } else if (idleTicks > 3) {
+          setLog((l) => [{ title: item.title, ok: false, detail: "processamento parado no servidor — retome pela página da pregação" }, ...l]);
+          return;
+        }
+      } else {
+        idleTicks = 0;
+      }
     }
   };
 
