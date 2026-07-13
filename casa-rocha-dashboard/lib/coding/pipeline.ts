@@ -8,6 +8,7 @@ import crypto from "node:crypto";
 import { prisma } from "../db";
 import { locateAnchors } from "./locate-anchors";
 import { chatCompletion, extractJson } from "./openrouter";
+import { batchFields, buildEvidencePrompt, parseEvidenceResponse, type FieldNeedingEvidence } from "./evidencePrompt";
 import { buildFormativePrompt, parseFormativeResponse } from "./formativePrompt";
 import {
   buildInterpretationPrompt,
@@ -15,8 +16,25 @@ import {
   parseInterpretationResponse,
   type InterpretationResponse,
 } from "./interpretationPrompt";
-import { applyConditionalApplicability } from "./schema";
-import { AGGREGATE_SCORE_FIELDS, RISK_EVIDENCE_THRESHOLDS, SCORE_FIELDS } from "./score-fields";
+import { detectCompositeQuote, locateEvidence } from "./locate-evidence";
+import { RUBRIC } from "./rubric";
+import {
+  applyConditionalApplicability,
+  computeNeedsReview,
+  CodingResponseSchema,
+  validateBusinessRules,
+  type CodingResponse,
+} from "./schema";
+import {
+  AGGREGATE_SCORE_FIELDS,
+  applicationModeToOntological,
+  FAMILY_SEMANTICS,
+  familyOf,
+  INTERPRETATION_QUALITY_FIELDS,
+  RISK_EVIDENCE_THRESHOLDS,
+  SCORE_FIELD_NAMES,
+  SCORE_FIELDS,
+} from "./score-fields";
 import { buildStructurePrompt, compactStructureMap, parseStructureResponse, type StructureResponse } from "./structurePrompt";
 import {
   PIPELINE_STAGES,
@@ -492,6 +510,249 @@ export async function runFormativeStage(runId: string, modelOverride?: string): 
   return { ok: true, runId, stage: "formative", attemptId };
 }
 
+// ── Etapa D — extração direcionada e validação de evidências (§7) ───────────
+function pathGet(obj: unknown, path: string): unknown {
+  return path.split(".").reduce<unknown>((acc, k) => (acc && typeof acc === "object" ? (acc as Record<string, unknown>)[k] : undefined), obj);
+}
+
+const FIELD_LABELS = new Map(SCORE_FIELDS.map((f) => [f.field, f.label]));
+
+export async function runEvidenceStage(runId: string, modelOverride?: string): Promise<StageResult> {
+  const run = await prisma.analysisRun.findUnique({
+    where: { id: runId },
+    include: {
+      formative: { select: { categoricalFieldsJson: true, scoreMetadataJson: true } },
+      interpretation: { select: { hermeneuticsJson: true, argumentationJson: true, homileticsJson: true } },
+      sermon: { select: { id: true, title: true, transcriptText: true } },
+    },
+  });
+  if (!run) return { ok: false, runId, stage: "evidence", error: "run não encontrado" };
+  if (!run.formative) return { ok: false, runId, stage: "evidence", error: "etapa formativa ausente — execute-a primeiro" };
+  const alreadyValidated = await prisma.sermonEvidence.count({ where: { analysisRunId: runId } });
+  if (alreadyValidated > 0) return { ok: true, runId, stage: "evidence", skipped: true };
+
+  const catParse = CodingResponseSchema.safeParse(JSON.parse(run.formative.categoricalFieldsJson));
+  if (!catParse.success) return { ok: false, runId, stage: "evidence", error: "categoricalFieldsJson inválido no run" };
+  const categorical: CodingResponse = catParse.data;
+  const model = modelOverride ?? defaultModel(run.modelConfigurationJson);
+  const transcript = run.sermon.transcriptText;
+
+  // Campos que exigem evidência: score ≥ limiar; agregados NUNCA entram (§9).
+  const needing: FieldNeedingEvidence[] = Object.entries(categorical.scores)
+    .filter(([field, score]) => {
+      if (score == null || AGGREGATE_SCORE_FIELDS.has(field)) return false;
+      return score >= (RISK_EVIDENCE_THRESHOLDS[field] ?? 4);
+    })
+    .map(([field, score]) => ({
+      field,
+      label: FIELD_LABELS.get(field) ?? field,
+      score: score as number,
+      familyLabel: FAMILY_SEMANTICS[familyOf(field)].label,
+      rubricHint: RUBRIC[field],
+    }));
+
+  // Rerun da etapa substitui as candidatas anteriores DESTE run (auditoria
+  // completa continua nos CodingAttempts imutáveis).
+  await prisma.evidenceCandidate.deleteMany({ where: { analysisRunId: runId } });
+
+  // Lotes de 5–8 campos (ajuste 11)
+  const collected: { field: string; quote: string; reason: string }[] = [];
+  for (const batch of batchFields(needing)) {
+    const { system, user, version } = buildEvidencePrompt({ title: run.sermon.title, transcriptText: transcript, fields: batch });
+    const call = await stageCall({ sermonId: run.sermonId, runId, stage: "evidence", model, system, user, version });
+    if (!call.ok) return { ok: false, runId, stage: "evidence", error: call.error };
+    const parsed = parseEvidenceResponse(call.extracted);
+    if (!parsed.success) {
+      const msg = await recordSchemaFailure({
+        sermonId: run.sermonId, runId, stage: "evidence", model, version,
+        rawContent: call.raw.content, extracted: call.extracted, issues: parsed.issues,
+        normalizations: parsed.normalizations, meta: call.meta,
+      });
+      return { ok: false, runId, stage: "evidence", error: msg };
+    }
+    await recordStageAttempt({
+      sermonId: run.sermonId, runId, stage: "evidence", model, status: "SUCCESS",
+      promptVersion: version,
+      extras: {
+        rawResponseText: call.raw.content,
+        extractedJson: JSON.stringify(parsed.data),
+        openrouterMetaJson: call.meta,
+      },
+    });
+    await accumulateUsage(runId, call.raw.usage as Usage);
+    collected.push(...parsed.data.evidences);
+  }
+
+  // Classificar e localizar TODAS as candidatas (nenhuma interrompe o loop).
+  const located: { field: string; quote: string; reason: string; startIndex: number; endIndex: number }[] = [];
+  const candidateRows: {
+    analysisRunId: string; field: string; quote: string; reason: string;
+    locationStatus: string; rejectionReason: string | null; startIndex: number | null; endIndex: number | null;
+    model: string; promptVersion: string;
+  }[] = [];
+  for (const ev of collected) {
+    const base = {
+      analysisRunId: runId, field: ev.field, quote: ev.quote, reason: ev.reason,
+      model, promptVersion: run.evidencePromptVersion ?? "",
+    };
+    if (AGGREGATE_SCORE_FIELDS.has(ev.field)) {
+      candidateRows.push({ ...base, locationStatus: "ignored_aggregate", rejectionReason: "agregado nunca tem evidência própria", startIndex: null, endIndex: null });
+      continue;
+    }
+    const comp = detectCompositeQuote(ev.quote);
+    if (comp.isComposite) {
+      candidateRows.push({ ...base, locationStatus: "composite_rejected", rejectionReason: comp.reason, startIndex: null, endIndex: null });
+      continue;
+    }
+    const loc = locateEvidence(transcript, ev.quote);
+    if (!loc) {
+      candidateRows.push({ ...base, locationStatus: "unlocated", rejectionReason: "não localizada na transcrição", startIndex: null, endIndex: null });
+      continue;
+    }
+    candidateRows.push({ ...base, locationStatus: "located", rejectionReason: null, startIndex: loc.startIndex, endIndex: loc.endIndex });
+    located.push({ field: ev.field, quote: loc.exactQuote, reason: ev.reason, startIndex: loc.startIndex, endIndex: loc.endIndex });
+  }
+  await prisma.evidenceCandidate.createMany({ data: candidateRows });
+
+  const locatedFields = new Set(located.map((e) => e.field));
+  const bizIssues = validateBusinessRules(categorical, locatedFields);
+  if (bizIssues.length > 0) {
+    // Gap reparável: run NÃO é marcado failed — fica em "evidence", retomável
+    // (reparo/revisão humana). Nenhum score é alterado (Entregável 6, caso 2).
+    await recordStageAttempt({
+      sermonId: run.sermonId, runId, stage: "evidence", model, status: "REPAIRABLE_EVIDENCE_GAP",
+      failStage: "evidência obrigatória não localizada", promptVersion: run.evidencePromptVersion ?? "",
+      extras: {
+        businessRuleIssuesJson: JSON.stringify(bizIssues),
+        evidenceValidationJson: JSON.stringify(candidateRows.map((c) => ({ campo: c.field, status: c.locationStatus }))),
+      },
+    });
+    return {
+      ok: false, runId, stage: "evidence",
+      error: `evidência obrigatória não localizada para ${bizIssues.length} campo(s): ${bizIssues.slice(0, 3).map((i) => i.field).join(", ")} — nenhum score alterado; use reparo ou revisão humana`,
+    };
+  }
+
+  // ── Projeção "atual": SermonScores/SermonAnalysis/SermonEvidence ──────────
+  const scoresData: Record<string, number | null> = {};
+  for (const f of SCORE_FIELD_NAMES) scoresData[f] = categorical.scores[f] ?? null;
+  // Campos de qualidade da Etapa B (mapeados dos JSONs da interpretação)
+  const interp = run.interpretation
+    ? {
+        hermeneutics: JSON.parse(run.interpretation.hermeneuticsJson),
+        argumentation: JSON.parse(run.interpretation.argumentationJson),
+        homiletics: JSON.parse(run.interpretation.homileticsJson),
+      }
+    : null;
+  for (const q of INTERPRETATION_QUALITY_FIELDS) {
+    const v = interp ? pathGet(interp, q.source) : null;
+    scoresData[q.field] = typeof v === "number" ? v : null;
+  }
+
+  const conditional = applyConditionalApplicability(categorical);
+  const baseReview = computeNeedsReview(categorical);
+  const triggerReasons = conditional.reviewTriggers.map((t) => t.message);
+  const needs = baseReview.needs || triggerReasons.length > 0;
+  const reason = [baseReview.reason, ...triggerReasons].filter(Boolean).join("; ") || null;
+
+  const analysisFields = {
+    confidenceGlobal: categorical.confianca,
+    biblicalMainText: categorical.texto_biblico_principal,
+    sermonType: categorical.tipo_de_pregacao,
+    mainTheme: categorical.tema_central,
+    secondaryThemes: JSON.stringify(categorical.temas_secundarios),
+    doctrineMain: categorical.doutrina_principal,
+    ontologicalVsPragmatic:
+      categorical.application_mode !== "not_identifiable"
+        ? applicationModeToOntological(categorical.application_mode)
+        : categorical.ontological_vs_pragmatic,
+    applicationMode: categorical.application_mode,
+    discourseMode: categorical.discourse_mode,
+    critiqueShareEstimate: categorical.critique_share_estimate,
+    criticTarget: categorical.critic_target,
+    criticTone: categorical.critic_tone,
+    healthyOrDemobilizingCritique: categorical.healthy_or_demobilizing_critique,
+    politicalCritiqueTarget: categorical.political_critique_target,
+    sensitivityLevel: categorical.sensitivity_level,
+    needsHumanReview: needs,
+    reviewReason: reason,
+    summary3Lines: categorical.resumo_3_linhas,
+    mainApplication: categorical.aplicacao_principal,
+    possibleFormativeGap: categorical.possivel_lacuna_formativa,
+    pipelineVersion: run.pipelineVersion,
+  };
+
+  await prisma.$transaction([
+    prisma.sermonAnalysis.upsert({
+      where: { sermonId: run.sermonId },
+      create: {
+        sermonId: run.sermonId, analysisStatus: "ai_coded", aiModel: model, aiCodedAt: new Date(), aiError: null,
+        aiScoresJson: JSON.stringify(scoresData), ...analysisFields,
+      },
+      update: {
+        analysisStatus: "ai_coded", aiModel: model, aiCodedAt: new Date(), aiError: null,
+        aiScoresJson: JSON.stringify(scoresData), reviewStatus: null, reviewedBy: null, reviewedAt: null,
+        ...analysisFields,
+      },
+    }),
+    prisma.sermonScores.upsert({
+      where: { sermonId: run.sermonId },
+      create: { sermonId: run.sermonId, ...scoresData },
+      update: scoresData,
+    }),
+    prisma.sermonEvidence.deleteMany({
+      where: { sermonId: run.sermonId, analysisMethod: { in: ["ai_coding", "ai_repair", "ai_pipeline"] } },
+    }),
+    prisma.sermonEvidence.createMany({
+      data: located.map((ev) => ({
+        sermonId: run.sermonId,
+        category: ev.field,
+        scoreField: ev.field,
+        scoreValue: categorical.scores[ev.field] ?? null,
+        evidenceQuote: ev.quote,
+        evidenceStartIndex: ev.startIndex,
+        evidenceEndIndex: ev.endIndex,
+        analyticalComment: ev.reason,
+        analysisMethod: "ai_pipeline",
+        confidence: categorical.confianca,
+        analysisRunId: runId,
+        promptVersion: run.evidencePromptVersion,
+        evidenceBasis: "direct_quote",
+      })),
+    }),
+    // Troca do run atual: anterior vira superseded (histórico preservado)
+    prisma.analysisRun.updateMany({
+      where: { sermonId: run.sermonId, isCurrent: true, NOT: { id: runId } },
+      data: { isCurrent: false, status: "superseded" },
+    }),
+    prisma.analysisRun.update({ where: { id: runId }, data: { isCurrent: true, currentStage: "audit" } }),
+  ]);
+
+  // Refina scoreMetadata (§12): validated/evidence_missing + supportingEvidenceIds
+  const savedEvidence = await prisma.sermonEvidence.findMany({
+    where: { analysisRunId: runId },
+    select: { id: true, scoreField: true },
+  });
+  const byField = new Map<string, string[]>();
+  for (const e of savedEvidence) byField.set(e.scoreField, [...(byField.get(e.scoreField) ?? []), e.id]);
+  const scoreMetadata = JSON.parse(run.formative.scoreMetadataJson ?? "{}") as Record<string, Record<string, unknown>>;
+  for (const [field, meta] of Object.entries(scoreMetadata)) {
+    const ids = byField.get(field) ?? [];
+    if (ids.length > 0) {
+      meta.evidenceStatus = "validated";
+      meta.evidenceBasis = ids.length > 1 ? "multiple_quotes" : "direct_quote";
+      meta.supportingEvidenceIds = ids;
+    } else if (meta.evidenceStatus === "evidence_pending") {
+      meta.evidenceStatus = "evidence_missing";
+    }
+  }
+  const metaStr = JSON.stringify(scoreMetadata);
+  await prisma.sermonAnalysis.update({ where: { sermonId: run.sermonId }, data: { scoreMetadataJson: metaStr } });
+  await prisma.sermonFormativeAnalysis.update({ where: { analysisRunId: runId }, data: { scoreMetadataJson: metaStr } });
+
+  return { ok: true, runId, stage: "evidence" };
+}
+
 // ── Driver genérico ──────────────────────────────────────────────────────────
 // Registro de executores por etapa; as etapas B–E entram nos Commits 4–7.
 type StageRunner = (runId: string, modelOverride?: string) => Promise<StageResult>;
@@ -499,6 +760,7 @@ const STAGE_RUNNERS: Partial<Record<PipelineStage, StageRunner>> = {
   structure: runStructureStage,
   interpretation: runInterpretationStage,
   formative: runFormativeStage,
+  evidence: runEvidenceStage,
 };
 
 export function registerStageRunner(stage: PipelineStage, runner: StageRunner) {
