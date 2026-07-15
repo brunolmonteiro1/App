@@ -4,6 +4,29 @@ Registro das mudanças relevantes. Datas no formato AAAA-MM-DD.
 
 ## [Não lançado]
 
+### Rodada H — fila durável de codificação (worker interno, 2026-07-13)
+
+Motivação: rodar as 263 pregações no pipeline v3 (~22h) exigia manter o
+navegador aberto conduzindo a fila. Uma etapa longa (estrutura na transcrição
+inteira) pode levar minutos e estourava timeouts quando o navegador segurava a
+requisição.
+
+- `CodingJob` (nova tabela): fila durável com status queued/running/done/
+  needs_review/failed, lock (`lockedAt`), retry com backoff (`nextAttemptAt`,
+  `attempts`) e `analysisRunId` para retomar em vez de recriar.
+- `lib/coding/worker.ts`: worker interno singleton (concorrência 1, SQLite) —
+  `claimNext` (claim atômico via transação), `processJob` (dirige o pipeline v3
+  reutilizando `startRun`/`advanceRun`; classifica falha transitória × meto‑
+  dológica), `runWorkerLoop`, `resumeOrphans`. **Não duplica lógica analítica**:
+  prompts, validação, evidências e persistência seguem em `pipeline.ts`.
+- `instrumentation.ts`: no boot do servidor, retoma jobs órfãos e reinicia o
+  worker — sobrevive a restart do processo.
+- `/api/coding/queue`: enfileirar (POST) e snapshot ao vivo (GET).
+- `/coding`: ação primária **"Enviar N para a fila"** (pode fechar o navegador;
+  processa no servidor) + painel de fila ao vivo (na fila / processando N/5 /
+  concluídas / p/ revisão / falharam + custo). "testar agora (aba aberta)"
+  mantido para validação pontual.
+
 ### Rodada H — refatoração metodológica multi-etapas (2026-07-12)
 
 **Commit 1 — correções de evidência e validação (Fase 1 do blueprint de refatoração)**

@@ -45,6 +45,7 @@ model Sermon {
   repairs    CodingRepairSuggestion[]
   reviewEvents HumanReviewEvent[]
   analysisRuns AnalysisRun[]
+  jobs         CodingJob[]
 
   @@index([year])
   @@index([series])
@@ -465,6 +466,32 @@ model SermonFormativeAnalysis {
   run AnalysisRun @relation(fields: [analysisRunId], references: [id])
 
   @@map("sermon_formative_analysis")
+}
+
+// ─────────────────────────────────────────────
+// Fila durável de codificação (Rodada H) — worker interno reclama um job por
+// vez e roda o pipeline v3 até o fim, sobrevivendo a fechar o navegador e a
+// restart do processo. O worker só orquestra; a análise fica em pipeline.ts.
+// ─────────────────────────────────────────────
+model CodingJob {
+  id            String    @id @default(cuid())
+  sermonId      String    @unique
+  status        String    @default("queued") // queued | running | done | needs_review | failed
+  model         String?
+  analysisRunId String?   // run em andamento (para retomar em vez de recriar)
+  attempts      Int       @default(0)
+  lockedAt      DateTime?
+  nextAttemptAt DateTime? // backoff de retry transitório
+  lastError     String?
+  priority      Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  sermon Sermon @relation(fields: [sermonId], references: [id])
+
+  @@index([status])
+  @@index([nextAttemptAt])
+  @@map("coding_jobs")
 }
 
 // Etapa D — TODAS as evidências candidatas (auditáveis), inclusive rejeitadas.

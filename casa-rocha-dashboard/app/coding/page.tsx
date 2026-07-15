@@ -35,6 +35,12 @@ interface LogEntry {
   ok: boolean;
   detail: string;
 }
+interface QueueSnap {
+  counts: { queued: number; running: number; done: number; needs_review: number; failed: number };
+  processing: boolean;
+  current: { title: string; stagesDone: number; currentStage: string | null; costUsd: number | null } | null;
+  totalCostUsd: number;
+}
 
 export default function CodingPage() {
   const [status, setStatus] = useState<Status | null>(null);
@@ -46,6 +52,8 @@ export default function CodingPage() {
   const [log, setLog] = useState<LogEntry[]>([]);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [stageMsg, setStageMsg] = useState("");
+  const [queue, setQueue] = useState<QueueSnap | null>(null);
+  const [enqueuing, setEnqueuing] = useState(false);
   const stopRef = useRef(false);
 
   const STAGE_LABEL: Record<string, string> = {
@@ -54,6 +62,8 @@ export default function CodingPage() {
     formative: "formação/scores",
     evidence: "evidências",
     audit: "auditoria",
+    done: "concluída",
+    iniciando: "iniciando",
   };
 
   const refresh = useCallback(async () => {
@@ -63,13 +73,51 @@ export default function CodingPage() {
     setModel((m) => m || data.model);
   }, []);
 
+  const refreshQueue = useCallback(async () => {
+    try {
+      const res = await fetch("/api/coding/queue");
+      setQueue(await res.json());
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
   useEffect(() => {
     refresh();
+    refreshQueue();
     fetch("/api/coding/models")
       .then((r) => r.json())
       .then((d) => setModels(d.models ?? []))
       .catch(() => {});
-  }, [refresh]);
+  }, [refresh, refreshQueue]);
+
+  // Polling da fila (estado vive no servidor — a página pode ser fechada).
+  useEffect(() => {
+    const active = queue && (queue.processing || queue.counts.queued > 0 || queue.counts.running > 0);
+    const interval = setInterval(refreshQueue, active ? 4000 : 15000);
+    return () => clearInterval(interval);
+  }, [queue, refreshQueue]);
+
+  // Enfileira pregações para o worker interno. Não segura o navegador: dispara e
+  // o processamento continua no servidor mesmo se a aba for fechada.
+  const sendToQueue = async (all: boolean) => {
+    if (!model || enqueuing) return;
+    setEnqueuing(true);
+    try {
+      const res = await fetch("/api/coding/queue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(all ? { all: true, model } : { all: true, limit: batch === -1 ? undefined : batch, model }),
+      });
+      const data = await res.json();
+      setQueue(data);
+      await refresh();
+    } catch {
+      /* ignore */
+    } finally {
+      setEnqueuing(false);
+    }
+  };
 
   const run = async (onlyFailed: boolean) => {
     if (!status || running) return;
@@ -273,26 +321,24 @@ export default function CodingPage() {
               <option value={-1}>todas as pendentes</option>
             </select>
           </label>
-          {!running ? (
-            <>
-              <button
-                onClick={() => run(false)}
-                disabled={!status.hasApiKey || !model || status.counts.pending === 0}
-                className="rounded-lg bg-foreground text-background px-4 py-1.5 text-sm disabled:opacity-40"
-              >
-                Analisar
-              </button>
-              {status.counts.failed > 0 && (
-                <button
-                  onClick={() => run(true)}
-                  disabled={!status.hasApiKey || !model}
-                  className="rounded-lg border border-hairline px-4 py-1.5 text-sm"
-                >
-                  Re-tentar falhas ({status.counts.failed})
-                </button>
-              )}
-            </>
-          ) : (
+          <button
+            onClick={() => sendToQueue(false)}
+            disabled={!status.hasApiKey || !model || status.counts.pending === 0 || enqueuing}
+            className="rounded-lg bg-foreground text-background px-4 py-1.5 text-sm disabled:opacity-40"
+          >
+            {enqueuing ? "enviando…" : `Enviar ${batch === -1 ? "todas" : batch} para a fila`}
+          </button>
+          {!running && (
+            <button
+              onClick={() => run(false)}
+              disabled={!status.hasApiKey || !model || status.counts.pending === 0}
+              className="rounded-lg border border-hairline px-4 py-1.5 text-sm"
+              title="Roda no navegador (mantenha a aba aberta). Bom para testar 1."
+            >
+              testar agora (aba aberta)
+            </button>
+          )}
+          {running && (
             <button
               onClick={() => { stopRef.current = true; }}
               className="rounded-lg border border-hairline px-4 py-1.5 text-sm"
@@ -304,6 +350,10 @@ export default function CodingPage() {
             <span className="text-xs text-muted">{priceOf(model)}</span>
           )}
         </div>
+        <p className="text-[11px] text-muted">
+          <strong>Enviar para a fila</strong> processa no servidor — você pode <strong>fechar o navegador</strong> e a
+          codificação continua; reabra esta página para acompanhar. Ideal para lotes grandes (o corpus inteiro leva horas).
+        </p>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={usePipeline} onChange={(e) => setUsePipeline(e.target.checked)} disabled={running} />
           <span>
@@ -322,10 +372,61 @@ export default function CodingPage() {
         </p>
       </section>
 
+      {queue && (queue.processing || queue.counts.queued > 0 || queue.counts.running > 0 || queue.counts.done > 0 || queue.counts.needs_review > 0 || queue.counts.failed > 0) && (
+        <section className="rounded-xl border border-hairline bg-surface p-4 space-y-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <h2 className="text-sm font-medium text-secondary">
+              Fila de codificação (servidor){" "}
+              <span className={`ml-1 inline-block h-2 w-2 rounded-full ${queue.processing ? "bg-green-500 animate-pulse" : "bg-muted"}`} />
+            </h2>
+            {queue.totalCostUsd > 0 && <span className="text-xs text-muted">custo acumulado ~US${queue.totalCostUsd.toFixed(2)}</span>}
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center text-sm">
+            {(
+              [
+                ["na fila", queue.counts.queued, ""],
+                ["processando", queue.counts.running, "text-blue-700"],
+                ["concluídas", queue.counts.done, "text-green-700"],
+                ["p/ revisão", queue.counts.needs_review, "text-amber-700"],
+                ["falharam", queue.counts.failed, "text-red-700"],
+              ] as const
+            ).map(([label, n, cls]) => (
+              <div key={label} className="rounded-lg border border-hairline bg-background p-2">
+                <div className={`text-xl font-semibold ${cls}`}>{n}</div>
+                <div className="text-[11px] text-muted">{label}</div>
+              </div>
+            ))}
+          </div>
+          {queue.current ? (
+            <div className="text-sm">
+              <div className="flex items-center gap-2">
+                <span className="inline-block h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
+                <span className="flex-1 truncate" title={queue.current.title}>{queue.current.title}</span>
+                <span className="text-xs text-muted">
+                  {queue.current.stagesDone}/5 · {STAGE_LABEL[queue.current.currentStage ?? ""] ?? queue.current.currentStage ?? "…"}
+                </span>
+              </div>
+              <div className="mt-1 h-2 rounded bg-background overflow-hidden">
+                <div className="h-full rounded transition-all" style={{ width: `${(queue.current.stagesDone / 5) * 100}%`, background: "var(--series-1)" }} />
+              </div>
+            </div>
+          ) : queue.counts.queued > 0 ? (
+            <p className="text-xs text-muted">Aguardando o worker pegar o próximo item…</p>
+          ) : (
+            <p className="text-xs text-muted">Fila ociosa.</p>
+          )}
+          <p className="text-[11px] text-muted">
+            Você pode fechar esta página — o processamento continua no servidor. Itens marcados{" "}
+            <span className="text-amber-700">p/ revisão</span> aparecem na fila de revisão humana abaixo; use{" "}
+            <strong>Re-enviar</strong> em Falhas para tentar de novo.
+          </p>
+        </section>
+      )}
+
       {(running || log.length > 0) && (
         <section className="rounded-xl border border-hairline bg-surface p-4 space-y-2">
           <div className="flex items-center gap-3">
-            <h2 className="text-sm font-medium text-secondary">Progresso</h2>
+            <h2 className="text-sm font-medium text-secondary">Progresso (teste no navegador)</h2>
             <div className="flex-1 h-2 rounded bg-background overflow-hidden">
               <div
                 className="h-full rounded transition-all"
