@@ -25,6 +25,11 @@ produto foi escrita ainda.
 3. **Custo por unidade, isolado, engana.** No lote 3 dá R$ 7,01/un, mas ~170 das 304
    unidades são itens de valor irrisório (60x máscara de gatinho, 36x roupas diversas).
    Ordenar por R$/unidade premiaria justamente os lotes cheios de tranqueira.
+4. **O produto final é um teto de lance, não um relatório.** A mercadoria vai para bazar
+   solidário e evento de outlet, com venda realizada a **40–60% do valor online** — então o
+   teto sai como faixa (seguro / máximo), calculado de trás para frente a partir do
+   múltiplo exigido por categoria. Itens irrisórios entram como **zero**: não pagamos por
+   volume, mas ele gira no bazar como upside.
 
 ## Reproduzir o reconhecimento
 
