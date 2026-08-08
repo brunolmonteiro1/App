@@ -1,0 +1,186 @@
+#!/usr/bin/env node
+/**
+ * CLI do estudo de lotes.
+ *
+ *   npm run cli -- estudo --url <url do evento> [--saida arquivo.html] [--refresh 15]
+ *   npm run cli -- estudo --fixture            # roda offline, contra o evento capturado
+ *   npm run cli -- custo --lance 3460          # confere a conta de encargos
+ */
+
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
+import { CONFIG_PADRAO, type Config } from './config.ts';
+import { auctionIdDaUrl, buscarEvento, parsearEvento, type Evento, type Lote } from './superbid/api.ts';
+import { detectar } from './analise/categoria.ts';
+import { calcularCusto } from './analise/custo.ts';
+import { aplicar, carregarPrecos, cobertura, esqueleto, type ArquivoPrecos } from './analise/valor.ts';
+import { reconciliar, refDoTitulo } from './analise/quantidade.ts';
+import { avaliar } from './analise/teto.ts';
+import { conferir, lerManifesto, type Manifesto } from './superbid/manifesto.ts';
+import { gerarPagina, type LinhaEstudo } from './estudo/pagina.ts';
+
+const FIXTURE = new URL('../recon/fixtures/evento-790754-offers.json', import.meta.url).pathname;
+const MANIFESTO_LOTE3 = new URL(
+  '../recon/fixtures/manifesto-lote3-SB0032812.pdf',
+  import.meta.url,
+).pathname;
+
+function arg(nome: string): string | undefined {
+  const i = process.argv.indexOf(`--${nome}`);
+  return i > -1 ? process.argv[i + 1] : undefined;
+}
+const temFlag = (nome: string) => process.argv.includes(`--${nome}`);
+
+/** Monta a linha do estudo de um lote. `manifesto` é opcional: sem ele, não há teto. */
+function montarLinha(
+  lote: Lote,
+  manifesto: Manifesto | null,
+  cfg: Config,
+  precos: ArquivoPrecos | null,
+): LinhaEstudo {
+  const itens = manifesto ? aplicar(manifesto.itens, precos?.itens ?? {}) : [];
+  const unidades = reconciliar(lote.titulo, manifesto?.somaQuantidades ?? null);
+  const declaradas = reconciliar(lote.titulo, null).valor;
+
+  const av = avaliar(
+    {
+      itens,
+      categoria: detectar(lote.titulo),
+      lanceAtual: lote.lance,
+      incremento: lote.incremento,
+      temLances: lote.temLances,
+      encerrado: lote.encerrado,
+      unidadesDeclaradas: declaradas,
+    },
+    cfg,
+  );
+
+  const alertas = manifesto ? conferir(manifesto, refDoTitulo(lote.titulo), declaradas) : [];
+  if (!manifesto && lote.anexos.length === 0) alertas.push('lote sem PDF de anexo');
+  if (!manifesto && lote.anexos.length > 0) alertas.push('manifesto ainda não processado');
+  if (manifesto) {
+    const cob = cobertura(itens);
+    if (cob.pendentes > 0) {
+      alertas.push(
+        `${cob.pendentes} item(ns) sem preço (${cob.unidadesSemPreco} un) — teto sai baixo até precificar`,
+      );
+    }
+  }
+
+  const topItens = itens
+    .filter((i) => i.faixa !== 'C')
+    .map((i) => ({
+      descricao: i.descricao,
+      quantidade: i.quantidade,
+      valor: i.quantidade * (i.precoOnline ?? 0),
+    }))
+    .sort((a, b) => b.valor - a.valor || b.quantidade - a.quantidade)
+    .slice(0, 5);
+
+  return {
+    lote,
+    av,
+    alertas,
+    unidadesDeclaradas: unidades.valor,
+    fonteUnidades: unidades.fonte,
+    topItens,
+  };
+}
+
+async function comandoEstudo(): Promise<void> {
+  const cfg = { ...CONFIG_PADRAO };
+  const frete = arg('frete');
+  if (frete !== undefined) {
+    cfg.freteporLote = Number(frete);
+    cfg.freteInformado = true;
+  }
+
+  let evento: Evento;
+  if (temFlag('fixture')) {
+    // O fixture foi capturado com timeZoneId=UTC; o ao vivo pede America/Sao_Paulo.
+    evento = parsearEvento(JSON.parse(await readFile(FIXTURE, 'utf8')), 'UTC');
+    console.log(`[fixture] evento ${evento.auctionId} · ${evento.lotes.length} lotes`);
+  } else {
+    const url = arg('url');
+    if (!url) {
+      console.error('faltou --url <url do evento> (ou use --fixture)');
+      process.exit(2);
+    }
+    const id = auctionIdDaUrl(url);
+    console.log(`buscando evento ${id}…`);
+    evento = await buscarEvento(id);
+    console.log(`recebidos ${evento.lotes.length} de ${evento.total} lotes`);
+  }
+
+  const caminhoPrecos = arg('precos');
+  const precos = caminhoPrecos ? await carregarPrecos(caminhoPrecos) : null;
+  if (precos) {
+    const n = Object.values(precos.itens).filter((i) => i.preco != null).length;
+    console.log(`tabela de preços: ${n} item(ns) precificados${precos.exemplo ? ' [EXEMPLO]' : ''}`);
+  }
+
+  const limite = arg('limite') ? Number(arg('limite')) : undefined;
+  const lotes = limite ? evento.lotes.slice(0, limite) : evento.lotes;
+
+  // Só o lote 3 tem manifesto capturado no repo. Baixar os 57 PDFs é a etapa seguinte;
+  // sem manifesto o lote entra no estudo com teto vazio e alerta, nunca com número
+  // inventado.
+  const linhas: LinhaEstudo[] = [];
+  for (const lote of lotes) {
+    const ehLote3 = refDoTitulo(lote.titulo) === 'SB0032812';
+    let manifesto: Manifesto | null = null;
+    if (ehLote3) {
+      try {
+        manifesto = await lerManifesto(MANIFESTO_LOTE3);
+      } catch (e) {
+        console.warn(`  lote ${lote.numero}: manifesto ilegível (${(e as Error).message})`);
+      }
+    }
+    linhas.push(montarLinha(lote, manifesto, cfg, precos));
+  }
+
+  const refresh = arg('refresh');
+  const html = gerarPagina(evento, linhas, cfg, refresh ? Number(refresh) : null, precos?.exemplo ?? false);
+  const saida = resolve(arg('saida') ?? `saida/estudo-${evento.auctionId}.html`);
+  await mkdir(dirname(saida), { recursive: true });
+  await writeFile(saida, html, 'utf8');
+
+  const comTeto = linhas.filter((l) => l.av.tetoSeguro > 0).length;
+  console.log(`\nestudo gerado: ${saida}`);
+  console.log(`  ${linhas.length} lotes · ${comTeto} com teto · ${linhas.length - comTeto} aguardando manifesto/preço`);
+  if (!cfg.freteInformado) console.log('  custo marcado INCOMPLETO: passe --frete <valor> para fechar');
+  if (refresh) console.log(`  refresh ligado: a página busca lances a cada ${refresh}s`);
+}
+
+function comandoCusto(): void {
+  const lance = Number(arg('lance') ?? 3460);
+  const c = calcularCusto(lance, CONFIG_PADRAO);
+  const f = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  console.log(`Valor do lance                     ${f(c.lance)}`);
+  console.log(`Subtotal dos encargos e comissões  ${f(c.encargos)}`);
+  console.log(`Valor total previsto               ${f(c.total)}`);
+  console.log(`Overhead efetivo                   ${(c.overhead * 100).toFixed(1)}%  (o card do site diz +10%)`);
+}
+
+async function comandoEsqueleto(): Promise<void> {
+  const m = await lerManifesto(MANIFESTO_LOTE3);
+  const saida = resolve(arg('saida') ?? 'precos-lote3.json');
+  await writeFile(saida, JSON.stringify(esqueleto(m.itens), null, 2), 'utf8');
+  const distintas = Object.keys(esqueleto(m.itens).itens).length;
+  console.log(`esqueleto de preços: ${saida}`);
+  console.log(`  ${m.itens.length} itens do manifesto · ${distintas} descrições distintas`);
+  console.log('  preencha "preco" com o valor online por unidade; deixe null o que não souber');
+}
+
+const comando = process.argv[2];
+if (comando === 'estudo') await comandoEstudo();
+else if (comando === 'precos') await comandoEsqueleto();
+else if (comando === 'custo') comandoCusto();
+else {
+  console.log(`uso:
+  npm run cli -- estudo --fixture [--refresh 15] [--frete 150] [--precos p.json]
+  npm run cli -- estudo --url https://www.superbid.net/evento/<slug>-<id>
+  npm run cli -- precos [--saida precos-lote3.json]
+  npm run cli -- custo --lance 3460`);
+  process.exit(comando ? 2 : 0);
+}

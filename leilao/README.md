@@ -1,11 +1,48 @@
-# leilao — análise de lotes de leilão (Superbid)
+# leilao — teto de lance por lote (Superbid / BidTV)
 
-Ferramenta para, a partir de um link de evento de leilão, produzir um **ranking de lotes
-por valor recuperável sobre custo**, com custo por unidade real ao lado como referência.
+A partir do link de um evento, gera um **estudo com o teto máximo de lance de cada lote** —
+a página que o operador mantém aberta ao lado do BidTV para decidir, no último segundo, se
+cobre ou não. Com `--refresh`, ela busca os lances sozinha e repinta 🟢/🟡/🔴.
 
-**Status: planejado, não implementado.** O que existe aqui hoje é o reconhecimento
-técnico já executado contra o site real, com as evidências capturadas. Nenhuma linha do
-produto foi escrita ainda.
+**A ferramenta nunca dá lance.** O clique é sempre do operador, na janela do BidTV.
+
+## Como rodar
+
+```bash
+cd leilao && npm install
+
+# Confere a conta de encargos contra o diálogo real do site
+npm run cli -- custo --lance 3460
+#   → encargos R$ 596,00 · total R$ 4.056,00 · overhead 17,2%
+
+# Estudo dos 61 lotes, offline, a partir do evento capturado
+npm run cli -- estudo --fixture --frete 150 --refresh 15 \
+  --precos exemplos/precos-lote3-exemplo.json
+#   → saida/estudo-790754.html
+
+# Ao vivo, contra o site
+npm run cli -- estudo --url https://www.superbid.net/evento/logistica-reversa-790754 --refresh 15
+
+# Esqueleto de preços para preencher (sem números inventados)
+npm run cli -- precos --saida precos.json
+
+npm test          # 62 testes
+npm run typecheck
+```
+
+## Status
+
+| Parte | Estado |
+|---|---|
+| Coleta da API, validada por zod | ✅ |
+| Parser do manifesto (PDF → itens) | ✅ 71 itens / 304 un no lote 3 |
+| Quantidade do título (6 formatos + typo) | ✅ 58+/61 |
+| Encargos e teto (10% + R$ 250) | ✅ ancorado no diálogo do site |
+| Faixas A/B/C e unidades efetivas | ✅ heurística; preço vem de arquivo |
+| Estudo HTML com refresh | ✅ |
+| Preço automático por LLM | ⬜ Fase 2 — exige `ANTHROPIC_API_KEY` |
+| Download dos 57 PDFs de anexo | ⬜ hoje só o lote 3 tem manifesto no repo |
+| Extração do Edital | ❌ ver "tarefa zero" abaixo |
 
 ## Documentos
 
@@ -13,6 +50,17 @@ produto foi escrita ainda.
 |---|---|
 | [`docs/01-reconhecimento.md`](docs/01-reconhecimento.md) | O que foi verificado no site real e as evidências. Leia primeiro. |
 | [`docs/02-plano-implementacao.md`](docs/02-plano-implementacao.md) | Arquitetura, modelo de dados, fases e verificação. |
+
+## A tarefa zero falhou, e o impacto foi baixo
+
+O plano dependia de `pdfjs-dist` conseguir ler o **Edital**. Não consegue: a fonte tem
+subset sem `/ToUnicode` e o texto sai como código de glifo (`! " # $ %`). Está travado em
+teste para avisar se um dia mudar.
+
+Impacto baixo porque o Edital servia para descobrir a tabela de encargos — e ela veio de
+fonte melhor: **o próprio diálogo de confirmação de lance do BidTV**, que abre a composição
+e fecha no centavo. O manifesto, que é o que o produto realmente precisa, `pdfjs-dist` lê
+perfeitamente.
 
 ## Conclusões que definem o projeto
 

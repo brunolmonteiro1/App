@@ -1,0 +1,26 @@
+{
+  "name": "leilao",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Analise de lotes de leilao Superbid: teto de lance por lote",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "cli": "tsx src/cli.ts",
+    "test": "vitest run",
+    "test:rede": "vitest run --mode rede",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "pdfjs-dist": "^4.10.38",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
+  }
+}

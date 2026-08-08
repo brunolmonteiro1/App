@@ -1,0 +1,5 @@
+node_modules/
+saida/
+cache/
+*.db
+precos-lote3.json
