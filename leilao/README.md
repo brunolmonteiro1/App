@@ -11,9 +11,10 @@ cobre ou não. Com `--refresh`, ela busca os lances sozinha e repinta 🟢/🟡/
 ```bash
 cd leilao && npm install
 
-# Confere a conta de encargos contra o diálogo real do site
-npm run cli -- custo --lance 3460
-#   → encargos R$ 596,00 · total R$ 4.056,00 · overhead 17,2%
+# Confere a conta de encargos contra os números reais do site
+npm run cli -- custo --lance 3010
+#   → leiloeiro 150,50 + premium 150,50 + adm 187,50 + fee 62,50
+#   → encargos R$ 551,00 · total R$ 3.561,00 · overhead 18,3%
 
 # Estudo dos 61 lotes, offline, a partir do evento capturado
 npm run cli -- estudo --fixture --frete 150 --refresh 15 \
@@ -26,7 +27,7 @@ npm run cli -- estudo --url https://www.superbid.net/evento/logistica-reversa-79
 # Esqueleto de preços para preencher (sem números inventados)
 npm run cli -- precos --saida precos.json
 
-npm test          # 62 testes
+npm test          # 95 testes
 npm run typecheck
 ```
 
@@ -35,9 +36,10 @@ npm run typecheck
 | Parte | Estado |
 |---|---|
 | Coleta da API, validada por zod | ✅ |
+| Aviso de degrau da tabela de encargos | ✅ |
 | Parser do manifesto (PDF → itens) | ✅ 71 itens / 304 un no lote 3 |
 | Quantidade do título (6 formatos + typo) | ✅ 58+/61 |
-| Encargos e teto (10% + R$ 250) | ✅ ancorado no diálogo do site |
+| Encargos e teto (10% + tabela por faixa) | ✅ ancorado em 2 pontos reais do site |
 | Faixas A/B/C e unidades efetivas | ✅ heurística; preço vem de arquivo |
 | Estudo HTML com refresh | ✅ |
 | Preço automático por LLM | ⬜ Fase 2 — exige `ANTHROPIC_API_KEY` |
@@ -51,16 +53,34 @@ npm run typecheck
 | [`docs/01-reconhecimento.md`](docs/01-reconhecimento.md) | O que foi verificado no site real e as evidências. Leia primeiro. |
 | [`docs/02-plano-implementacao.md`](docs/02-plano-implementacao.md) | Arquitetura, modelo de dados, fases e verificação. |
 
+## Os encargos são tabelados — e é isso que engana
+
+Do Edital: **leiloeiro 5% + buyer's premium 5%**, mais **Encargos de Administração e Fee
+Plataforma tabelados por faixa de lance** (R$ 50 até R$ 499,99; R$ 125 até R$ 999,99;
+R$ 250 até R$ 4.999,99; R$ 500 até R$ 9.999,99; e assim por diante até R$ 6.500).
+
+Duas consequências que mudam a estratégia:
+
+1. **O overhead real vai de ~15% a ~35%** nos lances deste evento, e o card do site diz
+   "+10%" em todos. O melhor ponto não é "o maior lote possível" — é o **topo de uma faixa**
+   (o lote 42, a R$ 4.990, é o mais eficiente do evento com +15,0%).
+2. **Cruzar uma faixa custa caro por um centavo:** de R$ 4.999,99 para R$ 5.000,00 o custo
+   sobe R$ 250. O estudo avisa quando o próximo lance atravessa um degrau.
+
+Uma versão anterior deste código tratava o R$ 250 como taxa fixa universal, porque os dois
+exemplos disponíveis caíam na mesma faixa. Ficou registrado em `config.ts` para não repetir.
+
 ## A tarefa zero falhou, e o impacto foi baixo
 
 O plano dependia de `pdfjs-dist` conseguir ler o **Edital**. Não consegue: a fonte tem
 subset sem `/ToUnicode` e o texto sai como código de glifo (`! " # $ %`). Está travado em
 teste para avisar se um dia mudar.
 
-Impacto baixo porque o Edital servia para descobrir a tabela de encargos — e ela veio de
-fonte melhor: **o próprio diálogo de confirmação de lance do BidTV**, que abre a composição
-e fecha no centavo. O manifesto, que é o que o produto realmente precisa, `pdfjs-dist` lê
-perfeitamente.
+Impacto baixo, e por dois motivos. O manifesto — que é o que o produto realmente precisa —
+`pdfjs-dist` lê perfeitamente. E a tabela de encargos, único dado que o Edital tinha de
+entregar, **o operador extraiu à mão e conferimos contra o estimador do site**, o que fecha
+no centavo em dois pontos independentes. Automatizar a leitura do Edital seria conveniência,
+não requisito: é um documento por evento, revisado uma vez.
 
 ## Conclusões que definem o projeto
 

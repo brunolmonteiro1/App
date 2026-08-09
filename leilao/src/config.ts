@@ -17,20 +17,43 @@ export type Categoria =
   | 'bebidas'
   | 'outros';
 
+/** Uma linha da tabela de Encargos de Administração + Fee Plataforma. */
+export interface FaixaEncargo {
+  /** Limite superior da faixa, inclusive. `Infinity` na última. */
+  ate: number;
+  valor: number;
+}
+
 /**
- * Encargos do evento. **Verificado no diálogo "Confirmar lance" do BidTV**, lote 5:
- * lance 3.460,00 → encargos 596,00 → total 4.056,00.
- * Decompondo: 10% × 3.460 = 346, e 596 − 346 = 250. Bate no centavo.
+ * Encargos do evento, do Edital ("COMISSÕES, ENCARGOS DE ADMINISTRAÇÃO E FEE PLATAFORMA"):
  *
- * A API diz `groupOffer.commissionPercent = 5` — é menos da metade do encargo real e
- * ignora a taxa fixa. NUNCA derivar daí.
+ *     Leiloeiro                 5%
+ *     SOLD (Buyer's Premium)    5%    → juntos, os 10% que o card do site mostra
+ *     Encargos Adm + Fee        tabela por faixa de LANCE
+ *
+ * Conferido contra dois pontos reais do estimador do site, ambos fechando no centavo:
+ *
+ *     lance 3.010 → 150,50 + 150,50 + 187,50 + 62,50 = 551,00 → total 3.561,00
+ *     lance 3.460 → 173,00 + 173,00 +        250,00  = 596,00 → total 4.056,00
+ *
+ * ATENÇÃO ao histórico deste arquivo: a primeira versão tinha `fixo: 250` como constante,
+ * porque os dois exemplos disponíveis caíam na MESMA faixa (1.000–4.999,99). Dois pontos
+ * numa faixa só não distinguem taxa fixa de tabela. Nunca voltar a tratar como constante.
+ *
+ * A API diz `groupOffer.commissionPercent = 5` — menos da metade do encargo real, e ignora
+ * a tabela por completo. NUNCA derivar daí.
  */
 export interface Encargos {
-  /** Percentual sobre o martelo. */
+  /** Percentual sobre o martelo: leiloeiro + buyer's premium. */
   percentual: number;
-  /** Taxa fixa por lote, em reais. É ela que devora lote barato. */
-  fixo: number;
-  fonte: 'dialogo-lance' | 'edital' | 'manual';
+  /** Encargos de Administração + Fee Plataforma, por faixa de lance. */
+  faixas: FaixaEncargo[];
+  /**
+   * Como o estimador do site divide o valor da faixa. Só para exibição — a soma é o que
+   * entra na conta.
+   */
+  divisao: { encargosAdm: number; feePlataforma: number };
+  fonte: 'edital' | 'dialogo-lance' | 'manual';
 }
 
 export interface ConfigCategoria {
@@ -60,8 +83,30 @@ export interface Config {
   freteInformado: boolean;
 }
 
+/** Tabela do Edital do evento 790754. Cada leilão tem a sua — isto é config, não constante. */
+export const ENCARGOS_790754: Encargos = {
+  percentual: 0.10,
+  fonte: 'edital',
+  // 187,50 + 62,50 = 250, observado no estimador para um lance de R$ 3.010.
+  divisao: { encargosAdm: 0.75, feePlataforma: 0.25 },
+  faixas: [
+    { ate: 499.99, valor: 50 },
+    { ate: 999.99, valor: 125 },
+    { ate: 4999.99, valor: 250 },
+    { ate: 9999.99, valor: 500 },
+    { ate: 29999.99, valor: 750 },
+    { ate: 49999.99, valor: 1250 },
+    { ate: 74999.99, valor: 1500 },
+    { ate: 99999.99, valor: 3000 },
+    { ate: 149999.99, valor: 4000 },
+    // O Edital lista 150–199.999, 200–249.999 e "igual ou superior a 250.000" todas em
+    // R$ 6.500, então acima de 150 mil é um valor só.
+    { ate: Infinity, valor: 6500 },
+  ],
+};
+
 export const CONFIG_PADRAO: Config = {
-  encargos: { percentual: 0.10, fixo: 250, fonte: 'dialogo-lance' },
+  encargos: ENCARGOS_790754,
   fatorBazar: { conservador: 0.40, otimista: 0.60 },
   freteporLote: 0,
   freteInformado: false,

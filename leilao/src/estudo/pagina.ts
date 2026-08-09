@@ -24,6 +24,8 @@ export interface LinhaEstudo {
   unidadesDeclaradas: number | null;
   fonteUnidades: string;
   topItens: { descricao: string; quantidade: number; valor: number }[];
+  /** Preenchido só quando o próximo lance atravessa uma fronteira da tabela de encargos. */
+  degrau?: { limite: number; salto: number } | null;
 }
 
 const brl = (v: number | null) =>
@@ -120,6 +122,11 @@ export function gerarPagina(
   .anota input{background:transparent;border:none;border-bottom:1px dashed var(--linha);
                color:var(--txt);width:96px;font-size:12px;padding:2px}
   footer{padding:0 18px 40px;color:var(--fraco);font-size:12px;max-width:70ch}
+  .tabela-faixas{border-collapse:collapse;margin:10px 0;font-size:11px}
+  .tabela-faixas th,.tabela-faixas td{border:1px solid var(--linha);padding:3px 8px;text-align:left}
+  .degrau{margin-top:7px;font-size:12px;color:#8ab4f8}
+  @media (prefers-color-scheme: light){ .degrau{color:#1a4d8f} }
+  .comp{margin-top:6px;font-size:11px;color:var(--fraco)}
   @media (max-width:640px){ .lote{grid-template-columns:1fr} .acao{text-align:left} }
 </style>
 </head>
@@ -154,10 +161,24 @@ ${linhas.map((l) => linhaHtml(l, evento.fuso)).join('\n')}
   <p><b>Como usar:</b> o número grande é o maior lance que ainda cabe no seu teto seguro.
   Verde cobre, amarelo é a faixa entre o teto seguro (40% do valor online) e o máximo (60%),
   vermelho é para parar. O lance você dá no BidTV — esta página não dá lance nenhum.</p>
-  <p>Custo = lance × ${(1 + cfg.encargos.percentual).toFixed(2).replace('.', ',')} + ${brl(cfg.encargos.fixo)}
-  (verificado no diálogo de confirmação do BidTV). A taxa fixa é o que encarece lote barato:
-  o overhead real vai de ~14% num lote de R$ 7 mil a 60% num de R$ 500, embora o card do
-  site diga "+10%" em todos.</p>
+  <p><b>Custo</b> = lance × ${(1 + cfg.encargos.percentual).toFixed(2).replace('.', ',')}
+  (leiloeiro 5% + buyer's premium 5%) <b>+ Encargos Adm e Fee Plataforma, que são TABELADOS
+  por faixa de lance</b> — do Edital, conferido no estimador do site.</p>
+  <p>Por isso o card do site diz "+10%" em todos os lotes e nunca é 10%: o overhead real
+  neste evento vai de <b>~15%</b> (lance de R$ 4.990, topo de faixa) a <b>~35%</b> (lance de
+  R$ 500). E não cai sempre com o tamanho do lote — <b>cruzar uma faixa salta o encargo</b>:
+  de R$ 4.999,99 para R$ 5.000,00 o custo sobe R$ 250 por um centavo de lance. Quando o
+  próximo lance atravessa um desses degraus, a linha avisa.</p>
+  <table class="tabela-faixas">
+    <tr><th>Faixa de lance</th><th>Encargos Adm + Fee</th></tr>
+    ${cfg.encargos.faixas
+      .map((f, i, todas) => {
+        const de = i === 0 ? 0.01 : (todas[i - 1]!.ate + 0.01);
+        const ate = f.ate === Infinity ? 'ou mais' : `até ${brl(f.ate)}`;
+        return `<tr><td>${brl(de)} ${ate}</td><td>${brl(f.valor)}</td></tr>`;
+      })
+      .join('')}
+  </table>
   <p>Preço estimado é chute informado, não cotação. A decisão de lance é sua.</p>
 </footer>
 <script>
@@ -224,6 +245,15 @@ function linhaHtml(l: LinhaEstudo, fuso: FusoPayload): string {
         ? `<ul class="itens">${l.topItens
             .map((i) => `<li><span>${i.quantidade}×</span> ${esc(i.descricao)}</li>`)
             .join('')}</ul>`
+        : ''
+    }
+    <div class="comp">encargos ${brl(av.custoAtual.encargos)} =
+      leiloeiro ${brl(av.custoAtual.leiloeiro)} + premium ${brl(av.custoAtual.premium)}
+      + adm ${brl(av.custoAtual.encargosAdm)} + fee ${brl(av.custoAtual.feePlataforma)}</div>
+    ${
+      l.degrau
+        ? `<div class="degrau">▲ próximo lance cruza o degrau de ${brl(l.degrau.limite)} —
+           passar dele soma ${brl(l.degrau.salto)} de encargo</div>`
         : ''
     }
     ${l.alertas.map((a) => `<div class="alerta">⚠ ${esc(a)}</div>`).join('')}

@@ -12,7 +12,7 @@ import { dirname, resolve } from 'node:path';
 import { CONFIG_PADRAO, type Config } from './config.ts';
 import { auctionIdDaUrl, buscarEvento, parsearEvento, type Evento, type Lote } from './superbid/api.ts';
 import { detectar } from './analise/categoria.ts';
-import { calcularCusto } from './analise/custo.ts';
+import { calcularCusto, degrauProximo } from './analise/custo.ts';
 import { aplicar, carregarPrecos, cobertura, esqueleto, type ArquivoPrecos } from './analise/valor.ts';
 import { reconciliar, refDoTitulo } from './analise/quantidade.ts';
 import { avaliar } from './analise/teto.ts';
@@ -77,6 +77,12 @@ function montarLinha(
     .sort((a, b) => b.valor - a.valor || b.quantidade - a.quantidade)
     .slice(0, 5);
 
+  // Avisa só quando o próximo lance de fato atravessa a fronteira da faixa — parar no topo
+  // da faixa de baixo pode valer mais que cobrir.
+  const proximoLance = lote.temLances ? lote.lance + lote.incremento : lote.lance;
+  const d = degrauProximo(lote.lance, cfg.encargos);
+  const degrau = d && proximoLance > d.limite ? d : null;
+
   return {
     lote,
     av,
@@ -84,6 +90,7 @@ function montarLinha(
     unidadesDeclaradas: unidades.valor,
     fonteUnidades: unidades.fonte,
     topItens,
+    degrau,
   };
 }
 
@@ -157,9 +164,17 @@ function comandoCusto(): void {
   const c = calcularCusto(lance, CONFIG_PADRAO);
   const f = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   console.log(`Valor do lance                     ${f(c.lance)}`);
+  console.log(`Comissão do leiloeiro              ${f(c.leiloeiro)}`);
+  console.log(`Buyers Premium                     ${f(c.premium)}`);
+  console.log(`Encargos de Administração          ${f(c.encargosAdm)}`);
+  console.log(`Fee Plataforma                     ${f(c.feePlataforma)}`);
   console.log(`Subtotal dos encargos e comissões  ${f(c.encargos)}`);
   console.log(`Valor total previsto               ${f(c.total)}`);
   console.log(`Overhead efetivo                   ${(c.overhead * 100).toFixed(1)}%  (o card do site diz +10%)`);
+  const d = degrauProximo(c.lance, CONFIG_PADRAO.encargos);
+  if (d) {
+    console.log(`Degrau da tabela                   acima de ${f(d.limite)} o encargo sobe ${f(d.salto)}`);
+  }
 }
 
 async function comandoEsqueleto(): Promise<void> {

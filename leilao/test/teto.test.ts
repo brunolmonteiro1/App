@@ -50,22 +50,28 @@ describe('teto — item da faixa C não pode mover o resultado', () => {
 });
 
 describe('teto — a cadeia inteira do cálculo', () => {
-  it('valor 1.000 em utensílios (2,0x, perda 15%) dá teto seguro 1,0% do esperado', () => {
+  it('lote pequeno TEM teto — a faixa barata da tabela é R$ 50, não R$ 250', () => {
     const av = avaliar(entrada([item('x', 10, 100, 'A')]), cfg);
     // 1000 × (1 − 0,15) = 850 ; × 0,40 = 340 ; ÷ 2,0 = 170 de teto de custo
     expect(av.valorOnline).toBe(1000);
     expect(av.valorRealizadoMin).toBeCloseTo(340, 2);
-    // (170 − 250) já é negativo → o R$ 250 fixo consome tudo, teto 0.
-    expect(av.tetoSeguro).toBe(0);
-    // É o comportamento certo: lote pequeno não paga a taxa fixa.
+
+    // Com R$ 250 aplicado a tudo, (170 − 250) dava negativo e o lote saía SEM TETO —
+    // rejeitado por engano. Um lance de R$ 109 cai na faixa de R$ 50:
+    //   (170 − 50) / 1,10 = 109,09  →  custo 120 + 50 = 170 ✓
+    expect(av.tetoSeguro).toBeCloseTo(109.09, 2);
   });
 
-  it('lote grande: o teto sai positivo e respeita a divisão por 1,10', () => {
+  it('lote grande: cruzar para a faixa de R$ 500 derruba o teto', () => {
     const av = avaliar(entrada([item('x', 100, 400, 'A')]), cfg);
-    // 40.000 × 0,85 = 34.000 ; × 0,40 = 13.600 ; ÷ 2,0 = 6.800 de custo
-    // (6.800 − 250) / 1,10 = 5.954,55
-    expect(av.tetoSeguro).toBeCloseTo(5954.55, 2);
-    expect(av.tetoMaximo).toBeGreaterThan(av.tetoSeguro);
+    // 40.000 × 0,85 = 34.000 ; × 0,40 = 13.600 ; ÷ 2,0 = 6.800 de teto de custo
+    //
+    // Na faixa de 250 o candidato seria (6.800 − 250)/1,10 = 5.954,55 — mas isso passa de
+    // 4.999,99, então já não é a faixa dele. Na faixa de 500:
+    //   (6.800 − 500) / 1,10 = 5.727,27  →  custo 6.300 + 500 = 6.800 ✓
+    expect(av.tetoSeguro).toBeCloseTo(5727.27, 2);
+    expect(av.tetoSeguro).not.toBeCloseTo(5954.55, 2); // o valor da taxa fixa, errado
+    expect(av.tetoMaximo).toBeCloseTo(8818.18, 2);
   });
 
   it('sem preço nenhum não inventa teto — devolve sem-teto', () => {
@@ -84,7 +90,7 @@ describe('teto — a cadeia inteira do cálculo', () => {
 });
 
 describe('semáforo — decide pelo PRÓXIMO lance, não pelo atual', () => {
-  const itens = [item('x', 100, 400, 'A')]; // teto seguro 5.954,55 / máximo 9.204,55
+  const itens = [item('x', 100, 400, 'A')]; // teto seguro 5.727,27 / máximo 8.818,18
 
   it('verde quando o próximo lance ainda cabe no teto seguro', () => {
     expect(avaliar(entrada(itens, { lanceAtual: 5000 }), cfg).semaforo).toBe('verde');
@@ -99,7 +105,7 @@ describe('semáforo — decide pelo PRÓXIMO lance, não pelo atual', () => {
   });
 
   it('cobrir custa um degrau acima: lance colado no teto já vira amarelo', () => {
-    // 5.900 + 200 = 6.100 > 5.954,55, então cobrir já sai da zona segura.
+    // 5.900 + 200 = 6.100 > 5.727,27, então cobrir já sai da zona segura.
     expect(avaliar(entrada(itens, { lanceAtual: 5900 }), cfg).semaforo).toBe('amarelo');
   });
 });
