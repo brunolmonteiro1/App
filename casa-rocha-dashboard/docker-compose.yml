@@ -1,0 +1,25 @@
+# Dashboard de Saúde Teológica — A Casa da Rocha
+# Instalação: veja INSTALL.md. Resumo: docker compose up -d
+services:
+  dashboard:
+    build: .
+    ports:
+      - "${PORT:-3000}:3000"
+    volumes:
+      # O banco de dados fica FORA do container — sobrevive a atualizações.
+      - ./dados-do-banco:/app/data/db
+    environment:
+      # Senha de acesso ao painel (recomendado em servidor público).
+      # Deixe vazio para acesso aberto (ex.: uso só na sua máquina).
+      - APP_PASSWORD=${APP_PASSWORD:-}
+      # Senha do Modo Diagnóstico Interno (/admin/master-diagnosis) — painel
+      # estratégico confidencial, separado do acesso geral. Mín. 6 caracteres.
+      # Deixe vazio para desabilitar o modo (a rota some, 404). Acessos são registrados.
+      - MASTER_PASSWORD=${MASTER_PASSWORD:-}
+      # Limiar do sinalizador lexical de crítica religiosa, em % (padrão 30).
+      # ISC_THRESHOLD é aceito como alias de compatibilidade.
+      - CRITIQUE_LEXICAL_SIGNAL_THRESHOLD=${CRITIQUE_LEXICAL_SIGNAL_THRESHOLD:-${ISC_THRESHOLD:-30}}
+      # Chave da API do OpenRouter (https://openrouter.ai/keys) — habilita a
+      # codificação por IA na página /coding. Sem ela, o restante funciona normalmente.
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+    restart: unless-stopped

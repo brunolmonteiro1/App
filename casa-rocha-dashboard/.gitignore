@@ -1,0 +1,11 @@
+node_modules/
+.next/
+out/
+data/db/
+data/processed/
+.env*.local
+npm-debug.log*
+*.tsbuildinfo
+next-env.d.ts
+.ca-test.crt
+Dockerfile.test

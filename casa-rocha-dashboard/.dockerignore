@@ -1,0 +1,8 @@
+node_modules
+.next
+data/db
+data/processed
+dados-do-banco
+.git
+*.md
+!docs

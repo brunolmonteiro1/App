@@ -1,0 +1,624 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Sermon {
+  id                    String   @id @default(cuid())
+  notebookSourceId      String   @unique
+  contentHash           String
+  title                 String
+  normalizedTitle       String
+  messageNumber         Int?
+  series                String?
+  seriesRaw             String?
+  preacher              String?
+  dateEstimated         DateTime?
+  dateConfidence        String?
+  year                  Int?
+  youtubeUrl            String?
+  youtubeId             String?  @unique
+  sourceType            String
+  isSermon              Boolean  @default(true)
+  durationRaw           String?
+  durationSeconds       Int?
+  transcriptText        String
+  transcriptCharCount   Int
+  transcriptWordCount   Int
+  transcriptQualityFlag String?
+  metadataConflict      String?
+  importStatus          String   @default("imported")
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  analysis   SermonAnalysis?
+  scores     SermonScores?
+  evidence   SermonEvidence[]
+  references BiblicalReference[]
+  lexical    LexicalMetric[]
+  saturation SaturationMetric?
+  attempts   CodingAttempt[]
+  repairs    CodingRepairSuggestion[]
+  reviewEvents HumanReviewEvent[]
+  analysisRuns AnalysisRun[]
+  jobs         CodingJob[]
+
+  @@index([year])
+  @@index([series])
+  @@map("sermons")
+}
+
+model SermonAnalysis {
+  id                         String    @id @default(cuid())
+  sermonId                   String    @unique
+  analysisStatus             String    @default("pending")
+  analysisVersion            Int       @default(1)
+  aiModel                    String?
+  aiCodedAt                  DateTime?
+  aiError                    String?
+  aiScoresJson               String?   // snapshot dos scores originais da IA → concordância IA×revisor
+  reviewStatus               String?
+  reviewedBy                 String?
+  reviewedAt                 DateTime?
+  confidenceGlobal           String?
+  biblicalMainText           String?
+  biblicalBooksCited         String?
+  testamentPredominant       String?
+  sermonType                 String?
+  mainTheme                  String?
+  secondaryThemes            String?
+  doctrineMain               String?
+  doctrinesSecondary         String?
+  pastoralTone               String?
+  formativeFocus             String?
+  individualVsCommunityFocus String?
+  theologicalLevel           String?
+  languageComplexityScore    Int?
+  ontologicalVsPragmatic     String?
+  // Campos categóricos contextuais novos (BLUEPRINT v2 §12/§8.4)
+  applicationMode              String?
+  discourseMode                String?
+  critiqueShareEstimate        String?
+  criticTarget                 String?
+  criticTone                   String?
+  healthyOrDemobilizingCritique String?
+  politicalCritiqueTarget      String?
+  needsHumanReview             Boolean  @default(false)
+  reviewReason                 String?
+  sensitivityLevel             String?
+  summary3Lines              String?
+  mainApplication            String?
+  possibleFormativeGap       String?
+  // Pipeline multi-etapas (Rodada H): projeção "atual" do run isCurrent
+  pipelineVersion            String?   // null = análise v1 (chamada única)
+  scoreMetadataJson          String?   // por campo: confidence, evidenceStatus, evidenceBasis, supportingEvidenceIds, derivedFromFields, coverageAssessment
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
+
+  sermon Sermon @relation(fields: [sermonId], references: [id])
+
+  @@map("sermon_analysis")
+}
+
+model SermonScores {
+  id       String @id @default(cuid())
+  sermonId String @unique
+
+  biblicalHealthScore        Int?
+  homileticExpositionScore   Int?
+  christocentricReadingScore Int?
+  biblicalApplicationScore   Int?
+
+  orthodoxyScore       Int?
+  trinityScore         Int?
+  theologyProperScore  Int?
+  christologyScore     Int?
+  crucicentrismScore   Int?
+  soteriologyScore     Int?
+  pneumatologyScore    Int?
+  bibliologyScore      Int?
+  ecclesiologyScore    Int?
+  eschatologyScore     Int?
+  anthropologyScore    Int?
+  hamartiologyScore    Int?
+  sanctificationScore  Int?
+  kingdomTheologyScore Int?
+
+  orthopraxyScore                Int?
+  serviceDiaconiaScore           Int?
+  generosityScore                Int?
+  missionEvangelismScore         Int?
+  discipleshipScore              Int?
+  communityMutualityScore        Int?
+  hospitalityScore               Int?
+  careForPoorScore               Int?
+  forgivenessReconciliationScore Int?
+  vocationWorkScore              Int?
+  familyRelationshipsScore       Int?
+  financeStewardshipScore        Int?
+
+  spiritualityScore         Int?
+  prayerScore               Int?
+  scriptureDevotionScore    Int?
+  fastingScore              Int?
+  worshipScore              Int?
+  repentanceScore           Int?
+  discernmentScore          Int?
+  spiritualDisciplinesScore Int?
+
+  pastoralHealthScore             Int?
+  religiousDeconstructionScore    Int?
+  discipleshipReconstructionScore Int?
+  practicalActivationScore        Int?
+  healingWoundedScore             Int?
+  sendingHealedScore              Int?
+  coresponsibilityScore           Int?
+  passivityRiskScore              Int?
+  cynicismElitismRiskScore        Int?
+
+  // Campos contextuais novos (BLUEPRINT v2 §12) — todos nullable (aditivos)
+  contextualCritiqueIntensityScore Int?
+  biblicalGroundingOfCritiqueScore Int?
+  reconstructionAfterCritiqueScore Int?
+  activationAfterCritiqueScore     Int?
+  organicDiaconiaScore             Int?
+  institutionalActionScore         Int?
+  politicalIdolatryCritiqueScore   Int?
+
+  practicalMethodScore Int?
+
+  // Família QUALIDADE derivada da Etapa B do pipeline multi-etapas (Rodada H).
+  // null = não aplicável/impossível avaliar; escala 1–5 (NUNCA 0).
+  hermeneuticalFidelityScore      Int?
+  textApplicationIntegrationScore Int?
+  argumentativeCoherenceScore     Int?
+  dynamicUnityScore               Int?
+  progressionScore                Int?
+  transitionsScore                Int?
+  closureScore                    Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sermon Sermon @relation(fields: [sermonId], references: [id])
+
+  @@map("sermon_scores")
+}
+
+model SermonEvidence {
+  id                 String   @id @default(cuid())
+  sermonId           String
+  category           String
+  scoreField         String
+  scoreValue         Int?
+  evidenceQuote      String
+  evidenceStartIndex Int?
+  evidenceEndIndex   Int?
+  keywordMatched     String?
+  analyticalComment  String?
+  analysisMethod     String
+  confidence         String?
+  // Pipeline multi-etapas (Rodada H): esta tabela contém SOMENTE evidências
+  // localizadas e validadas (utilizáveis no dashboard). Candidatas rejeitadas
+  // vivem em EvidenceCandidate.
+  analysisRunId      String?
+  promptVersion      String?
+  evidenceBasis      String?  // direct_quote | multiple_quotes | structural_analysis | derived_gap | whole_sermon_absence | paired_evidence | aggregate_derived | human_judgment
+  humanReviewed      Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  sermon Sermon @relation(fields: [sermonId], references: [id])
+
+  @@index([sermonId])
+  @@index([category])
+  @@index([scoreField])
+  @@index([analysisRunId])
+  @@map("sermon_evidence")
+}
+
+model BiblicalReference {
+  id         String   @id @default(cuid())
+  sermonId   String
+  book       String
+  bookSlug   String
+  testament  String
+  chapter    Int?
+  verseStart Int?
+  verseEnd   Int?
+  rawMatch   String
+  startIndex Int
+  endIndex   Int
+  isMainText Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  sermon Sermon @relation(fields: [sermonId], references: [id])
+
+  @@index([sermonId])
+  @@index([bookSlug])
+  @@map("biblical_references")
+}
+
+model LexicalMetric {
+  id            String   @id @default(cuid())
+  sermonId      String
+  theme         String
+  term          String?
+  rawCount      Int
+  densityPer10k Float
+  createdAt     DateTime @default(now())
+
+  sermon Sermon @relation(fields: [sermonId], references: [id])
+
+  @@unique([sermonId, theme, term])
+  @@index([theme])
+  @@map("lexical_metrics")
+}
+
+model SaturationMetric {
+  id                  String   @id @default(cuid())
+  sermonId            String   @unique
+  iscRatio            Float?
+  criticDensityPer10k Float
+  gospelDensityPer10k Float
+  criticRawCount      Int
+  gospelRawCount      Int
+  saturationLabel     String?
+  thresholdUsed       Float
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  sermon Sermon @relation(fields: [sermonId], references: [id])
+
+  @@map("saturation_metrics")
+}
+
+model CodebookCategory {
+  id               String   @id @default(cuid())
+  fieldName        String
+  label            String
+  axis             String
+  description      String
+  score0Definition String
+  score1Definition String
+  score2Definition String
+  score3Definition String
+  score4Definition String
+  score5Definition String
+  examplesPositive String?
+  examplesNegative String?
+  keywords         String?
+  version          Int      @default(1)
+  active           Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([fieldName, version])
+  @@map("codebook_categories")
+}
+
+model BenchmarkTopic {
+  id        String   @id @default(cuid())
+  topic     String   @unique
+  baseTexts String
+  axis      String
+  category  String
+  notes     String?
+  createdAt DateTime @default(now())
+
+  @@map("benchmark_topics")
+}
+
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+
+  @@map("app_settings")
+}
+
+model ImportRun {
+  id             String    @id @default(cuid())
+  fileName       String
+  exportedAt     DateTime?
+  sourcesTotal   Int
+  sourcesNew     Int
+  sourcesUpdated Int
+  sourcesSkipped Int
+  conflicts      String?
+  createdAt      DateTime  @default(now())
+
+  @@map("import_runs")
+}
+
+// ─────────────────────────────────────────────
+// Tentativas de IA (BLUEPRINT_MESTRE_v2 §8.7/§19) — IMUTÁVEIS, nunca sobrescritas.
+// Toda chamada de codificação/reparo/auditoria grava uma linha ANTES da validação.
+// NUNCA persistir a chave da API aqui.
+// ─────────────────────────────────────────────
+model CodingAttempt {
+  id                    String   @id @default(cuid())
+  sermonId              String
+  parentAttemptId       String?  // encadeia RETRY/EVIDENCE_REPAIR/AUDIT ao INITIAL_CODING
+  analysisRunId         String?  // pipeline multi-etapas (Rodada H): vincula a chamada ao run
+  attemptType           String   // INITIAL_CODING | RETRY | EVIDENCE_REPAIR | AUDIT | STRUCTURE | INTERPRETATION | FORMATIVE_SCORING | EVIDENCE_EXTRACTION
+  model                 String
+  status                String   // SUCCESS | FAILED_JSON | FAILED_SCHEMA | FAILED_VALIDATION | FAILED_EVIDENCE_LOCATION | FAILED_OPENROUTER | REPAIRABLE_EVIDENCE_GAP | HUMAN_REVIEW_REQUIRED
+  failStage             String?  // etapa amigável em que falhou
+  rawResponseText       String?  // resposta bruta do modelo
+  extractedJson         String?  // JSON extraído (pode falhar)
+  validationIssuesJson  String?  // erros Zod
+  businessRuleIssuesJson String? // regras de negócio violadas
+  evidenceValidationJson String? // resultado da localização de evidências
+  openrouterMetaJson    String?  // usage/tokens retornados pelo provedor
+  promptVersion         String?
+  schemaVersion         String?
+  createdAt             DateTime @default(now())
+
+  sermon Sermon @relation(fields: [sermonId], references: [id])
+
+  @@index([sermonId])
+  @@index([status])
+  @@index([analysisRunId])
+  @@map("coding_attempts")
+}
+
+// ─────────────────────────────────────────────
+// Pipeline multi-etapas (Rodada H) — entidade-RAIZ de cada execução completa.
+// Cada recodificação cria um run NOVO (histórico preservado); exatamente um run
+// por pregação tem isCurrent=true (a transação que completa marca o anterior
+// como superseded). O estado operacional vive em currentStage; a fonte real é
+// a presença das tabelas de etapa (derivePipelineStatus em lib/coding/run-status.ts).
+// ─────────────────────────────────────────────
+model AnalysisRun {
+  id                          String    @id @default(cuid())
+  sermonId                    String
+  status                      String    @default("running") // running | completed | failed | superseded
+  currentStage                String?   // structure | interpretation | formative | evidence | audit | done
+  isCurrent                   Boolean   @default(false)
+  requestedBy                 String?
+  modelConfigurationJson      String?   // modelo escolhido por etapa
+  pipelineVersion             String
+  structurePromptVersion      String?
+  interpretationPromptVersion String?
+  formativePromptVersion      String?
+  evidencePromptVersion       String?
+  auditPromptVersion          String?
+  sourceTranscriptHash        String?
+  totalTokens                 Int?
+  totalCostUsd                Float?
+  startedAt                   DateTime  @default(now())
+  completedAt                 DateTime?
+  failedAt                    DateTime?
+  failReason                  String?
+  createdAt                   DateTime  @default(now())
+
+  sermon         Sermon                       @relation(fields: [sermonId], references: [id])
+  structure      SermonStructureAnalysis?
+  interpretation SermonInterpretationAnalysis?
+  formative      SermonFormativeAnalysis?
+  candidates     EvidenceCandidate[]
+
+  @@index([sermonId])
+  @@index([sermonId, isCurrent])
+  @@map("analysis_runs")
+}
+
+// Etapa A — reconstrução integral da pregação como discurso fluido.
+model SermonStructureAnalysis {
+  id                String   @id @default(cuid())
+  analysisRunId     String   @unique
+  structureJson     String   // saída validada (tese, fios, unidades discursivas, clímax, arco…)
+  anchorsLocatedJson String? // anchors localizados deterministicamente (startIndex/endIndex/locationStatus)
+  model             String
+  promptVersion     String
+  inputHash         String?
+  outputHash        String?
+  tokenUsageJson    String?  // tokens/custo do provedor
+  durationMs        Int?
+  createdAt         DateTime @default(now())
+
+  run AnalysisRun @relation(fields: [analysisRunId], references: [id])
+
+  @@map("sermon_structure_analysis")
+}
+
+// Etapa B — hermenêutica, argumentação e homilética.
+model SermonInterpretationAnalysis {
+  id                String   @id @default(cuid())
+  analysisRunId     String   @unique
+  hermeneuticsJson  String
+  argumentationJson String
+  homileticsJson    String
+  model             String
+  promptVersion     String
+  inputHash         String?
+  outputHash        String?
+  tokenUsageJson    String?
+  durationMs        Int?
+  createdAt         DateTime @default(now())
+
+  run AnalysisRun @relation(fields: [analysisRunId], references: [id])
+
+  @@map("sermon_interpretation_analysis")
+}
+
+// Etapa C — formação, campos categóricos e lacuna formativa (§13).
+model SermonFormativeAnalysis {
+  id                  String   @id @default(cuid())
+  analysisRunId       String   @unique
+  formationJson       String
+  categoricalFieldsJson String
+  gapAnalysisJson     String?  // notDevelopedInThisSermon / formativeComplement / corpusHypotheses
+  scoreMetadataJson   String?  // confidence/evidenceStatus/evidenceBasis por campo (§12)
+  model               String
+  promptVersion       String
+  inputHash           String?
+  outputHash          String?
+  tokenUsageJson      String?
+  durationMs          Int?
+  createdAt           DateTime @default(now())
+
+  run AnalysisRun @relation(fields: [analysisRunId], references: [id])
+
+  @@map("sermon_formative_analysis")
+}
+
+// ─────────────────────────────────────────────
+// Fila durável de codificação (Rodada H) — worker interno reclama um job por
+// vez e roda o pipeline v3 até o fim, sobrevivendo a fechar o navegador e a
+// restart do processo. O worker só orquestra; a análise fica em pipeline.ts.
+// ─────────────────────────────────────────────
+model CodingJob {
+  id            String    @id @default(cuid())
+  sermonId      String    @unique
+  status        String    @default("queued") // queued | running | done | needs_review | failed
+  model         String?
+  analysisRunId String?   // run em andamento (para retomar em vez de recriar)
+  attempts      Int       @default(0)
+  lockedAt      DateTime?
+  nextAttemptAt DateTime? // backoff de retry transitório
+  lastError     String?
+  priority      Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  sermon Sermon @relation(fields: [sermonId], references: [id])
+
+  @@index([status])
+  @@index([nextAttemptAt])
+  @@map("coding_jobs")
+}
+
+// Etapa D — TODAS as evidências candidatas (auditáveis), inclusive rejeitadas.
+// SermonEvidence recebe apenas as localizadas e validadas.
+model EvidenceCandidate {
+  id              String   @id @default(cuid())
+  analysisRunId   String
+  field           String
+  quote           String
+  reason          String?  // justificativa dada pelo modelo
+  locationStatus  String   // located | unlocated | composite_rejected | ignored_aggregate
+  rejectionReason String?  // square_bracket_ellipsis | editorial_omission | não localizada…
+  startIndex      Int?
+  endIndex        Int?
+  model           String?
+  promptVersion   String?
+  createdAt       DateTime @default(now())
+
+  run AnalysisRun @relation(fields: [analysisRunId], references: [id])
+
+  @@index([analysisRunId])
+  @@index([field])
+  @@map("evidence_candidates")
+}
+
+// ─────────────────────────────────────────────
+// Sugestões de reparo de score (BLUEPRINT v2 §8.8/§18) — NUNCA aplicadas
+// automaticamente. Criar a sugestão não altera sermon_scores. Só ação humana
+// autorizada aplica, gerando evento de revisão com antes/depois.
+// ─────────────────────────────────────────────
+model CodingRepairSuggestion {
+  id                    String    @id @default(cuid())
+  sermonId              String
+  codingAttemptId       String?
+  scoreField            String
+  originalScore         Int?
+  suggestedScore        Int?
+  suggestionReason      String?
+  missingEvidenceReason String?
+  suggestedByModel      String?
+  promptVersion         String?
+  status                String    @default("PENDING") // PENDING | APPLIED | REJECTED | SUPERSEDED
+  reviewedBy            String?
+  reviewedAt            DateTime?
+  reviewNote            String?
+  createdAt             DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  sermon Sermon @relation(fields: [sermonId], references: [id])
+
+  @@index([sermonId])
+  @@index([status])
+  @@map("coding_repair_suggestions")
+}
+
+// ─────────────────────────────────────────────
+// Eventos de revisão humana (BLUEPRINT v2 §8.9) — trilha antes/depois de toda
+// mudança de score/evidência/aplicação de sugestão.
+// ─────────────────────────────────────────────
+model HumanReviewEvent {
+  id           String   @id @default(cuid())
+  sermonId     String
+  entityType   String   // score | evidence | suggestion | analysis
+  entityId     String?
+  action       String   // change_score | approve | reject | apply_suggestion | reject_suggestion
+  fieldName    String?
+  oldValueJson String?
+  newValueJson String?
+  reason       String?
+  performedBy  String?
+  performedAt  DateTime @default(now())
+
+  sermon Sermon @relation(fields: [sermonId], references: [id])
+
+  @@index([sermonId])
+  @@map("human_review_events")
+}
+
+// ─────────────────────────────────────────────
+// Relatório do Modo Diagnóstico Interno (Master Diagnostic View, BLUEPRINT v2
+// §8.10/§35). Persistido e versionado — nova versão nunca apaga a anterior.
+// ─────────────────────────────────────────────
+model MasterDiagnosticReport {
+  id                        String   @id @default(cuid())
+  generatedBy               String?
+  filtersJson               String?
+  inputMetricsHash          String?
+  inputDenominatorJson      String?
+  promptVersion             String?
+  model                     String?
+  hardnessLevel             String   @default("MODERATE") // MODERATE | DIRECT | VERY_DIRECT
+  datasetJson               String?  // payload agregado enviado ao modelo (snapshot)
+  reportJson                String?  // saída validada
+  rawResponseText           String?
+  source                    String   @default("deterministic") // deterministic | ai
+  includesPreliminaryData   Boolean  @default(false)
+  reviewedOnly              Boolean  @default(true)
+  includesLexicalSignals    Boolean  @default(false)
+  includesSensitiveSnippets Boolean  @default(false)
+  status                    String   @default("GENERATED") // GENERATED | REVIEWED | ARCHIVED
+  notes                     String?
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  @@index([status])
+  @@map("master_diagnostic_reports")
+}
+
+// ─────────────────────────────────────────────
+// Trilha de segurança (BLUEPRINT v2 §8.11/§7.4) — acessos e ações no Modo
+// Diagnóstico Interno, permitidos e negados. Nunca registra transcrições nem
+// segredos; metadataJson guarda apenas contexto não sensível.
+// ─────────────────────────────────────────────
+model SecurityAuditLog {
+  id            String   @id @default(cuid())
+  userLabel     String?  // rótulo informado no login master (não é conta de e-mail)
+  action        String   // master_login | master_login_denied | master_view | master_generate | master_review | master_logout
+  resourceType  String?
+  resourceId    String?
+  route         String?
+  result        String   // allowed | denied
+  metadataJson  String?
+  ipHash        String?
+  userAgent     String?
+  createdAt     DateTime @default(now())
+
+  @@index([action])
+  @@index([createdAt])
+  @@map("security_audit_logs")
+}
