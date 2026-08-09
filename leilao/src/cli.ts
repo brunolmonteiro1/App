@@ -15,6 +15,7 @@ import { detectar } from './analise/categoria.ts';
 import { calcularCusto, degrauProximo } from './analise/custo.ts';
 import {
   aplicar,
+  chave,
   cobertura,
   esqueleto,
   esqueletoPriorizado,
@@ -29,7 +30,8 @@ import { gerarPagina, type LinhaEstudo } from './estudo/pagina.ts';
 import { montarLinha } from './estudo/montar.ts';
 import { gerarPaginaPrecificar } from './estudo/precificar.ts';
 import { gravarSnapshot, NOME_SNAPSHOT, type Snapshot } from './estudo/snapshot.ts';
-import { lerPrecos } from './precos/arquivo.ts';
+import { gravarPrecos, lerPrecos, mesclar } from './precos/arquivo.ts';
+import { exportar, importar } from './precos/troca.ts';
 
 const FIXTURE = new URL('../recon/fixtures/evento-790754-offers.json', import.meta.url).pathname;
 /** Onde os 57 manifestos ficam. Está no .gitignore: material do vendedor não vai pro repo. */
@@ -318,11 +320,122 @@ async function comandoShortlist(): Promise<void> {
   console.log(`\n  para dar teto a um destes: npm run cli -- precos --lote <n> --fixture`);
 }
 
+
+/**
+ * Exporta os itens a precificar para outro modelo preencher.
+ *
+ * Precificar ~1.900 descrições à mão não é viável, e é o que mantinha a cobertura em 3%. O
+ * arquivo leva o prompt dentro dele (campo `instrucoes`), então não há instrução para guardar
+ * entre um leilão e o próximo.
+ */
+async function comandoExportar(): Promise<void> {
+  const cfg = CONFIG_PADRAO;
+  const evento = await carregarEvento();
+  const { porLote } = await lerManifestosDoCache(evento);
+  const numLote = arg('lote');
+  const top = arg('top') ? Number(arg('top')) : null;
+
+  const escolhidos = new Map<number, ItemManifesto[]>();
+  if (numLote && numLote !== 'todos') {
+    const m = porLote.get(Number(numLote));
+    if (!m) {
+      console.error(`lote ${numLote} sem manifesto em cache — rode \`baixar\` primeiro`);
+      process.exit(2);
+    }
+    escolhidos.set(Number(numLote), m.itens);
+  } else {
+    for (const lote of evento.lotes) {
+      const m = porLote.get(lote.numero);
+      if (!m || lote.encerrado || cfg.categoriasIgnoradas.includes(detectar(lote.titulo))) continue;
+      escolhidos.set(lote.numero, m.itens);
+    }
+  }
+
+  // Item de termo ignorado sai da lista: vale zero no teto, então pesquisar preço dele é gasto
+  // de tempo do modelo sem retorno nenhum.
+  const filtrado = new Map<number, ItemManifesto[]>();
+  for (const [n, itens] of escolhidos) {
+    const av = aplicar(itens, {}, cfg.termosIgnorados, cfg.excecoesIgnorados);
+    filtrado.set(n, itens.filter((_, k) => av[k]!.faixa !== 'C'));
+  }
+
+  const caminhoPrecos = arg('precos');
+  const precos = caminhoPrecos ? (await lerPrecos(resolve(caminhoPrecos))).arquivo : null;
+
+  let linhas = priorizar(filtrado).filter((l) => l.faixa !== 'C');
+  if (top) linhas = linhas.slice(0, top);
+
+  const corpo = exportar(linhas, {
+    evento: evento.auctionId,
+    escopo: numLote && numLote !== 'todos' ? `lote ${numLote}` : 'todos os lotes',
+    precoAtual: (k) => precos?.itens[k]?.preco ?? null,
+  });
+  const saida = resolve(arg('saida') ?? `precos-para-ia-${evento.auctionId}.json`);
+  await writeFile(saida, JSON.stringify(corpo, null, 2) + '\n', 'utf8');
+
+  const jaTem = corpo.itens.filter((i) => i.preco != null).length;
+  console.log(`\narquivo para a IA: ${saida}`);
+  console.log(`  ${corpo.itens.length} descrições · ${jaTem} já com preço da sua tabela`);
+  console.log(`  ${escolhidos.size} lote(s) · escopo: ${corpo.escopo}`);
+  console.log('\n  entregue a um modelo com: "preencha conforme o campo instrucoes"');
+  console.log(`  depois: npm run cli -- importar --arquivo <resposta.json> --precos precos.json`);
+}
+
+/** Importa o arquivo preenchido e mescla na tabela de preços, com relatório do que não casou. */
+async function comandoImportar(): Promise<void> {
+  const caminho = arg('arquivo');
+  if (!caminho) {
+    console.error('faltou --arquivo <resposta-da-ia.json>');
+    process.exit(2);
+  }
+  const evento = await carregarEvento();
+  const { porLote } = await lerManifestosDoCache(evento);
+
+  // Universo de chaves válidas: só o que existe em algum manifesto deste evento entra.
+  const conhecidas = new Set<string>();
+  for (const m of porLote.values()) {
+    for (const i of m.itens) {
+      const k = chave(i.descricao);
+      if (k) conhecidas.add(k);
+    }
+  }
+
+  const r = importar(await readFile(resolve(caminho), 'utf8'), conhecidas);
+  const destino = resolve(arg('precos') ?? 'precos.json');
+  const { arquivo } = await lerPrecos(destino);
+  const { arquivo: novo, gravados, rejeitados } = mesclar(arquivo, r.entrada);
+  await gravarPrecos(destino, novo);
+
+  const comPreco = Object.values(r.entrada).filter((e) => e.preco != null).length;
+  console.log(`\n${gravados} item(ns) gravados em ${destino}`);
+  console.log(`  com preço ${comPreco} · sem preço (null) ${r.semPreco}`);
+  console.log(`  casaram pela chave ${r.porChave}${r.porDescricao ? ` · pela descrição ${r.porDescricao}` : ''}`);
+  if (r.desconhecidos.length) {
+    console.log(`\n  NÃO CASARAM (${r.desconhecidos.length}) — não existem em nenhum lote deste evento:`);
+    for (const d of r.desconhecidos.slice(0, 15)) console.log(`    · ${d}`);
+  }
+  if (r.invalidos.length) {
+    console.log(`\n  PREÇO ILEGÍVEL (${r.invalidos.length}):`);
+    for (const d of r.invalidos.slice(0, 15)) console.log(`    · ${d}`);
+  }
+  if (r.suspeitos.length) {
+    console.log('\n  CONFIRA — alto o bastante para parecer erro de unidade:');
+    for (const s of r.suspeitos.slice(0, 15)) console.log(`    · R$ ${s.preco.toFixed(2)}  ${s.item}`);
+  }
+  for (const x of rejeitados) console.log(`    rejeitado: ${x}`);
+  if (!gravados) {
+    console.log('\n  Nada gravado. Quase sempre o modelo reescreveu as descrições — peça para');
+    console.log('  NÃO alterar "chave" nem "item", e exporte de novo.');
+  }
+}
+
 const comando = process.argv[2];
 if (comando === 'baixar') await comandoBaixar();
 else if (comando === 'shortlist') await comandoShortlist();
 else if (comando === 'estudo') await comandoEstudo();
 else if (comando === 'precos') await comandoEsqueleto();
+else if (comando === 'exportar') await comandoExportar();
+else if (comando === 'importar') await comandoImportar();
 else if (comando === 'custo') comandoCusto();
 else {
   console.log(`uso:
@@ -332,6 +445,8 @@ else {
   npm run cli -- shortlist --fixture --frete 150   # candidatos, sem precisar de preço
   npm run cli -- precos --lote 4 --fixture         # itens de UM lote, para precificar até o fim
   npm run cli -- precos --todos --fixture          # lista global (espalha esforço, ver README)
+  npm run cli -- exportar --fixture [--lote 56] [--top 300]   # JSON para outra IA preencher
+  npm run cli -- importar --arquivo resposta.json --fixture    # mescla o que a IA devolveu
   npm run cli -- precos                        # só o lote 3
   npm run cli -- custo --lance 3460`);
   process.exit(comando ? 2 : 0);

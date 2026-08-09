@@ -88,6 +88,24 @@ export function gerarPaginaPrecificar(auctionId: number): string {
   .aviso { background: #2a2113; border: 1px solid #5c4a1c; border-radius: 6px;
     padding: 9px 12px; margin-bottom: 14px; font-size: 13px; }
   .ajuda { color: var(--fraco); font-size: 13px; margin: 0 0 14px; max-width: 78ch; }
+  code { background: #0f1116; padding: 1px 4px; border-radius: 3px; font-size: 12px; }
+  #modal { position: fixed; inset: 0; background: rgba(0,0,0,.62); display: flex;
+    align-items: flex-start; justify-content: center; padding: 40px 16px; overflow-y: auto;
+    z-index: 10; }
+  /* O display:flex acima ANULA o atributo hidden, e a camada invisível cobre a página
+     inteira interceptando todo clique — a tela fica morta sem nada aparecer errado.
+     Pego em navegador real: nenhum lote da lista era clicável. */
+  #modal[hidden] { display: none; }
+  #modal .caixa { background: var(--caixa); border: 1px solid var(--linha); border-radius: 10px;
+    padding: 20px 22px; max-width: 720px; width: 100%; }
+  #modal h2 { font-size: 16px; margin: 0 0 10px; }
+  .passo { border-top: 1px solid var(--linha); padding: 14px 0; }
+  .passo strong { display: block; margin-bottom: 8px; }
+  .opcoes { display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; font-size: 14px; }
+  #relatorio { background: #0f1116; border: 1px solid var(--linha); border-radius: 6px;
+    padding: 11px 13px; font-size: 12.5px; white-space: pre-wrap; margin: 0 0 12px;
+    max-height: 320px; overflow-y: auto; }
+  input[type=file] { font-size: 13px; margin-bottom: 10px; display: block; }
 </style>
 </head>
 <body>
@@ -95,6 +113,7 @@ export function gerarPaginaPrecificar(auctionId: number): string {
   <h1>Precificar</h1>
   <span class="meta" id="meta">carregando…</span>
   <span class="meta"><a href="estudo.html">← estudo</a></span>
+  <button id="abrirIA" style="margin-left:auto">Precificar com IA (baixar / subir JSON)</button>
 </header>
 
 <div class="layout">
@@ -122,6 +141,40 @@ export function gerarPaginaPrecificar(auctionId: number): string {
   <button class="primario" id="salvar" disabled>Salvar preços</button>
   <button id="regerar">Atualizar estudo</button>
   <span id="recado"></span>
+</div>
+
+<div id="modal" hidden>
+  <div class="caixa">
+    <h2>Precificar com IA — baixar, preencher, subir</h2>
+    <p class="ajuda">
+      Pesquisar preço de ~1.900 descrições à mão não é viável. Baixe o JSON, entregue a um
+      modelo (ChatGPT, Claude, Gemini) dizendo <em>"preencha conforme o campo instrucoes"</em>,
+      e suba o arquivo que voltar. O prompt vai <strong>dentro</strong> do arquivo — você não
+      precisa guardar instrução em lugar nenhum.
+    </p>
+    <div class="passo">
+      <strong>1. Baixar</strong>
+      <div class="opcoes">
+        <label><input type="radio" name="escopo" value="lote" checked> só o lote aberto</label>
+        <label><input type="radio" name="escopo" value="top"> 300 itens de maior impacto do evento</label>
+        <label><input type="radio" name="escopo" value="todos"> todos os itens do evento</label>
+      </div>
+      <button id="baixar">Baixar JSON</button>
+      <span class="ajuda" id="dicaBaixar"></span>
+    </div>
+    <div class="passo">
+      <strong>2. Subir o arquivo preenchido</strong>
+      <p class="ajuda">
+        Aceita o JSON como veio, mesmo com <code>\`\`\`json</code> em volta, chaves reordenadas
+        ou preço escrito <code>"R$ 1.299,90"</code>. Item que não casar com nenhum lote é
+        relatado, não gravado.
+      </p>
+      <input type="file" id="arquivo" accept=".json,.txt,application/json">
+      <button class="primario" id="subir" disabled>Importar</button>
+    </div>
+    <pre id="relatorio" hidden></pre>
+    <button id="fechar">Fechar</button>
+  </div>
 </div>
 
 <script>
@@ -356,6 +409,101 @@ document.getElementById('regerar').onclick = function () {
     .catch(function (e) { recado(e.message, true); })
     .then(function () { b.disabled = false; });
 };
+
+/* ---------- ciclo com outra IA: baixar, preencher fora, subir ---------- */
+
+var modal = document.getElementById('modal');
+
+document.getElementById('abrirIA').onclick = function () {
+  modal.hidden = false;
+  document.getElementById('dicaBaixar').textContent = atual
+    ? 'lote aberto: ' + atual.numero
+    : 'nenhum lote aberto — escolha um lote ou baixe o evento todo';
+};
+document.getElementById('fechar').onclick = function () { modal.hidden = true; };
+modal.onclick = function (e) { if (e.target === modal) modal.hidden = true; };
+
+function escopoEscolhido() {
+  var r = document.querySelector('input[name=escopo]:checked').value;
+  if (r === 'lote') {
+    if (!atual) return null;
+    return 'lote=' + atual.numero;
+  }
+  if (r === 'top') return 'lote=todos&top=300';
+  return 'lote=todos';
+}
+
+document.getElementById('baixar').onclick = function () {
+  var q = escopoEscolhido();
+  if (!q) { recado('escolha um lote na lista antes, ou baixe o evento todo', true); return; }
+  // Navegação direta: o servidor manda content-disposition e o navegador baixa o arquivo.
+  window.location.href = 'api/exportar?' + q;
+};
+
+var arquivoEl = document.getElementById('arquivo');
+arquivoEl.onchange = function () {
+  document.getElementById('subir').disabled = !arquivoEl.files.length;
+};
+
+document.getElementById('subir').onclick = function () {
+  var f = arquivoEl.files[0];
+  if (!f) return;
+  var b = this;
+  b.disabled = true;
+  var rel = document.getElementById('relatorio');
+  rel.hidden = false;
+  rel.textContent = 'lendo ' + f.name + '…';
+
+  var leitor = new FileReader();
+  leitor.onload = function () {
+    // Manda como texto cru: o servidor limpa cercas de markdown e prosa em volta do JSON.
+    pedir('api/importar', { texto: String(leitor.result) })
+      .then(function (j) {
+        rel.textContent = relatorioTexto(j);
+        recado(j.gravados + ' item(ns) atualizados');
+        return carregarLista().then(function () {
+          if (atual) return abrirSilencioso(atual.numero);
+        });
+      })
+      .catch(function (e) { rel.textContent = 'ERRO: ' + e.message; })
+      .then(function () { b.disabled = false; });
+  };
+  leitor.onerror = function () { rel.textContent = 'não consegui ler o arquivo'; b.disabled = false; };
+  leitor.readAsText(f);
+};
+
+function relatorioTexto(j) {
+  var L = [];
+  L.push('gravados            ' + j.gravados + ' item(ns)');
+  L.push('  com preço         ' + j.comPreco);
+  L.push('  sem preço (null)  ' + j.semPreco + '   (o modelo não soube — é resposta legítima)');
+  L.push('casamento');
+  L.push('  pela chave        ' + j.porChave);
+  if (j.porDescricao) L.push('  pela descrição    ' + j.porDescricao + '   (a chave voltou alterada)');
+  if (j.totalDesconhecidos) {
+    L.push('');
+    L.push('NÃO CASARAM (' + j.totalDesconhecidos + ') — não existem em nenhum lote deste evento:');
+    j.desconhecidos.forEach(function (d) { L.push('  · ' + d); });
+    if (j.totalDesconhecidos > j.desconhecidos.length) L.push('  … e mais ' + (j.totalDesconhecidos - j.desconhecidos.length));
+  }
+  if (j.invalidos && j.invalidos.length) {
+    L.push('');
+    L.push('PREÇO ILEGÍVEL (' + j.invalidos.length + '):');
+    j.invalidos.forEach(function (d) { L.push('  · ' + d); });
+  }
+  if (j.suspeitos && j.suspeitos.length) {
+    L.push('');
+    L.push('CONFIRA ESTES — preço alto o bastante para parecer erro de unidade:');
+    j.suspeitos.forEach(function (s) { L.push('  · ' + brl(s.preco) + '  ' + s.item); });
+  }
+  if (!j.gravados) {
+    L.push('');
+    L.push('Nada foi gravado. Quase sempre é uma destas: o arquivo não é o que saiu daqui,');
+    L.push('ou o modelo reescreveu as descrições. Baixe de novo e peça para NÃO alterar');
+    L.push('"chave" nem "item".');
+  }
+  return L.join('\\n');
+}
 
 /* ---------- partida ---------- */
 

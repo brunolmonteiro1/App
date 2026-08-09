@@ -23,6 +23,43 @@ E preço é gravado **pela descrição do item**, não pelo lote: preenchido uma
 sozinho em todo lote e todo leilão futuro onde a mesma descrição aparecer. Por isso o esforço
 diminui a cada evento em vez de recomeçar.
 
+## Precificar em bloco, com outra IA
+
+São ~1.900 descrições distintas neste evento. Pesquisar preço de cada uma à mão não é viável, e
+era exatamente isso que mantinha a cobertura em 3% — sem cobertura não existe teto. Então o
+caminho é o ciclo:
+
+```bash
+npm run cli -- exportar --fixture --lote 56          # ou --lote todos [--top 300]
+#   → precos-para-ia-790754.json
+
+#   entregue a um chat: "preencha conforme o campo instrucoes"
+
+npm run cli -- importar --arquivo resposta.json --fixture --precos precos.json
+```
+
+Na tela, os mesmos dois passos ficam no botão **Precificar com IA**.
+
+**O prompt vai dentro do arquivo**, no campo `instrucoes` — assim não há instrução para guardar
+entre um leilão e o próximo.
+
+A parte interessante é a volta. Arquivo que passa por um chat não volta igual, e os modos de
+falha são todos conhecidos:
+
+| O que o chat faz | O que a importação faz |
+|---|---|
+| envolve em ` ```json ` ou põe prosa em volta | remove antes do parse |
+| devolve só o array, ou `{ itens: { chave: {...} } }` | aceita os três formatos |
+| escreve `"R$ 1.299,90"` | normaliza, milhar e decimal inclusive |
+| **reescreve a `chave`** | casa pela descrição do item |
+| reordena, remove ou duplica linhas | irrelevante: casa por chave, não por posição |
+| **inventa item que não existe** | rejeita e lista no relatório |
+| preço ilegível (`"uns cem reais"`) | pula a linha, não grava 0 |
+| preço absurdo numa caneca | grava mas sinaliza para conferência |
+
+E o relatório é obrigatório justamente pelo pior caso: uma importação que dissesse "sucesso"
+tendo casado zero linhas deixaria o operador entrar no pregão confiando num teto inexistente.
+
 ## Como rodar
 
 ```bash
@@ -56,7 +93,7 @@ npm run cli -- precos --saida precos.json
 # O painel: estudo + tela de precificação
 npm run servir    # http://127.0.0.1:8080/precificar.html
 
-npm test          # 195 testes
+npm test          # 243 testes
 npm run typecheck
 ```
 

@@ -164,6 +164,15 @@ Um lote precificado até o fim vale mais que 57 lotes a 3%. Cada preço fica gra
 descrição do item**, então ele volta preenchido em todo lote e todo leilão futuro onde a mesma
 descrição aparecer.
 
+**Para não pesquisar item por item**, use o botão **Precificar com IA**: baixe o JSON, entregue a
+um chat dizendo *"preencha conforme o campo instrucoes"*, e suba o arquivo que voltar. O prompt
+vai dentro do arquivo. A importação aceita o JSON como o chat devolveu — com cercas de markdown,
+prosa em volta, preço escrito `"R$ 1.299,90"`, linhas reordenadas — e mostra um relatório do que
+casou, do que não casou e do que ficou suspeito. Item que a IA inventou é rejeitado, não gravado.
+
+Comece por um lote (30–60 itens) para conferir a qualidade dos preços antes de mandar o evento
+todo.
+
 ### 7. Já tem um `precos.json` na mão?
 
 Os preços moram num named volume, não em pasta do host. Para carregar um arquivo existente:
@@ -227,7 +236,7 @@ reboot && sleep 60 && docker compose ps               # painel de pé por restar
 mas sem acesso ao daemon. Você já rodou o build na VPS e ele passou (`✔ Image leilao:local
 Built`), o que cobre justamente essa lacuna.
 
-O que **foi** verificado de fato: os 183 testes, o servidor estático (traversal
+O que **foi** verificado de fato: os 243 testes, o servidor estático (traversal
 percent-encoded incluído), toda a API da tela de precificação contra o manifesto real do lote 3,
 os três modos de acesso (loopback, senha certa, senha errada), e a própria tela em navegador
 real — 61 lotes na lista, 59 itens na tabela, preço digitado e teto recalculado.

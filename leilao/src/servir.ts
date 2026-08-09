@@ -32,6 +32,8 @@ import { gerarPagina } from './estudo/pagina.ts';
 import { configDoSnapshot, montarLinha, montarLinhas } from './estudo/montar.ts';
 import { lerSnapshot, manifestoDo, NOME_SNAPSHOT, type Snapshot } from './estudo/snapshot.ts';
 import { gravarPrecos, lerPrecos, mesclar, type EntradaPreco } from './precos/arquivo.ts';
+import { exportar, importar, type ArquivoTroca } from './precos/troca.ts';
+import type { ItemManifesto } from './analise/faixa.ts';
 import { reconciliar } from './analise/quantidade.ts';
 
 const RAIZ = resolve(process.env.DIR_SAIDA ?? 'saida');
@@ -267,6 +269,95 @@ async function apiLote(numero: number, pendentes: Record<string, EntradaPreco> =
   };
 }
 
+/**
+ * Itens a precificar, em ordem de impacto, para levar a outro modelo pesquisar.
+ *
+ * Escopos: um lote (`lote=56`), todos (`lote=todos`), e `top` para cortar a lista. Precificar um
+ * lote até o fim rende um teto real; a lista global espalha esforço por 57 lotes e não fecha
+ * nenhum — mas com IA preenchendo em bloco o custo de "todos" cai, então os dois existem.
+ */
+async function apiExportar(escopoLote: string, top: number | null): Promise<{ nome: string; corpo: ArquivoTroca }> {
+  const s = await snapshot();
+  const { arquivo: precos } = await lerPrecos(ARQUIVO_PRECOS);
+  const cfg = configDoSnapshot(s, cfgBase);
+
+  const todos = escopoLote === 'todos' || escopoLote === '';
+  const porLote = new Map<number, ItemManifesto[]>();
+  if (todos) {
+    for (const lote of s.evento.lotes) {
+      const m = manifestoDo(s, lote.numero);
+      // Categoria que o operador não trabalha fica fora: não faz sentido pagar pesquisa dela.
+      if (!m || lote.encerrado || cfg.categoriasIgnoradas.includes(detectar(lote.titulo))) continue;
+      porLote.set(lote.numero, m.itens);
+    }
+  } else {
+    const n = Number(escopoLote);
+    const m = manifestoDo(s, n);
+    if (!m) throw new Error(`lote ${n} não tem manifesto no snapshot — rode o \`gerar\``);
+    porLote.set(n, m.itens);
+  }
+
+  // Item de termo ignorado (cosmético, limpeza, bebida) sai da lista: vale zero de qualquer jeito.
+  const filtrado = new Map<number, ItemManifesto[]>();
+  for (const [n, itens] of porLote) {
+    const av = aplicar(itens, {}, cfg.termosIgnorados, cfg.excecoesIgnorados);
+    filtrado.set(n, itens.filter((_, k) => av[k]!.faixa !== 'C'));
+  }
+
+  let linhas = priorizar(filtrado).filter((l) => l.faixa !== 'C');
+  if (top && top > 0) linhas = linhas.slice(0, top);
+
+  const corpo = exportar(linhas, {
+    evento: s.evento.auctionId,
+    escopo: todos ? `todos os lotes${top ? ` · ${top} itens de maior impacto` : ''}` : `lote ${escopoLote}`,
+    precoAtual: (k) => precos.itens[k]?.preco ?? null,
+  });
+  const nome = todos
+    ? `precos-evento-${s.evento.auctionId}.json`
+    : `precos-lote${escopoLote}-${s.evento.auctionId}.json`;
+  return { nome, corpo };
+}
+
+/**
+ * Recebe o arquivo preenchido pela outra IA e grava o que casar.
+ *
+ * O relatório é a parte que importa. Um "importado com sucesso" mudo esconderia o caso ruim:
+ * o modelo reescreveu as chaves, nada casou, e o operador acha que precificou 400 itens.
+ */
+async function apiImportar(corpo: Record<string, unknown>): Promise<unknown> {
+  const texto = typeof corpo.texto === 'string' ? corpo.texto : JSON.stringify(corpo.arquivo ?? corpo);
+  const s = await snapshot();
+
+  // Universo de chaves válidas: tudo que existe em algum manifesto deste evento.
+  const conhecidas = new Set<string>();
+  for (const m of Object.values(s.manifestos)) {
+    for (const i of m.itens) {
+      const k = chaveDe(i.descricao);
+      if (k) conhecidas.add(k);
+    }
+  }
+
+  const r = importar(texto, conhecidas);
+  const comPreco = Object.values(r.entrada).filter((e) => e.preco != null).length;
+
+  const { arquivo } = await lerPrecos(ARQUIVO_PRECOS);
+  const { arquivo: novo, gravados, rejeitados } = mesclar(arquivo, r.entrada);
+  await gravarPrecos(ARQUIVO_PRECOS, novo);
+
+  return {
+    gravados,
+    comPreco,
+    semPreco: r.semPreco,
+    porChave: r.porChave,
+    porDescricao: r.porDescricao,
+    desconhecidos: r.desconhecidos.slice(0, 20),
+    totalDesconhecidos: r.desconhecidos.length,
+    invalidos: r.invalidos.slice(0, 20),
+    suspeitos: r.suspeitos.slice(0, 20),
+    rejeitados,
+  };
+}
+
 /** Recalcula o teto com os preços digitados, SEM gravar. */
 async function apiSimular(corpo: Record<string, unknown>): Promise<unknown> {
   const numero = Number(corpo.lote);
@@ -338,6 +429,22 @@ const servidor = createServer(async (req, res) => {
       }
       if (metodo === 'POST' && rota === '/api/estudo') {
         return json(res, 200, await apiRegerarEstudo());
+      }
+      if (metodo === 'GET' && rota === '/api/exportar') {
+        const q = new URL(req.url ?? '', 'http://x').searchParams;
+        const { nome, corpo } = await apiExportar(q.get('lote') ?? 'todos', Number(q.get('top')) || null);
+        const txt = JSON.stringify(corpo, null, 2);
+        // content-disposition faz o navegador BAIXAR em vez de exibir — é o ponto do botão.
+        res.writeHead(200, {
+          'content-type': 'application/json; charset=utf-8',
+          'content-disposition': `attachment; filename="${nome}"`,
+          'content-length': Buffer.byteLength(txt),
+          'cache-control': 'no-store',
+        });
+        return res.end(txt);
+      }
+      if (metodo === 'POST' && rota === '/api/importar') {
+        return json(res, 200, await apiImportar(await corpoJson(req)));
       }
       return json(res, 404, { erro: `rota ${metodo} ${rota} não existe` });
     } catch (e) {

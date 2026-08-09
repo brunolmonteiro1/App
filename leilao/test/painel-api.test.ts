@@ -275,3 +275,93 @@ describe('a página em si', () => {
     expect(html).toContain('precisa do servidor');
   });
 });
+
+describe('GET /api/exportar — o arquivo para outra IA', () => {
+  it('vem com content-disposition, senão o navegador exibe em vez de baixar', async () => {
+    const r = await fetch(`${base}/api/exportar?lote=${numeroLote}`);
+    expect(r.status).toBe(200);
+    expect(r.headers.get('content-disposition')).toMatch(/attachment; filename=".*\.json"/);
+  });
+
+  it('traz o prompt dentro do arquivo e os itens com preco null', async () => {
+    const j = await get(`/api/exportar?lote=${numeroLote}`);
+    expect(j.instrucoes).toContain('NÃO altere o campo "chave"');
+    expect(j.itens.length).toBeGreaterThan(10);
+    expect(j.escopo).toContain(String(numeroLote));
+  });
+
+  it('não pede preço de item irrisório: pesquisa que não move teto é tempo jogado fora', async () => {
+    const j = await get(`/api/exportar?lote=${numeroLote}`);
+    expect(j.itens.every((i: { faixa: string }) => i.faixa !== 'C')).toBe(true);
+  });
+
+  it('escopo "todos" cobre o evento e respeita o corte de --top', async () => {
+    const todos = await get('/api/exportar?lote=todos');
+    const cortado = await get('/api/exportar?lote=todos&top=5');
+    expect(cortado.itens).toHaveLength(5);
+    expect(todos.itens.length).toBeGreaterThanOrEqual(cortado.itens.length);
+    // O corte é pelo topo da ordem de impacto, não aleatório.
+    expect(cortado.itens[0].chave).toBe(todos.itens[0].chave);
+  });
+});
+
+describe('POST /api/importar — a volta do arquivo', () => {
+  it('grava o que casou e RELATA o que não casou', async () => {
+    const exp = await get(`/api/exportar?lote=${numeroLote}`);
+    const lista = exp.itens.slice(0, 6).map((i: { chave: string }, k: number) => ({
+      ...i,
+      preco: k === 0 ? 'R$ 1.299,90' : 120 + k,
+    }));
+    lista.push({ chave: 'nao existe', item: 'PRODUTO INVENTADO PELA IA', preco: 50 });
+    // Com cerca de markdown e prosa, como um chat responde de verdade.
+    const texto = 'Aqui está!\n\n```json\n' + JSON.stringify({ itens: lista }) + '\n```';
+
+    const j = await post('/api/importar', { texto });
+    expect(j.gravados).toBe(6);
+    expect(j.porChave).toBe(6);
+    expect(j.totalDesconhecidos).toBe(1);
+    expect(j.desconhecidos[0]).toContain('INVENTADO');
+  });
+
+  it('o preço em formato pt-BR chega no arquivo como número', async () => {
+    const d = JSON.parse(await readFile(arquivoPrecos, 'utf8'));
+    const comMilhar = Object.values(d.itens).filter((v) => (v as { preco: number }).preco === 1299.9);
+    expect(comMilhar.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('arquivo que não é JSON dá erro explicado, não 500', async () => {
+    const r = await fetch(base + '/api/importar', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ texto: 'desculpe, não consegui' }),
+    });
+    expect(r.status).toBe(400);
+    expect((await r.json()).erro).toMatch(/JSON/);
+  });
+
+  it('importar não apaga os preços digitados à mão em outros lotes', async () => {
+    const antes = JSON.parse(await readFile(arquivoPrecos, 'utf8'));
+    const chaves = Object.keys(antes.itens);
+    const exp = await get(`/api/exportar?lote=${numeroLote}`);
+    await post('/api/importar', {
+      texto: JSON.stringify({ itens: [{ ...exp.itens[0], preco: 7 }] }),
+    });
+    const depois = JSON.parse(await readFile(arquivoPrecos, 'utf8'));
+    for (const k of chaves) expect(depois.itens[k]).toBeDefined();
+  });
+});
+
+describe('a tela não pode ficar morta', () => {
+  it('o modal escondido não intercepta clique', async () => {
+    // `#modal` tem display:flex, que ANULA o atributo hidden — a camada invisível cobria a
+    // página e nenhum lote da lista era clicável. Pego em navegador real; travado aqui.
+    const html = await (await fetch(base + '/precificar.html')).text();
+    expect(html).toMatch(/#modal\[hidden\]\s*\{\s*display:\s*none/);
+  });
+
+  it('a tela oferece os dois caminhos: baixar e subir', async () => {
+    const html = await (await fetch(base + '/precificar.html')).text();
+    expect(html).toContain('api/exportar');
+    expect(html).toContain('api/importar');
+  });
+});
