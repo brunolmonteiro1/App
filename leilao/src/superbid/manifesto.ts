@@ -85,6 +85,15 @@ export function conferir(
   m: Manifesto,
   refDoLote: string | null,
   unidadesDeclaradas: number | null,
+  /**
+   * Total da composição (itens nomeados + conteúdo das caixas de diversos), quando conhecido.
+   *
+   * Existe porque comparar o título com a soma da COLUNA quantidade produzia alerta falso em 30
+   * lotes: uma linha com quantidade 1 e descrição "APROXIMADAMENTE 256 ITENS SUPLEMENTO DIVERSOS"
+   * vale 256 na contagem do vendedor. Quem sabe disso é `analise/embalagem.ts`; aqui só se
+   * compara contra o número certo, e a divergência que sobra é real.
+   */
+  totalDaComposicao: number | null = null,
 ): string[] {
   const alertas: string[] = [];
   if (m.itens.length === 0) alertas.push('manifesto sem itens legíveis');
@@ -92,7 +101,9 @@ export function conferir(
   if (refDoLote && m.refs.length && !m.refs.includes(refDoLote)) {
     alertas.push(`manifesto é do lote ${m.refs[0]}, não de ${refDoLote}`);
   }
-  if (unidadesDeclaradas && m.somaQuantidades !== unidadesDeclaradas) {
+  // Sem a composição, cai na soma da coluna — e aí a tolerância é maior, porque a comparação é
+  // sabidamente grosseira. Com a composição, quem alerta sobre divergência é `montar.ts`.
+  if (unidadesDeclaradas && totalDaComposicao === null && m.somaQuantidades !== unidadesDeclaradas) {
     const dif = m.somaQuantidades - unidadesDeclaradas;
     alertas.push(
       `título declara ${unidadesDeclaradas} un, manifesto soma ${m.somaQuantidades} (${dif > 0 ? '+' : ''}${dif})`,

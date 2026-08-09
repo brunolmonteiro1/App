@@ -23,8 +23,8 @@ import { createReadStream } from 'node:fs';
 import { readdir, stat, writeFile, rename } from 'node:fs/promises';
 import { timingSafeEqual } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { extname, join, resolve, sep } from 'node:path';
-import { CONFIG_PADRAO } from './config.ts';
+import { dirname, extname, join, resolve, sep } from 'node:path';
+import { CONFIG_PADRAO, type Config } from './config.ts';
 import { detectar } from './analise/categoria.ts';
 import { aplicar, chave as chaveDe, priorizar } from './analise/valor.ts';
 import { avaliar } from './analise/teto.ts';
@@ -33,11 +33,14 @@ import { configDoSnapshot, montarLinha, montarLinhas } from './estudo/montar.ts'
 import { lerSnapshot, manifestoDo, NOME_SNAPSHOT, type Snapshot } from './estudo/snapshot.ts';
 import { gravarPrecos, lerPrecos, mesclar, type EntradaPreco } from './precos/arquivo.ts';
 import { exportar, importar, type ArquivoTroca } from './precos/troca.ts';
+import { aplicarRegra, gravarRegra, lerRegra, NOME_REGRA, type ArquivoRegra } from './precos/regra.ts';
 import type { ItemManifesto } from './analise/faixa.ts';
 import { reconciliar } from './analise/quantidade.ts';
 
 const RAIZ = resolve(process.env.DIR_SAIDA ?? 'saida');
 const ARQUIVO_PRECOS = resolve(process.env.ARQUIVO_PRECOS ?? 'precos.json');
+/** Parâmetros do operador. Fica junto dos preços: os dois são dele, não do código. */
+const ARQUIVO_REGRA = resolve(process.env.ARQUIVO_REGRA ?? join(dirname(ARQUIVO_PRECOS), NOME_REGRA));
 const PORTA = Number(process.env.PORT ?? 8080);
 const HOST = process.env.HOST ?? '127.0.0.1';
 const USUARIO = process.env.USUARIO ?? 'leilao';
@@ -140,13 +143,22 @@ function alcancePorChave(s: Snapshot): Map<string, number> {
   return m;
 }
 
-const cfgBase = CONFIG_PADRAO;
+/**
+ * Config base = `config.ts` + o que o operador ajustou na tela.
+ *
+ * Relida a cada request de propósito: são 8 campos num arquivo pequeno, e cachear isso obrigaria
+ * a reiniciar o painel para um número novo valer — exatamente o atrito que esta tela existe para
+ * remover.
+ */
+async function configBase(): Promise<Config> {
+  return aplicarRegra(await lerRegra(ARQUIVO_REGRA), CONFIG_PADRAO);
+}
 
 /** Resumo de todos os lotes, sem os itens — é o que a lista da esquerda consome. */
 async function apiLotes(): Promise<unknown> {
   const s = await snapshot();
   const { arquivo: precos, aviso } = await lerPrecos(ARQUIVO_PRECOS);
-  const cfg = configDoSnapshot(s, cfgBase);
+  const cfg = configDoSnapshot(s, await configBase());
   const linhas = montarLinhas(s, cfg, precos);
 
   const lotes = linhas.map((l) => {
@@ -159,19 +171,30 @@ async function apiLotes(): Promise<unknown> {
       pendentes: m ? l.av.unidadesSemPreco : 0,
       cobertura: l.av.cobertura,
       custoPorUnidadeEfetiva: l.av.custoPorUnidadeEfetiva,
+      // Camada 0: é isto que a lista mostra antes de existir preço nenhum.
+      custoPorItemTitulo: l.av.custoPorItemTitulo,
+      custoPorItemNomeado: l.av.custoPorItemNomeado,
+      fracaoEmCaixa: l.av.fracaoEmCaixa,
+      baseDoTeto: l.av.baseDoTeto,
+      tetoOperante: l.av.tetoOperante,
+      lucroEstimado: l.av.lucroEstimado,
       lance: l.lote.lance,
       encerrado: l.lote.encerrado,
     };
   });
 
-  // Ordem recomendada: primeiro onde vale gastar o esforço. Custo por unidade efetiva é a
-  // métrica que funciona SEM preço nenhum, então serve justamente quando nada está precificado.
+  // Ordem: o mais barato por item declarado primeiro — a régua que o operador usa. Funciona sem
+  // preço nenhum, então serve justamente quando nada está precificado.
   const peso = (x: (typeof lotes)[number]) =>
-    x.encerrado || x.semaforo === 'ignorado' ? 2 : x.itens === 0 ? 1 : 0;
+    x.encerrado || x.semaforo === 'ignorado' || x.semaforo === 'sem-teto'
+      ? 2
+      : x.custoPorItemTitulo === null
+        ? 1
+        : 0;
   lotes.sort(
     (a, b) =>
       peso(a) - peso(b) ||
-      (a.custoPorUnidadeEfetiva ?? Infinity) - (b.custoPorUnidadeEfetiva ?? Infinity) ||
+      (a.custoPorItemTitulo ?? Infinity) - (b.custoPorItemTitulo ?? Infinity) ||
       a.numero - b.numero,
   );
 
@@ -181,6 +204,9 @@ async function apiLotes(): Promise<unknown> {
     geradoEm: s.geradoEm.replace('T', ' ').slice(0, 16),
     precificados,
     avisoPrecos: aviso,
+    regra: cfg.regra,
+    // Quantas categorias já têm venda média informada — a tela usa para dizer se o lucro existe.
+    categoriasComVenda: Object.values(cfg.vendaMediaPorItemUtil).filter((v) => v != null).length,
     lotes,
   };
 }
@@ -202,7 +228,7 @@ async function apiLote(numero: number, pendentes: Record<string, EntradaPreco> =
   // Preços ainda não salvos entram por cima, para o teto na tela responder ao que ele digitou.
   const comPendentes = mesclar(precos, pendentes).arquivo;
 
-  const cfg = configDoSnapshot(s, cfgBase);
+  const cfg = configDoSnapshot(s, await configBase());
   const linha = montarLinha(lote, manifesto, cfg, comPendentes);
   const categoria = detectar(lote.titulo);
 
@@ -279,7 +305,7 @@ async function apiLote(numero: number, pendentes: Record<string, EntradaPreco> =
 async function apiExportar(escopoLote: string, top: number | null): Promise<{ nome: string; corpo: ArquivoTroca }> {
   const s = await snapshot();
   const { arquivo: precos } = await lerPrecos(ARQUIVO_PRECOS);
-  const cfg = configDoSnapshot(s, cfgBase);
+  const cfg = configDoSnapshot(s, await configBase());
 
   const todos = escopoLote === 'todos' || escopoLote === '';
   const porLote = new Map<number, ItemManifesto[]>();
@@ -384,7 +410,7 @@ async function apiGravarPrecos(corpo: Record<string, unknown>): Promise<unknown>
 async function apiRegerarEstudo(): Promise<unknown> {
   const s = await snapshot();
   const { arquivo: precos } = await lerPrecos(ARQUIVO_PRECOS);
-  const cfg = configDoSnapshot(s, cfgBase);
+  const cfg = configDoSnapshot(s, await configBase());
   const linhas = montarLinhas(s, cfg, precos);
   const html = gerarPagina(s.evento, linhas, cfg, s.refresh, precos.exemplo ?? false);
 
@@ -519,6 +545,35 @@ const servidor = createServer(async (req, res) => {
       }
       if (metodo === 'POST' && rota === '/api/importar') {
         return json(res, 200, await apiImportar(await corpoJson(req)));
+      }
+      if (metodo === 'GET' && rota === '/api/regra') {
+        const cfg = await configBase();
+        return json(res, 200, {
+          regra: cfg.regra,
+          vendaMediaPorItemUtil: cfg.vendaMediaPorItemUtil,
+          perdaPorCategoria: Object.fromEntries(
+            Object.entries(cfg.categorias).map(([k, v]) => [k, v.perda]),
+          ),
+          rotulos: Object.fromEntries(Object.entries(cfg.categorias).map(([k, v]) => [k, v.rotulo])),
+          arquivo: ARQUIVO_REGRA,
+        });
+      }
+      if (metodo === 'POST' && rota === '/api/regra') {
+        const corpo = (await corpoJson(req)) as ArquivoRegra;
+        const anterior = await lerRegra(ARQUIVO_REGRA);
+        // Mescla, como nos preços: a tela pode mandar só a seção que o operador mexeu.
+        const novo: ArquivoRegra = {
+          regra: { ...anterior.regra, ...corpo.regra },
+          vendaMediaPorItemUtil: { ...anterior.vendaMediaPorItemUtil, ...corpo.vendaMediaPorItemUtil },
+          perdaPorCategoria: { ...anterior.perdaPorCategoria, ...corpo.perdaPorCategoria },
+        };
+        await gravarRegra(ARQUIVO_REGRA, novo);
+        const cfg = await configBase();
+        return json(res, 200, {
+          regra: cfg.regra,
+          vendaMediaPorItemUtil: cfg.vendaMediaPorItemUtil,
+          arquivo: ARQUIVO_REGRA,
+        });
       }
       return json(res, 404, { erro: `rota ${metodo} ${rota} não existe` });
     } catch (e) {

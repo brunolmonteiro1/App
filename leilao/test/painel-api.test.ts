@@ -89,14 +89,25 @@ describe('GET /api/lotes — a lista da esquerda', () => {
     expect(j.lotes).toHaveLength(61);
   });
 
-  it('ordena por onde vale gastar esforço, deixando encerrado e ignorado no fim', async () => {
+  it('ordena pelo R$/item declarado, deixando ignorado e sem teto no fim', async () => {
     const j = await get('/api/lotes');
-    const pos = (s: string) => j.lotes.findIndex((l: { semaforo: string }) => l.semaforo === s);
-    const comManifesto = j.lotes.findIndex((l: { itens: number }) => l.itens > 0);
-    // O lote com manifesto (o único aqui) vem antes dos que não têm nada para precificar.
-    expect(comManifesto).toBe(0);
-    const ignorado = pos('ignorado');
-    if (ignorado > -1) expect(ignorado).toBeGreaterThan(comManifesto);
+    type L = { semaforo: string; custoPorItemTitulo: number | null; encerrado: boolean };
+    const lotes: L[] = j.lotes;
+
+    // Ignorado, encerrado e sem-teto afundam. Sem isto, ordenar por R$/item punha um lote de
+    // cosméticos no topo — categoria que o operador não trabalha, aparecendo como a melhor
+    // oportunidade do evento.
+    const fora = (l: L) => l.encerrado || l.semaforo === 'ignorado' || l.semaforo === 'sem-teto';
+    const primeiroFora = lotes.findIndex(fora);
+    if (primeiroFora > -1) {
+      expect(lotes.slice(primeiroFora).every(fora)).toBe(true);
+    }
+
+    // E entre os que decidem, ordem crescente de R$/item — a régua do operador.
+    const decidem = lotes.filter((l) => !fora(l) && l.custoPorItemTitulo !== null);
+    for (let i = 1; i < decidem.length; i++) {
+      expect(decidem[i]!.custoPorItemTitulo!).toBeGreaterThanOrEqual(decidem[i - 1]!.custoPorItemTitulo!);
+    }
   });
 
   it('conta as descrições já precificadas', async () => {
@@ -134,13 +145,15 @@ describe('GET /api/lote — os itens de um lote', () => {
 });
 
 describe('POST /api/simular — o teto ao vivo, sem gravar', () => {
-  it('preço em poucos itens NÃO produz teto: o portão de cobertura vale na tela', async () => {
+  it('preço em poucos itens não produz teto POR VALOR: a tela cai na regra de R$/item', async () => {
     const lote = await get(`/api/lote?n=${numeroLote}`);
     const um = lote.itens.find((i: { faixa: string }) => i.faixa !== 'C')!;
     const j = await post('/api/simular', { lote: numeroLote, itens: { [um.chave]: { preco: 100 } } });
-    // É a regressão perigosa: teto baixo com 2% de cobertura lê como "lote caro" quando
-    // significa "ainda não sei".
-    expect(j.av.semaforo).toBe('sem-cobertura');
+    // É a regressão perigosa: teto por valor calculado sobre 2% dos itens sai baixo e lê como
+    // "lote caro" quando significa "ainda não sei". O portão continua, e o que aparece na tela
+    // é o teto pela regra do operador, rotulado como tal.
+    expect(j.av.baseDoTeto).toBe('regra');
+    expect(j.av.tetoOperante).toBe(j.av.tetoPorRegra);
   });
 
   it('precificando o lote inteiro, aparece teto de verdade', async () => {
@@ -255,7 +268,8 @@ describe('POST /api/estudo — fecha o ciclo', () => {
     const bloco = new RegExp(`data-offer="${offerId}"[\\s\\S]{0,400}?data-teto-seguro="([\\d.]+)"`);
     const m = bloco.exec(html);
     expect(m).not.toBeNull();
-    expect(Number(m![1])).toBeCloseTo(daTela.av.tetoSeguro, 2);
+    // O atributo carrega o teto OPERANTE — o limite duro contra o qual o refresh repinta.
+    expect(Number(m![1])).toBeCloseTo(daTela.av.tetoOperante, 2);
   });
 });
 

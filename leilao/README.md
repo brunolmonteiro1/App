@@ -6,6 +6,58 @@ cobre ou não. Com `--refresh`, ela busca os lances sozinha e repinta 🟢/🟡/
 
 **A ferramenta nunca dá lance.** O clique é sempre do operador, na janela do BidTV.
 
+## O que decide a compra: custo real por item
+
+A pergunta que a ferramenta responde primeiro **não precisa de preço nenhum**:
+
+```
+lote  título nomeados em caixa   custo  R$/título  R$/nomeado
+  15     375      373        0     2831       7,55        7,59   ← quase tudo nomeado
+  21     510      493        0     4580       8,98        9,29
+  44     908      558      350     7569       8,34       13,54   ← 39% em caixa fechada
+  11     283       27      256     2578       9,11       95,48   ← 92% em caixa fechada
+```
+
+A regra do operador é `custo total ÷ itens declarados ≤ R$ 15` (histórico de compra: R$ 10–14).
+Isso dá um **teto de lance para os 61 lotes desde o primeiro segundo** — 53 deles, contra zero
+pelo caminho do valor de revenda.
+
+### O que infla um lote, medido
+
+Duas coisas distintas, e o manifesto denuncia as duas:
+
+- **Caixa de diversos.** Uma linha com quantidade 1 e a contagem no texto:
+  `"APROXIMADAMENTE 256 ITENS SUPLEMENTO DIVERSOS ALWAYSFIT, MAX HEYLLAIR…"`. São 256 peças que
+  vêm sem nome. No lote 11 isso é 92% do lote.
+- **Kit comercial.** `"Faqueiro Viena 30 Peças"` é **1 produto** com um preço, não 30 itens.
+  Contar as peças faria o lote 42 saltar de 304 para 5.556 "unidades" por causa de seis caixas de
+  5.000 grampos, e o R$/item viraria ficção — para baixo, que é o lado que faz pagar caro.
+
+O título **não mente**: ele conta o conteúdo das caixas. Lote 11 → 27 + 256 = 283, exato. O que
+ele não diz é quanto do lote vem sem nome, e é isso que a coluna `R$/nomeado` mostra.
+
+Quando o título conta peças *dentro* de embalagem — lote 41 declara 799 e o manifesto lista 291,
+porque conta parafuso por parafuso — a linha ganha alerta e o fator de correção (2,7× ali).
+
+### Três camadas, por custo de esforço
+
+| Camada | Esforço | Entrega |
+|---|---|---|
+| **custo real** | zero | R$/item nas duas bases, composição, âncoras, **teto pela regra** |
+| **venda média** | 8 números | faturamento e lucro estimados nos 61 lotes |
+| **preço por item** | horas | teto por valor de revenda; vale o **menor** dos dois tetos |
+
+A camada 1 é o atalho que evita as ~1.900 pesquisas: um preço médio de venda por peça útil **por
+categoria**, que o operador já sabe de cabeça. Enquanto estiver em branco, o estudo **não mostra
+lucro nenhum** — é o lugar mais fácil de inventar número neste projeto, e lucro inventado vira
+lance real.
+
+### As âncoras saem de graça
+
+`classeValor()` + `especificidade()` separam `"Martelete Rompedor Bosch Gbh 2-24d 820w"` de
+`"máscara de gatinho"` **sem preço**. É o que justifica furar a regra dos R$ 15 — nas palavras do
+operador, *"se tem alguma máquina ou item de valor agregado alto, faz sentido para mim"*.
+
 ## As duas telas
 
 O painel serve duas páginas, e a primeira é onde o trabalho acontece:
@@ -93,7 +145,7 @@ npm run cli -- precos --saida precos.json
 # O painel: estudo + tela de precificação
 npm run servir    # http://127.0.0.1:8080/precificar.html
 
-npm test          # 243 testes
+npm test          # 276 testes
 npm run typecheck
 ```
 

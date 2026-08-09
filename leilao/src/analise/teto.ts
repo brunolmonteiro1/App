@@ -11,25 +11,80 @@
 import { CONFIG_PADRAO, type Categoria, type Config } from '../config.ts';
 import { calcularCusto, martelaDoTeto, ultimoLanceValido, type Custo } from './custo.ts';
 import type { ItemAvaliado } from './faixa.ts';
+import type { Composicao } from './embalagem.ts';
+import { ancoras } from './valor.ts';
 
 /**
- * `sem-cobertura` é distinto de `vermelho` de propósito. Vermelho significa "lote caro, para";
- * sem-cobertura significa "não sei ainda". Dar a mesma cor aos dois faria o operador descartar
- * lote bom achando que é lote caro — foi exatamente o que aconteceu quando a cobertura era 3%.
+ * A cor da decisão.
+ *
+ * **`sem-cobertura` foi retirado**, e a história importa. Ele existia porque o único caminho de
+ * teto era o valor de revenda: com 3% dos itens precificados, o lote 3 aparecia como
+ * "teto R$ 26 · PARE", que lê como "lote horrível" quando significa "precificamos 3 de 59 itens".
+ * O estado azul separava "não sei" de "lote caro", que são informações opostas.
+ *
+ * A proteção continua inteira, só mudou de mecanismo: abaixo do portão de cobertura o teto por
+ * VALOR não é oferecido (`baseDoTeto` nunca diz `valor` nem `ambos`), e o que aparece é o teto
+ * pela regra de R$/item do operador — que não depende de preço e vem rotulado como tal. Manter
+ * um estado inalcançável no tipo só produziria ramo morto na renderização.
  */
-export type Semaforo =
-  | 'verde'
-  | 'amarelo'
-  | 'vermelho'
-  | 'sem-teto'
-  | 'sem-cobertura'
-  | 'ignorado'
-  | 'encerrado';
+export type Semaforo = 'verde' | 'amarelo' | 'vermelho' | 'sem-teto' | 'ignorado' | 'encerrado';
+
+/** De onde veio o teto que está governando a decisão. */
+export type BaseDoTeto =
+  /** Da regra de R$/item do operador. Funciona sem precificar nada. */
+  | 'regra'
+  /** Do valor de revenda dos itens. Exige cobertura de preço. */
+  | 'valor'
+  /** Os dois existem, e vale o menor. */
+  | 'ambos'
+  | 'nenhum';
 
 export interface Avaliacao {
   categoria: Categoria;
   multiplo: number;
   perda: number;
+
+  // ── Camada 0: custo real, sem depender de preço ──────────────────────────────
+
+  /** Peças com nome/marca/modelo; kit conta 1. */
+  itensNomeados: number;
+  /** Peças que vêm dentro de caixa de diversos, sem nome. */
+  volumeEmCaixa: number;
+  /** Fração do lote que é caixa fechada. Alto = risco de natureza diferente. */
+  fracaoEmCaixa: number;
+  /** Custo total ÷ itens declarados no título. **É a conta que o operador faz de cabeça.** */
+  custoPorItemTitulo: number | null;
+  /** Custo total ÷ itens nomeados. A base honesta, para contraste. */
+  custoPorItemNomeado: number | null;
+  /** Maior lance em que o custo por item ainda cabe na regra. Não precisa de preço. */
+  tetoPorRegra: number;
+  /** Divisor efetivamente usado no `tetoPorRegra`, para a tela poder explicar. */
+  divisorDaRegra: number;
+
+  // ── Camada 1: lucro estimado, um número por categoria ───────────────────────
+
+  /** `unidadesEfetivas × venda média da categoria`. null sem o parâmetro. */
+  faturamentoEstimado: number | null;
+  lucroEstimado: number | null;
+  margemEstimada: number | null;
+
+  /** Os itens de valor agregado alto, detectados sem preço. */
+  ancoras: { descricao: string; quantidade: number; classe: number }[];
+
+  /**
+   * **Limite duro**: acima daqui é PARE. É o menor entre o teto máximo por valor (60%) e o teto
+   * pela regra de R$/item — os dois "não passe disto", e vale o que aperta primeiro.
+   */
+  tetoOperante: number;
+  /**
+   * **Patamar confortável**: até aqui é verde. Menor entre o teto seguro por valor (40%) e o
+   * alvo de R$/item (onde ele costuma comprar, R$ 10–14 no histórico).
+   *
+   * Existe separado do limite duro para preservar a faixa amarela. Colapsar os dois num número
+   * só apagaria a zona "só com conhecimento da categoria", que é decisão dele, não do programa.
+   */
+  tetoConfortavel: number;
+  baseDoTeto: BaseDoTeto;
 
   /** Σ (qtd × preço) das faixas A e B. C não entra. */
   valorOnline: number;
@@ -68,8 +123,10 @@ export interface Avaliacao {
   /** Margem do lance atual contra o valor realizado conservador. */
   margem: number | null;
 
-  /** O número de ação: maior lance válido que ainda cabe no teto seguro. */
+  /** O número de ação: maior lance válido que ainda cabe no patamar confortável. */
   lanceSugerido: number | null;
+  /** Maior lance válido que ainda cabe no limite duro. Acima do sugerido, e não substitui ele. */
+  lanceMaximo: number | null;
   semaforo: Semaforo;
 }
 
@@ -80,7 +137,10 @@ export interface EntradaAvaliacao {
   incremento: number;
   temLances: boolean;
   encerrado: boolean;
+  /** Contagem do TÍTULO — a base da regra do operador. */
   unidadesDeclaradas: number | null;
+  /** Composição do manifesto. Sem ela, a camada 0 não existe e o lote fica só no caminho do valor. */
+  composicao?: Composicao | null;
   /** Lote de categoria que o operador não trabalha. */
   ignorado?: boolean;
 }
@@ -138,16 +198,83 @@ export function avaliar(e: EntradaAvaliacao, cfg: Config = CONFIG_PADRAO): Avali
 
   const custoAtual = calcularCusto(e.lanceAtual, cfg);
 
-  // Sem cobertura suficiente o teto existe internamente mas NÃO é oferecido como decisão.
-  const temTeto = valorOnline > 0 && coberturaOk && !e.ignorado;
-  const lanceSugerido = temTeto && !e.encerrado
-    ? ultimoLanceValido(e.lanceAtual, e.incremento, tetoSeguro, e.temLances)
-    : null;
+  // ── Camada 0: a regra de R$/item. Não depende de preço nenhum. ─────────────────
+  const comp = e.composicao ?? null;
+  const doTitulo = e.unidadesDeclaradas ?? null;
+  const nomeados = comp?.itensNomeados ?? null;
+
+  // O divisor segue a base configurada, com queda para o que existir. Ordem importa: a base do
+  // título é a única em que os R$ 10–14 do histórico dele estão calibrados.
+  const divisorDaRegra =
+    (cfg.regra.base === 'titulo' ? doTitulo : cfg.regra.base === 'nomeados' ? nomeados : unidadesEfetivas || null) ??
+    doTitulo ??
+    nomeados ??
+    0;
+
+  const tetoPorRegra =
+    divisorDaRegra > 0 && !e.ignorado
+      ? martelaDoTeto(cfg.regra.custoPorItemMaximo * divisorDaRegra, cfg.encargos, cfg.freteporLote)
+      : 0;
+
+  // ── Camada 1: lucro por venda média da categoria. Um número, não mil. ─────────
+  const vendaMedia = cfg.vendaMediaPorItemUtil[e.categoria];
+  const faturamentoEstimado =
+    vendaMedia != null && unidadesEfetivas > 0 ? unidadesEfetivas * vendaMedia * (1 - cat.perda) : null;
+  const lucroEstimado = faturamentoEstimado != null ? faturamentoEstimado - custoAtual.total : null;
+
+  // Sem cobertura suficiente o teto por VALOR existe internamente mas não decide nada.
+  const temTetoPorValor = valorOnline > 0 && coberturaOk && !e.ignorado;
+  const temTetoPorRegra = tetoPorRegra > 0;
+
+  // Os dois tetos respondem perguntas diferentes — "quanto isso vale revendido?" e "quanto eu
+  // aceito pagar por item?" — então quando os dois existem vale a restrição que aperta primeiro.
+  const baseDoTeto: BaseDoTeto =
+    temTetoPorValor && temTetoPorRegra ? 'ambos' : temTetoPorValor ? 'valor' : temTetoPorRegra ? 'regra' : 'nenhum';
+
+  // O alvo de R$/item: onde ele costuma comprar, e não onde ele para.
+  const tetoAlvoRegra = temTetoPorRegra
+    ? martelaDoTeto(cfg.regra.custoPorItemAlvo * divisorDaRegra, cfg.encargos, cfg.freteporLote)
+    : 0;
+
+  // Dois níveis, e por isso o `min` é aplicado nível por nível: o limite duro de um caminho não
+  // pode virar o patamar confortável do outro.
+  const INFINITO = Number.POSITIVE_INFINITY;
+  const duroValor = temTetoPorValor ? tetoMaximo : INFINITO;
+  const duroRegra = temTetoPorRegra ? tetoPorRegra : INFINITO;
+  const confValor = temTetoPorValor ? tetoSeguro : INFINITO;
+  const confRegra = temTetoPorRegra ? tetoAlvoRegra : INFINITO;
+
+  const tetoOperante = baseDoTeto === 'nenhum' ? 0 : Math.min(duroValor, duroRegra);
+  const tetoConfortavel = baseDoTeto === 'nenhum' ? 0 : Math.min(confValor, confRegra);
+
+  const lanceSugerido =
+    tetoConfortavel > 0 && !e.encerrado
+      ? ultimoLanceValido(e.lanceAtual, e.incremento, tetoConfortavel, e.temLances)
+      : null;
+  const lanceMaximo =
+    tetoOperante > 0 && !e.encerrado
+      ? ultimoLanceValido(e.lanceAtual, e.incremento, tetoOperante, e.temLances)
+      : null;
 
   return {
     categoria: e.categoria,
     multiplo: cat.multiplo,
     perda: cat.perda,
+    itensNomeados: nomeados ?? 0,
+    volumeEmCaixa: comp?.volumeEmCaixa ?? 0,
+    fracaoEmCaixa: comp?.fracaoEmCaixa ?? 0,
+    custoPorItemTitulo: doTitulo && doTitulo > 0 ? custoAtual.total / doTitulo : null,
+    custoPorItemNomeado: nomeados && nomeados > 0 ? custoAtual.total / nomeados : null,
+    tetoPorRegra,
+    divisorDaRegra,
+    faturamentoEstimado,
+    lucroEstimado,
+    margemEstimada:
+      faturamentoEstimado != null && custoAtual.total > 0 ? faturamentoEstimado / custoAtual.total : null,
+    ancoras: ancoras(e.itens).map(({ descricao, quantidade, classe }) => ({ descricao, quantidade, classe })),
+    tetoOperante,
+    tetoConfortavel,
+    baseDoTeto,
     valorOnline,
     valorRealizadoMin,
     valorRealizadoMax,
@@ -165,28 +292,33 @@ export function avaliar(e: EntradaAvaliacao, cfg: Config = CONFIG_PADRAO): Avali
       e.unidadesDeclaradas && e.unidadesDeclaradas > 0
         ? custoAtual.total / e.unidadesDeclaradas
         : null,
-    margem: temTeto && custoAtual.total > 0 ? valorRealizadoMin / custoAtual.total : null,
+    margem: temTetoPorValor && custoAtual.total > 0 ? valorRealizadoMin / custoAtual.total : null,
     lanceSugerido,
-    semaforo: semaforoDe(e, tetoSeguro, tetoMaximo, valorOnline > 0, coberturaOk),
+    lanceMaximo,
+    semaforo: semaforoDe(e, { tetoOperante, tetoConfortavel, baseDoTeto }),
   };
 }
 
+/**
+ * A cor da decisão.
+ *
+ * Mudou de fundamento: antes só existia o caminho do valor de revenda, então lote sem preço caía
+ * em `sem-cobertura` e não oferecia decisão nenhuma — 33 dos 61 lotes deste evento. Agora a regra
+ * de R$/item dá um teto que existe desde o primeiro segundo, e `sem-cobertura` sobra apenas para
+ * o lote que não tem nem manifesto nem preço.
+ */
 function semaforoDe(
   e: EntradaAvaliacao,
-  tetoSeguro: number,
-  tetoMaximo: number,
-  temValor: boolean,
-  coberturaOk: boolean,
+  x: { tetoOperante: number; tetoConfortavel: number; baseDoTeto: BaseDoTeto },
 ): Semaforo {
   if (e.encerrado) return 'encerrado';
   // Categoria que o operador não trabalha: decisão dele, não falta de dado.
   if (e.ignorado) return 'ignorado';
-  if (!temValor) return 'sem-teto';
-  if (!coberturaOk) return 'sem-cobertura';
-  // O que decide é o próximo lance que ele teria de dar, não o lance atual: cobrir
-  // significa pagar um degrau acima de quem está na frente.
+  if (x.baseDoTeto === 'nenhum') return 'sem-teto';
+
+  // O que decide é o próximo lance que ele teria de dar, não o lance atual: cobrir significa
+  // pagar um degrau acima de quem está na frente.
   const proximo = e.temLances ? e.lanceAtual + e.incremento : e.lanceAtual;
-  if (proximo <= tetoSeguro) return 'verde';
-  if (proximo <= tetoMaximo) return 'amarelo';
-  return 'vermelho';
+  if (proximo > x.tetoOperante) return 'vermelho';
+  return proximo <= x.tetoConfortavel ? 'verde' : 'amarelo';
 }

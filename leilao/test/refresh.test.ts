@@ -31,6 +31,7 @@ const linha = (): LinhaEstudo => {
     ),
     alertas: [],
     unidadesDeclaradas: 304,
+    unidadesTitulo: 304,
     fonteUnidades: 'manifesto',
     topItens: [],
   };

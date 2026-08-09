@@ -16,6 +16,7 @@ import { aplicar, cobertura, type ArquivoPrecos } from '../analise/valor.ts';
 import { reconciliar, refDoTitulo } from '../analise/quantidade.ts';
 import { avaliar } from '../analise/teto.ts';
 import { conferir, type Manifesto } from '../superbid/manifesto.ts';
+import { compor, reconciliarComTitulo } from '../analise/embalagem.ts';
 import { manifestoDo, type Snapshot } from './snapshot.ts';
 import type { LinhaEstudo } from './pagina.ts';
 
@@ -30,6 +31,11 @@ export function montarLinha(
   const unidades = reconciliar(lote.titulo, manifesto?.somaQuantidades ?? null);
   const declaradas = reconciliar(lote.titulo, null).valor;
 
+  // A composição é a camada 0: separa item nomeado de caixa fechada de diversos, e conta kit
+  // como 1 produto. É o que faz o custo por item significar alguma coisa.
+  const composicao = manifesto ? compor(manifesto.itens) : null;
+  const rec = composicao ? reconciliarComTitulo(composicao, declaradas) : null;
+
   const categoria = detectar(lote.titulo);
   const ignorado = cfg.categoriasIgnoradas.includes(categoria);
   const av = avaliar(
@@ -42,35 +48,60 @@ export function montarLinha(
       temLances: lote.temLances,
       encerrado: lote.encerrado,
       unidadesDeclaradas: declaradas,
+      composicao,
     },
     cfg,
   );
 
+  // `conferir` recebe a composição para NÃO alertar sobre a divergência entre o título e a soma
+  // da coluna quantidade: em 30 lotes ela existe porque o título conta o conteúdo das caixas de
+  // diversos, e o alerta antigo disparava por um motivo que não existia.
   const alertas = ignorado
     ? [`categoria "${cfg.categorias[categoria].rotulo}" — você não trabalha com isso`]
     : manifesto
-      ? conferir(manifesto, refDoTitulo(lote.titulo), declaradas)
+      ? conferir(manifesto, refDoTitulo(lote.titulo), declaradas, composicao?.total ?? null)
       : [];
   if (!ignorado && !manifesto && lote.anexos.length === 0) alertas.push('lote sem PDF de anexo');
   if (!ignorado && !manifesto && lote.anexos.length > 0) alertas.push('manifesto ainda não processado');
-  if (manifesto && !ignorado) {
-    const cob = cobertura(itens);
-    if (cob.pendentes > 0) {
+
+  if (composicao && !ignorado) {
+    if (composicao.fracaoEmCaixa >= cfg.regra.fracaoEmCaixaGrave) {
+      const q = composicao.caixas.length;
       alertas.push(
-        `${cob.pendentes} item(ns) sem preço (${cob.unidadesSemPreco} un) — teto sai baixo até precificar`,
+        `${(composicao.fracaoEmCaixa * 100).toFixed(0)}% do lote (${composicao.volumeEmCaixa} peças) vem em ` +
+          `${q} caixa${q > 1 ? 's' : ''} de "diversos", sem item nomeado — risco diferente, não necessariamente ruim`,
+      );
+    }
+    if (rec?.tipo === 'titulo-conta-pecas') {
+      alertas.push(
+        `o título conta peças dentro de embalagem: declara ${declaradas} e o manifesto lista ` +
+          `${composicao.total} — o custo por item real é ${rec.fator.toFixed(1)}× o da conta pelo título`,
       );
     }
   }
 
-  const topItens = itens
-    .filter((i) => i.faixa !== 'C')
-    .map((i) => ({
-      descricao: i.descricao,
-      quantidade: i.quantidade,
-      valor: i.quantidade * (i.precoOnline ?? 0),
-    }))
-    .sort((a, b) => b.valor - a.valor || b.quantidade - a.quantidade)
-    .slice(0, 5);
+  if (manifesto && !ignorado) {
+    const cob = cobertura(itens);
+    if (cob.pendentes > 0 && av.baseDoTeto === 'regra') {
+      alertas.push(
+        `teto pela sua regra de R$/item; ${cob.pendentes} item(ns) sem preço — precificar daria a segunda visão`,
+      );
+    }
+  }
+
+  // Com preço, os 5 que mais somam valor. SEM preço isso saía tudo zero e a lista virava
+  // ordem alfabética do azar — então cai nas âncoras, que não precisam de preço nenhum.
+  const comValor = itens.filter((i) => i.faixa !== 'C' && i.precoOnline != null);
+  const topItens = comValor.length
+    ? comValor
+        .map((i) => ({
+          descricao: i.descricao,
+          quantidade: i.quantidade,
+          valor: i.quantidade * (i.precoOnline ?? 0),
+        }))
+        .sort((a, b) => b.valor - a.valor || b.quantidade - a.quantidade)
+        .slice(0, 5)
+    : av.ancoras.map((a) => ({ descricao: a.descricao, quantidade: a.quantidade, valor: 0 }));
 
   // Avisa só quando o próximo lance de fato atravessa a fronteira da faixa — parar no topo
   // da faixa de baixo pode valer mais que cobrir.
@@ -83,6 +114,7 @@ export function montarLinha(
     av,
     alertas,
     unidadesDeclaradas: unidades.valor,
+    unidadesTitulo: declaradas,
     fonteUnidades: unidades.fonte,
     topItens,
     degrau,

@@ -281,6 +281,34 @@ export function esqueletoPriorizado(linhas: LinhaPrioritaria[]): ArquivoPrecos {
   };
 }
 
+/**
+ * As âncoras do lote: os itens de valor agregado alto, detectados **sem preço nenhum**.
+ *
+ * Existe por causa de uma frase do operador: *"se tem alguma máquina ou algum item que tem valor
+ * agregado alto, que sirva de uso para mim ou de venda em outro canal por preço melhor, então faz
+ * sentido para mim"*. É o que justifica furar a regra dos R$ 15 por item.
+ *
+ * `classeValor` e `especificidade` já fazem esse trabalho para ordenar a lista de precificação —
+ * aqui eles são reusados para responder "o que este lote tem de bom?" antes de existir preço.
+ * O `topItens` do estudo não serve: ele ordena por `quantidade × preço`, e sem preço sai tudo zero.
+ */
+export function ancoras(
+  itens: ItemAvaliado[],
+  quantas = 5,
+): { descricao: string; quantidade: number; classe: number; peso: number }[] {
+  return itens
+    .filter((i) => i.faixa !== 'C')
+    .map((i) => ({
+      descricao: i.descricao,
+      quantidade: i.quantidade,
+      classe: classeValor(i.descricao),
+      // Magnitude domina; especificidade separa "Martelete Bosch GBH 2-24D" de "ferramenta".
+      peso: Math.pow(4, classeValor(i.descricao)) * especificidade(i.descricao),
+    }))
+    .sort((a, b) => b.peso - a.peso || b.quantidade - a.quantidade)
+    .slice(0, quantas);
+}
+
 /** Quantos itens (e quanto do volume) ainda estão sem preço. */
 export function cobertura(itens: ItemAvaliado[]): {
   precificados: number;

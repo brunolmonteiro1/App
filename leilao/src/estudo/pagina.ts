@@ -21,7 +21,14 @@ export interface LinhaEstudo {
   lote: Lote;
   av: Avaliacao;
   alertas: string[];
+  /** Reconciliada: soma do manifesto quando existe, senão a do título. */
   unidadesDeclaradas: number | null;
+  /**
+   * A contagem do TÍTULO, sem reconciliar. É a base da regra de R$/item do operador, então o
+   * cartão precisa dela separada — rotular a soma do manifesto como "no título" fazia o número
+   * contradizer o R$/item declarado exibido ao lado (28 contra 283, no lote 11).
+   */
+  unidadesTitulo: number | null;
   fonteUnidades: string;
   topItens: { descricao: string; quantidade: number; valor: number }[];
   /** Preenchido só quando o próximo lance atravessa uma fronteira da tabela de encargos. */
@@ -65,7 +72,7 @@ export function gerarPagina(
 ): string {
   const incompleto = !cfg.freteInformado;
   const semTeto = linhas.filter((l) => l.av.semaforo === 'sem-teto').length;
-  const semCobertura = linhas.filter((l) => l.av.semaforo === 'sem-cobertura').length;
+  const soPelaRegra = linhas.filter((l) => l.av.baseDoTeto === 'regra').length;
   const ignorados = linhas.filter((l) => l.av.semaforo === 'ignorado').length;
   const comTeto = linhas.filter(
     (l) => l.av.semaforo === 'verde' || l.av.semaforo === 'amarelo' || l.av.semaforo === 'vermelho',
@@ -130,6 +137,19 @@ export function gerarPagina(
   .itens{margin:8px 0 0;padding:0;list-style:none;font-size:12px;color:var(--fraco)}
   .itens li{display:flex;gap:6px}
   .alerta{margin-top:7px;font-size:12px;color:#e0a030}
+  /* R$/item é o número que o operador usa para decidir; a cor é a leitura instantânea. */
+  .grade .cpi strong{font-size:16px}
+  .grade .cpi.alvo strong{color:var(--verde)}
+  .grade .cpi.ok strong{color:var(--amarelo)}
+  .grade .cpi.fora strong{color:var(--vermelho)}
+  .grade small{display:block;color:var(--fraco);font-size:10px;font-weight:400}
+  .rot-itens{margin-top:8px;font-size:10px;color:var(--fraco);text-transform:uppercase;
+             letter-spacing:.04em}
+  .ordena{margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+  .ordena span{font-size:11px;color:var(--fraco);text-transform:uppercase;letter-spacing:.04em}
+  .ordena button{padding:5px 10px;border-radius:6px;border:1px solid var(--linha);
+                 background:var(--card);color:var(--txt);font-size:12px;cursor:pointer}
+  .ordena button[aria-pressed=true]{border-color:var(--destaque);color:var(--destaque)}
   .anota{margin-top:8px;font-size:12px;color:var(--fraco)}
   .anota input{background:transparent;border:none;border-bottom:1px dashed var(--linha);
                color:var(--txt);width:96px;font-size:12px;padding:2px}
@@ -148,7 +168,7 @@ export function gerarPagina(
   <div class="meta">
     ${linhas.length} lotes · encerramento a partir de ${horaPregao(evento.encerraEm, evento.fuso)}
     ${evento.prorrogaAte ? ` · prorrogação até ${horaPregao(evento.prorrogaAte, evento.fuso)}` : ''}
-    · lances de <span id="quando">${evento.agora ? horaPregao(evento.agora, evento.fuso) : 'agora'}</span>
+    · <span id="quando">lances de ${evento.agora ? horaPregao(evento.agora, evento.fuso) : 'agora'}</span>
   </div>
   ${
     precosDeExemplo
@@ -157,25 +177,47 @@ export function gerarPagina(
       : ''
   }
   ${
-    incompleto || semTeto || semCobertura || ignorados
+    incompleto || semTeto || soPelaRegra || ignorados
       ? `<div class="aviso">
       ${incompleto ? '<b>Custo incompleto:</b> frete de retirada não informado, então o teto está mais alto do que deveria. ' : ''}
-      ${semTeto ? `<b>${semTeto} lote(s) sem preço nenhum.</b> ` : ''}
-      ${semCobertura ? `<b>${semCobertura} lote(s) com cobertura abaixo de ${pct(cfg.coberturaMinima)}:</b> o teto deles NÃO é exibido de propósito — teto calculado sobre poucos itens sairia baixo e pareceria "lote caro", quando na verdade é "ainda não sei". Precifique um lote inteiro para ele virar verde/amarelo/vermelho de verdade.` : ''}
+      ${semTeto ? `<b>${semTeto} lote(s) sem teto:</b> nem contagem no título nem preço, então não há de onde calcular. ` : ''}
+      ${soPelaRegra ? `<b>${soPelaRegra} lote(s) com teto só pela sua regra de R$/item</b> (custo ÷ itens ≤ R$ ${cfg.regra.custoPorItemMaximo}). Isso já decide, e é o que você usa hoje. Precificar um lote acrescenta a segunda visão — valor de revenda — e aí vale o menor dos dois tetos. ` : ''}
       ${ignorados ? `<b>${ignorados} lote(s) ignorado(s)</b> por categoria (${cfg.categoriasIgnoradas.join(', ')}) — ficam na lista para você reconhecê-los quando o leiloeiro chamar, mas sem teto. ` : ''}
       ${comTeto ? `<b>${comTeto} lote(s) com teto utilizável.</b>` : ''}
     </div>`
       : ''
   }
   <input class="busca" id="busca" placeholder="Filtrar por número de lote ou descrição…">
+  <div class="ordena">
+    <span>ordenar</span>
+    <button data-ord="numero" aria-pressed="true">nº do lote (ordem de chamada)</button>
+    <button data-ord="cpi" aria-pressed="false">R$/item — mais barato primeiro</button>
+    <button data-ord="caixa" aria-pressed="false">mais caixa fechada primeiro</button>
+    <button data-ord="lucro" aria-pressed="false">maior lucro estimado</button>
+  </div>
 </header>
 <main id="lista">
-${linhas.map((l) => linhaHtml(l, evento.fuso)).join('\n')}
+${linhas.map((l) => linhaHtml(l, evento.fuso, cfg)).join('\n')}
 </main>
 <footer>
-  <p><b>Como usar:</b> o número grande é o maior lance que ainda cabe no seu teto seguro.
-  Verde cobre, amarelo é a faixa entre o teto seguro (40% do valor online) e o máximo (60%),
-  vermelho é para parar. O lance você dá no BidTV — esta página não dá lance nenhum.</p>
+  <p><b>Como usar:</b> o número grande é o maior lance que ainda cabe no teto. O lance você dá
+  no BidTV — esta página não dá lance nenhum.</p>
+  <p><b>De onde vem o teto.</b> Há dois caminhos, e cada linha diz qual está valendo:</p>
+  <ul>
+    <li><b>Pela sua regra</b> — custo total ÷ itens do título ≤
+    R$ ${cfg.regra.custoPorItemMaximo}. Não precisa de preço nenhum, então existe desde o primeiro
+    segundo. Verde é quando o lance ainda cabe no seu alvo de R$ ${cfg.regra.custoPorItemAlvo}/item;
+    amarelo é entre o alvo e o máximo.</li>
+    <li><b>Por valor de revenda</b> — Σ(preço × quantidade) × 40–60% ÷ múltiplo da categoria.
+    Exige ter precificado o lote. Mais preciso, e mais trabalhoso.</li>
+    <li><b>Os dois</b> — vale o <b>menor</b>. Eles respondem perguntas diferentes, e a restrição
+    que aperta primeiro é a que manda.</li>
+  </ul>
+  <p><b>R$/item declarado × R$/item nomeado.</b> A primeira é a sua conta: custo ÷ itens do
+  título. A segunda desconta o que vem em <b>caixa de "diversos"</b> sem item nomeado, e conta kit
+  fechado (faqueiro de 30 peças, jogo de panelas de 10) como <b>1 produto</b>, que é o que ele é.
+  <b>Quando as duas se afastam, é aí que o lote infla.</b> O título não mente — ele conta o
+  conteúdo das caixas; o que ele não diz é quanto do lote vem sem nome.</p>
   <p><b>Custo</b> = lance × ${(1 + cfg.encargos.percentual).toFixed(2).replace('.', ',')}
   (leiloeiro 5% + buyer's premium 5%) <b>+ Encargos Adm e Fee Plataforma, que são TABELADOS
   por faixa de lance</b> — do Edital, conferido no estimador do site.</p>
@@ -197,6 +239,35 @@ ${linhas.map((l) => linhaHtml(l, evento.fuso)).join('\n')}
   <p>Preço estimado é chute informado, não cotação. A decisão de lance é sua.</p>
 </footer>
 <script>
+  // Ordenação local: reordena os cartões no DOM. Sem rede, sem recalcular teto — os números
+  // já estão no cartão. O padrão é o número do lote, que é a ordem em que o leiloeiro chama.
+  const lista = document.getElementById('lista');
+  const botoes = [...document.querySelectorAll('.ordena button')];
+  botoes.forEach((b) => b.addEventListener('click', () => {
+    botoes.forEach((o) => o.setAttribute('aria-pressed', String(o === b)));
+    const chave = b.dataset.ord;
+    const cartoes = [...lista.querySelectorAll('.lote')];
+    const num = (el, attr) => {
+      const v = parseFloat(el.dataset[attr]);
+      return Number.isFinite(v) ? v : null;
+    };
+    cartoes.sort((x, y) => {
+      if (chave === 'numero') return num(x, 'numero') - num(y, 'numero');
+      // Lote ignorado, encerrado ou sem teto afunda em TODA ordenação. Sem isto, ordenar por
+      // R$/item punha um lote de cosméticos no topo — categoria que o operador não trabalha,
+      // aparecendo como a melhor oportunidade do evento.
+      const fx = num(x, 'fora'), fy = num(y, 'fora');
+      if (fx !== fy) return fx - fy;
+      // Lote sem o dado vai para o fim, em vez de fingir ser o melhor.
+      const a = num(x, chave), b2 = num(y, chave);
+      if (a === null && b2 === null) return num(x, 'numero') - num(y, 'numero');
+      if (a === null) return 1;
+      if (b2 === null) return -1;
+      return chave === 'cpi' ? a - b2 : b2 - a;
+    });
+    cartoes.forEach((c) => lista.appendChild(c));
+  }));
+
   // Filtro local: nada de rede, só esconder linha.
   const busca = document.getElementById('busca');
   busca.addEventListener('input', () => {
@@ -212,7 +283,7 @@ ${refreshSegundos ? scriptRefresh(evento, refreshSegundos) : '  // Página inert
 `;
 }
 
-function linhaHtml(l: LinhaEstudo, fuso: FusoPayload): string {
+function linhaHtml(l: LinhaEstudo, fuso: FusoPayload, cfg: Config): string {
   const { lote: t, av } = l;
   const cor = av.semaforo;
   const rotulo =
@@ -222,30 +293,45 @@ function linhaHtml(l: LinhaEstudo, fuso: FusoPayload): string {
         ? 'sem preço ainda'
         : cor === 'ignorado'
         ? 'fora do escopo'
-        : cor === 'sem-cobertura'
-          ? `cobertura ${pct(av.cobertura)}`
-          : av.lanceSugerido === null
-            ? 'não cobre'
-            : 'pode ir até';
+        : av.lanceSugerido === null
+          ? 'não cobre'
+          : 'pode ir até';
 
   const valor =
     cor === 'encerrado' || cor === 'sem-teto'
       ? '—'
       : cor === 'ignorado'
         ? 'IGNORADO'
-        : cor === 'sem-cobertura'
-        ? 'PRECIFIQUE'
         : av.lanceSugerido === null
           ? 'PARE'
           : brl(av.lanceSugerido);
 
   const busca = `${t.numero} ${t.titulo}`.toLowerCase();
 
+  // Procedência do teto. O operador precisa saber se aquele número veio da regra de R$/item dele
+  // (existe sempre) ou do valor de revenda (exige preço) — são confianças diferentes.
+  const PROCEDENCIA: Record<string, string> = {
+    regra: `pela sua regra: até ${brl(cfg.regra.custoPorItemMaximo)}/item × ${av.divisorDaRegra} itens`,
+    valor: 'por valor de revenda dos itens',
+    ambos: 'regra e valor — vale o menor dos dois',
+    nenhum: '',
+  };
+
+  // O contraste entre as duas bases É o produto: onde elas se afastam, o lote infla.
+  const cpi = av.custoPorItemTitulo;
+  const cpn = av.custoPorItemNomeado;
+  const dentroDaRegra = cpi !== null && cpi <= cfg.regra.custoPorItemMaximo;
+  const noAlvo = cpi !== null && cpi <= cfg.regra.custoPorItemAlvo;
+  const afastadas = cpi !== null && cpn !== null && cpn > cpi * 1.25;
+
   // Os tetos vão no DOM porque o refresh repinta contra eles sem recalcular nada:
   // teto não se move durante o pregão, só o lance.
   return `<article class="lote ${cor}" data-cor="${cor}" data-offer="${t.offerId}"
   data-numero="${t.numero}" data-busca="${esc(busca)}"
-  data-teto-seguro="${av.tetoSeguro.toFixed(2)}" data-teto-maximo="${av.tetoMaximo.toFixed(2)}">
+  data-teto-seguro="${av.tetoOperante.toFixed(2)}" data-teto-maximo="${av.tetoMaximo.toFixed(2)}"
+  data-cpi="${cpi ?? 9999}" data-caixa="${av.fracaoEmCaixa.toFixed(3)}"
+  data-fora="${cor === 'ignorado' || cor === 'encerrado' || cor === 'sem-teto' ? '1' : '0'}"
+  data-lucro="${av.lucroEstimado ?? ''}">
   <div>
     <div class="num">Lote ${t.numero}<span>${esc(av.categoria)} · ${av.multiplo.toFixed(1)}x · perda ${pct(av.perda)}</span></div>
     <div class="tit">${esc(t.titulo)}</div>
@@ -256,22 +342,43 @@ function linhaHtml(l: LinhaEstudo, fuso: FusoPayload): string {
       <div><b>Custo se levar</b> ${brl(av.custoAtual.total)}
         <small>+${pct(av.custoAtual.overhead)}</small></div>
       ${
-        cor === 'ignorado'
+        cpi === null
           ? ''
-          : cor === 'sem-cobertura' || cor === 'sem-teto'
-          ? `<div><b>Falta precificar</b> ${av.unidadesSemPreco} un efetivas</div>`
-          : `<div><b>Teto seguro</b> ${brl(av.tetoSeguro)}</div>
-      <div><b>Teto máximo</b> ${brl(av.tetoMaximo)}</div>`
+          : `<div class="cpi ${noAlvo ? 'alvo' : dentroDaRegra ? 'ok' : 'fora'}">
+        <b>R$/item declarado</b> <strong>${cpi.toFixed(2)}</strong>
+        <small>sua regra: até ${cfg.regra.custoPorItemMaximo}</small></div>`
       }
-      <div><b>Unidades</b> ${l.unidadesDeclaradas ?? '?'} decl.
-        · <strong>${av.unidadesEfetivas} efet.</strong>
-        ${av.volumeBazar ? ` · ${av.volumeBazar} volume` : ''}</div>
-      <div><b>Custo/un efetiva</b> ${brl(av.custoPorUnidadeEfetiva)}</div>
+      ${
+        cpn === null
+          ? ''
+          : `<div class="${afastadas ? 'cpi fora' : ''}"><b>R$/item nomeado</b> ${cpn.toFixed(2)}
+        <small>${afastadas ? 'muito acima do declarado' : 'bate com o declarado'}</small></div>`
+      }
+      ${
+        cor === 'ignorado' || cor === 'sem-teto'
+          ? ''
+          : `<div><b>Teto${av.baseDoTeto === 'ambos' ? ' (o menor)' : ''}</b> ${brl(av.tetoOperante)}
+        <small>${PROCEDENCIA[av.baseDoTeto] ?? ''}</small></div>`
+      }
+      ${
+        av.baseDoTeto === 'ambos' || av.baseDoTeto === 'valor'
+          ? `<div><b>Teto por valor</b> ${brl(av.tetoSeguro)} – ${brl(av.tetoMaximo)}</div>`
+          : ''
+      }
+      <div><b>Composição</b> ${l.unidadesTitulo ?? l.unidadesDeclaradas ?? '?'} no título
+        · <strong>${av.itensNomeados} nomeados</strong>
+        ${av.volumeEmCaixa ? ` · ${av.volumeEmCaixa} em caixa fechada (${pct(av.fracaoEmCaixa)})` : ''}</div>
+      ${
+        av.lucroEstimado !== null
+          ? `<div><b>Lucro estimado</b> ${brl(av.lucroEstimado)} <small>margem ${av.margemEstimada?.toFixed(2)}x</small></div>`
+          : ''
+      }
       ${av.concentracao > 0.6 ? `<div><b>Concentração</b> ${pct(av.concentracao)} ⚠</div>` : ''}
     </div>
     ${
       l.topItens.length
-        ? `<ul class="itens">${l.topItens
+        ? `<div class="rot-itens">${l.topItens.some((i) => i.valor > 0) ? 'itens de maior valor' : 'âncoras — o que este lote tem de bom'}</div>
+           <ul class="itens">${l.topItens
             .map((i) => `<li><span>${i.quantidade}×</span> ${esc(i.descricao)}</li>`)
             .join('')}</ul>`
         : ''
@@ -338,9 +445,10 @@ function scriptRefresh(evento: Evento, segundos: number): string {
           if (acao) acao.className = 'acao ' + cor;
         }
       }
-      marcar(new Date().toLocaleTimeString('pt-BR').slice(0, 5));
+      marcar('lances de ' + new Date().toLocaleTimeString('pt-BR').slice(0, 5));
     } catch (e) {
-      marcar('sem conexão');
+      // O texto tem de ser uma frase inteira: "lances de sem conexão" não se entende.
+      marcar('SEM CONEXÃO — os lances na tela podem estar velhos');
     }
   }
   function marcar(txt) {

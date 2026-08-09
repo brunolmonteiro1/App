@@ -96,6 +96,17 @@ export function gerarPaginaPrecificar(auctionId: number): string {
      inteira interceptando todo clique — a tela fica morta sem nada aparecer errado.
      Pego em navegador real: nenhum lote da lista era clicável. */
   #modal[hidden] { display: none; }
+  #modalRegra { position: fixed; inset: 0; background: rgba(0,0,0,.62); display: flex;
+    align-items: flex-start; justify-content: center; padding: 40px 16px; overflow-y: auto;
+    z-index: 11; }
+  #modalRegra[hidden] { display: none; }
+  #modalRegra .caixa { background: var(--caixa); border: 1px solid var(--linha);
+    border-radius: 10px; padding: 20px 22px; max-width: 640px; width: 100%; }
+  #modalRegra h2 { font-size: 16px; margin: 0 0 10px; }
+  #modalRegra label { display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; font-size: 13.5px; margin-bottom: 6px; }
+  #modalRegra label input { width: 110px; }
+  #modalRegra label span.rot { color: var(--fraco); font-size: 11px; }
   #modal .caixa { background: var(--caixa); border: 1px solid var(--linha); border-radius: 10px;
     padding: 20px 22px; max-width: 720px; width: 100%; }
   #modal h2 { font-size: 16px; margin: 0 0 10px; }
@@ -113,7 +124,8 @@ export function gerarPaginaPrecificar(auctionId: number): string {
   <h1>Precificar</h1>
   <span class="meta" id="meta">carregando…</span>
   <span class="meta"><a href="estudo.html">← estudo</a></span>
-  <button id="abrirIA" style="margin-left:auto">Precificar com IA (baixar / subir JSON)</button>
+  <button id="abrirRegra" style="margin-left:auto">Minha regra e venda média</button>
+  <button id="abrirIA">Precificar com IA (baixar / subir JSON)</button>
 </header>
 
 <div class="layout">
@@ -133,14 +145,57 @@ export function gerarPaginaPrecificar(auctionId: number): string {
 </div>
 
 <div id="painel">
+  <div class="campo"><span class="rot">R$/item declarado</span><span class="val" id="vCpi">—</span></div>
+  <div class="campo"><span class="rot">R$/item nomeado</span><span class="val" id="vCpn">—</span></div>
+  <div class="campo"><span class="rot">teto (limite duro)</span><span class="val" id="vSeguro">—</span></div>
   <div class="campo"><span class="rot">valor online</span><span class="val" id="vOnline">—</span></div>
   <div class="campo"><span class="rot">cobertura</span><span class="val" id="vCob">—</span></div>
-  <div class="campo"><span class="rot">teto seguro</span><span class="val" id="vSeguro">—</span></div>
-  <div class="campo"><span class="rot">teto máximo</span><span class="val" id="vMax">—</span></div>
   <div class="campo"><span class="rot">lance sugerido</span><span class="val" id="vLance">—</span></div>
   <button class="primario" id="salvar" disabled>Salvar preços</button>
   <button id="regerar">Atualizar estudo</button>
   <span id="recado"></span>
+</div>
+
+<div id="modalRegra" hidden>
+  <div class="caixa">
+    <h2>Minha regra e venda média</h2>
+    <p class="ajuda">
+      Estes números são <strong>seus</strong>, não do programa, e ficam gravados no servidor. São o
+      que faz a análise funcionar <em>sem</em> precificar item por item.
+    </p>
+    <div class="passo">
+      <strong>1. Custo máximo por item</strong>
+      <p class="ajuda">
+        Sua regra: custo total do lote ÷ itens declarados no anúncio. Você disse que não passa de
+        R$ 15, e comprou entre R$ 10 e 14 nos últimos leilões. O <em>alvo</em> é a fronteira do
+        verde; o <em>máximo</em> é onde vira vermelho.
+      </p>
+      <label>alvo (verde até aqui) R$ <input type="text" id="rAlvo" inputmode="decimal"></label>
+      <label>máximo (acima disto, PARE) R$ <input type="text" id="rMax" inputmode="decimal"></label>
+    </div>
+    <div class="passo">
+      <strong>2. Venda média por peça útil, por categoria</strong>
+      <p class="ajuda">
+        Quanto sai <strong>uma peça</strong>, em média, no seu bazar ou no dia de outlet — não o
+        preço de mercado online. Com isso eu estimo faturamento e lucro dos 61 lotes sem pesquisar
+        preço de nada. <strong>Deixe em branco o que não souber</strong>: categoria vazia
+        simplesmente não mostra lucro, em vez de mostrar um número inventado.
+      </p>
+      <div id="vendas"></div>
+    </div>
+    <div class="passo">
+      <strong>3. Perda por categoria</strong>
+      <p class="ajuda">
+        Fração que você descarta: avaria, faltando peça, desmontado que não remonta, vencido.
+        <strong>Os valores atuais são palpite meu</strong> (10% a 40%) — você tem anos de
+        histórico, e é a calibragem que mais move o teto. Em fração: 0,25 = 25%.
+      </p>
+      <div id="perdas"></div>
+    </div>
+    <button class="primario" id="salvarRegra">Salvar e atualizar estudo</button>
+    <button id="fecharRegra">Fechar</button>
+    <span class="ajuda" id="recadoRegra"></span>
+  </div>
 </div>
 
 <div id="modal" hidden>
@@ -185,13 +240,13 @@ var brl = function (v) {
 };
 var pct = function (v) { return v === null || v === undefined ? '—' : Math.round(v * 100) + '%'; };
 var CORES = { verde: 'verde', amarelo: 'amarelo', vermelho: 'vermelho',
-  'sem-cobertura': 'azul', 'sem-teto': 'cinza', ignorado: 'cinza', encerrado: 'cinza' };
+  'sem-teto': 'cinza', ignorado: 'cinza', encerrado: 'cinza' };
 var ROTULOS = { verde: 'PODE', amarelo: 'ATENÇÃO', vermelho: 'PARE',
-  'sem-cobertura': 'PRECIFIQUE', 'sem-teto': 'sem preço', ignorado: 'ignorado',
-  encerrado: 'encerrado' };
+  'sem-teto': 'sem contagem', ignorado: 'ignorado', encerrado: 'encerrado' };
 
 var lotes = [];
 var atual = null;      // { numero, itens: [...], av: {...} }
+var filtro = 'todos';  // todos | c | sempreco
 var pendente = {};     // chave -> { preco, faixa } ainda não salvo
 var simulando = null;
 
@@ -230,10 +285,18 @@ function pintarLista() {
     div.appendChild(el('div', { class: 'bola ' + (CORES[l.semaforo] || 'cinza') }));
     var col = el('div');
     col.appendChild(el('div', { class: 'num' }, 'Lote ' + l.numero + ' · ' + ROTULOS[l.semaforo]));
-    var sub = l.itens + ' itens';
-    if (l.pendentes > 0) sub += ' · faltam ' + l.pendentes;
-    if (l.custoPorUnidadeEfetiva) sub += ' · ' + brl(l.custoPorUnidadeEfetiva) + '/un';
+    // A régua do operador vem primeiro: R$ por item declarado, a conta que ele faz de cabeça.
+    var sub = l.custoPorItemTitulo
+      ? 'R$ ' + l.custoPorItemTitulo.toFixed(2) + '/item declarado'
+      : l.itens + ' itens';
+    if (l.custoPorItemNomeado && l.custoPorItemTitulo && l.custoPorItemNomeado > l.custoPorItemTitulo * 1.25) {
+      sub += ' · R$ ' + l.custoPorItemNomeado.toFixed(2) + ' real';
+    }
     col.appendChild(el('div', { class: 'sub' }, sub));
+    var sub2 = l.itens + ' itens';
+    if (l.fracaoEmCaixa > 0.05) sub2 += ' · ' + Math.round(l.fracaoEmCaixa * 100) + '% em caixa fechada';
+    if (l.pendentes > 0) sub2 += ' · faltam ' + l.pendentes + ' sem preço';
+    col.appendChild(el('div', { class: 'sub' }, sub2));
     col.appendChild(el('div', { class: 'sub' }, l.titulo.slice(0, 52)));
     div.appendChild(col);
     div.onclick = function () { abrir(l.numero); };
@@ -283,6 +346,32 @@ function pintarTabela() {
     pct(atual.perda) + ')');
   box.appendChild(sub);
 
+  // Triagem grosseira: ele pediu explicitamente "só quero corrigir os casos grosseiros". O filtro
+  // mostra o que a heurística jogou em C ordenado por quanto aquilo pesa, e o conserto é um
+  // clique no seletor de faixa — nenhum preço, nenhuma pesquisa.
+  var barra = el('div', { class: 'ordena' });
+  barra.appendChild(el('span', null, 'mostrar'));
+  [['todos', 'todos os itens'], ['c', 'só o que o programa jogou como irrisório'],
+   ['sempreco', 'só o que falta precificar']].forEach(function (par) {
+    var b = el('button', { 'data-filtro': par[0], 'aria-pressed': String(filtro === par[0]) }, par[1]);
+    b.onclick = function () { filtro = par[0]; pintarTabela(); };
+    barra.appendChild(b);
+  });
+  box.appendChild(barra);
+
+  var visiveis = atual.itens.filter(function (i) {
+    if (filtro === 'c') return i.faixa === 'C' && !i.ignorado;
+    if (filtro === 'sempreco') return i.faixa !== 'C' && (i.preco === null || i.preco === undefined);
+    return true;
+  });
+  if (filtro === 'c') {
+    // Ordena por peso: quantidade primeiro, porque é o que mais move o R$/item ao voltar para A/B.
+    visiveis = visiveis.slice().sort(function (a, b) { return b.quantidade - a.quantidade; });
+    box.appendChild(el('p', { class: 'ajuda' },
+      'Estes valem ZERO no cálculo. Se o programa errou, mude a faixa para A ou B — não precisa ' +
+      'de preço. Os de maior quantidade vêm primeiro, porque são os que mais mudam o custo por item.'));
+  }
+
   var tab = el('table');
   var thead = el('thead');
   var tr = el('tr');
@@ -293,7 +382,7 @@ function pintarTabela() {
   tab.appendChild(thead);
 
   var tb = el('tbody');
-  atual.itens.forEach(function (it) {
+  visiveis.forEach(function (it) {
     var linha = el('tr', it.faixa === 'C' ? { class: 'c' } : null);
     var tdItem = el('td');
     tdItem.appendChild(document.createTextNode(it.descricao));
@@ -365,12 +454,15 @@ function simular() {
 
 function pintarPainel(av) {
   if (!av) return;
+  var num = function (v) { return v === null || v === undefined ? '—' : 'R$ ' + v.toFixed(2); };
+  document.getElementById('vCpi').textContent = num(av.custoPorItemTitulo);
+  document.getElementById('vCpn').textContent = num(av.custoPorItemNomeado);
   document.getElementById('vOnline').textContent = brl(av.valorOnline);
   document.getElementById('vCob').textContent =
     pct(av.cobertura) + ' un / ' + pct(av.coberturaLinhas) + ' linhas';
-  var mostrarTeto = av.semaforo === 'verde' || av.semaforo === 'amarelo' || av.semaforo === 'vermelho';
-  document.getElementById('vSeguro').textContent = mostrarTeto ? brl(av.tetoSeguro) : '—';
-  document.getElementById('vMax').textContent = mostrarTeto ? brl(av.tetoMaximo) : '—';
+  var seg = document.getElementById('vSeguro');
+  seg.textContent = av.tetoOperante ? brl(av.tetoOperante) : '—';
+  seg.title = 'base: ' + av.baseDoTeto;
   var vl = document.getElementById('vLance');
   vl.textContent = av.lanceSugerido ? brl(av.lanceSugerido) : ROTULOS[av.semaforo] || '—';
   vl.style.color = 'var(--' + (CORES[av.semaforo] === 'azul' ? 'azul' : CORES[av.semaforo]) + ')';
@@ -407,6 +499,70 @@ document.getElementById('regerar').onclick = function () {
       recado('estudo atualizado: ' + j.comTeto + ' lote(s) com teto utilizável');
     })
     .catch(function (e) { recado(e.message, true); })
+    .then(function () { b.disabled = false; });
+};
+
+/* ---------- os parâmetros do operador ---------- */
+
+var modalRegra = document.getElementById('modalRegra');
+
+document.getElementById('abrirRegra').onclick = function () {
+  modalRegra.hidden = false;
+  pedir('api/regra').then(function (j) {
+    document.getElementById('rAlvo').value = String(j.regra.custoPorItemAlvo).replace('.', ',');
+    document.getElementById('rMax').value = String(j.regra.custoPorItemMaximo).replace('.', ',');
+    campos('vendas', j.rotulos, j.vendaMediaPorItemUtil, 'v-', 'R$ por peça');
+    campos('perdas', j.rotulos, j.perdaPorCategoria, 'p-', 'fração 0–1');
+    document.getElementById('recadoRegra').textContent = 'gravado em ' + j.arquivo;
+  }).catch(function (e) {
+    document.getElementById('recadoRegra').textContent = 'erro: ' + e.message;
+  });
+};
+document.getElementById('fecharRegra').onclick = function () { modalRegra.hidden = true; };
+modalRegra.onclick = function (e) { if (e.target === modalRegra) modalRegra.hidden = true; };
+
+function campos(alvo, rotulos, valores, prefixo, dica) {
+  var box = document.getElementById(alvo);
+  box.textContent = '';
+  Object.keys(rotulos).forEach(function (cat) {
+    var lab = el('label');
+    var txt = el('span', null, rotulos[cat]);
+    var inp = el('input', { type: 'text', inputmode: 'decimal', id: prefixo + cat, placeholder: dica });
+    var v = valores[cat];
+    if (v !== null && v !== undefined) inp.value = String(v).replace('.', ',');
+    lab.appendChild(txt);
+    lab.appendChild(inp);
+    box.appendChild(lab);
+  });
+}
+
+document.getElementById('salvarRegra').onclick = function () {
+  var b = this;
+  b.disabled = true;
+  var rec = document.getElementById('recadoRegra');
+  rec.textContent = 'gravando…';
+  var venda = {}, perda = {};
+  [].forEach.call(document.querySelectorAll('[id^=v-]'), function (i) {
+    // String vazia vira null de propósito: é assim que ele apaga um valor e o lucro some.
+    venda[i.id.slice(2)] = i.value.trim() === '' ? null : i.value.trim();
+  });
+  [].forEach.call(document.querySelectorAll('[id^=p-]'), function (i) {
+    if (i.value.trim() !== '') perda[i.id.slice(2)] = i.value.trim();
+  });
+  pedir('api/regra', {
+    regra: {
+      custoPorItemAlvo: document.getElementById('rAlvo').value,
+      custoPorItemMaximo: document.getElementById('rMax').value,
+    },
+    vendaMediaPorItemUtil: venda,
+    perdaPorCategoria: perda,
+  })
+    .then(function () { return pedir('api/estudo', {}); })
+    .then(function (j) {
+      rec.textContent = 'salvo · estudo atualizado: ' + j.comTeto + ' lote(s) com teto';
+      return carregarLista().then(function () { if (atual) return abrirSilencioso(atual.numero); });
+    })
+    .catch(function (e) { rec.textContent = 'erro: ' + e.message; })
     .then(function () { b.disabled = false; });
 };
 

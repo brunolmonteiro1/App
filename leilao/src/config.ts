@@ -113,6 +113,40 @@ export interface Config {
    */
   excecoesIgnorados: string[];
   categorias: Record<Categoria, ConfigCategoria>;
+  /**
+   * A regra de bolso do operador, e o caminho de teto que **não depende de precificar item**.
+   *
+   * Palavras dele: *"eu divido valor total final pelo total de itens na descrição. Não costuma
+   * passar de 15 reais por item. Os últimos leilões comprei com custo por item entre 10 e 14."*
+   *
+   * É a camada 0 da análise, e a que funciona no dia do pregão: 23 dos 54 lotes deste evento já
+   * estão dentro dela, contra zero tetos pelo caminho do valor de revenda.
+   */
+  regra: {
+    /** Limite: R$ de custo total por item. Acima disto ele não compra. */
+    custoPorItemMaximo: number;
+    /** Onde ele costuma comprar. Vira a fronteira verde/amarelo. */
+    custoPorItemAlvo: number;
+    /**
+     * Divisor do custo por item.
+     *
+     * `titulo` é a regra literal dele, e é a base em que os R$ 10–14 estão calibrados — o painel
+     * precisa reproduzir a conta que ele faz de cabeça. `nomeados` desconta caixa de diversos e
+     * peça dentro de embalagem; aparece ao lado, e o contraste entre os dois é o produto.
+     */
+    base: 'titulo' | 'nomeados' | 'uteis';
+    /** Acima desta fração em caixa fechada, o lote ganha alerta: é outro tipo de risco. */
+    fracaoEmCaixaGrave: number;
+  };
+  /**
+   * Camada 1: quanto sai UMA peça útil no bazar, por categoria. É o que permite estimar lucro nos
+   * 61 lotes sem pesquisar preço de 1.900 descrições — um número por categoria em vez de mil.
+   *
+   * Nasce tudo `null` de propósito. O operador respondeu "depende muito da categoria" e não deu
+   * valores; **número inventado aqui viraria lucro inventado**, e lucro inventado vira lance real.
+   * Enquanto for null, o estudo não mostra lucro nenhum.
+   */
+  vendaMediaPorItemUtil: Record<Categoria, number | null>;
   /** Custo de retirada por lote. Retirada é em Embu das Artes-SP. */
   freteporLote: number;
   /** Marca o custo como incompleto enquanto o frete não for informado. */
@@ -178,6 +212,23 @@ export const CONFIG_PADRAO: Config = {
     // 'porta shampoo' contém 'shampoo'.
     'saboneteira', 'porta escova', 'escova de dente', 'nécessaire', 'necessaire',
   ],
+  regra: {
+    custoPorItemMaximo: 15,
+    custoPorItemAlvo: 12,
+    base: 'titulo',
+    fracaoEmCaixaGrave: 0.35,
+  },
+  vendaMediaPorItemUtil: {
+    vestuario: null,
+    utensilios: null,
+    cosmeticos: null,
+    eletroportateis: null,
+    ferramentas: null,
+    moveis: null,
+    automotivas: null,
+    bebidas: null,
+    outros: null,
+  },
   freteporLote: 0,
   freteInformado: false,
   categorias: {

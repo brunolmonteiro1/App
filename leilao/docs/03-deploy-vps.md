@@ -149,7 +149,21 @@ docker compose up -d painel
 docker compose logs painel
 ```
 
-### 6. Precificar — é o passo que faz o teto existir
+### 6. Ajuste a sua regra — 2 minutos, e destrava o resto
+
+Abra `http://187.77.63.219:8080/precificar.html` e clique em **Minha regra e venda média**.
+
+1. **Custo por item**: alvo R$ 12 (fronteira do verde) e máximo R$ 15 (onde vira vermelho). Já
+   vem assim, do seu histórico de R$ 10–14.
+2. **Venda média por peça útil, por categoria** — 8 campos. É o que faz o lucro estimado
+   aparecer nos 61 lotes sem pesquisar preço de nada. Em branco = sem lucro exibido, nunca número
+   inventado.
+3. **Perda por categoria** — os valores atuais são palpite meu (10% a 40%). É a calibragem que
+   mais move o teto.
+
+Grava em `dados/regra.json` e o `gerar` do cron passa a respeitar.
+
+### 7. Precificar item por item — opcional, é a segunda visão
 
 Abra `http://187.77.63.219:8080/precificar.html` e faça login.
 
@@ -173,7 +187,7 @@ casou, do que não casou e do que ficou suspeito. Item que a IA inventou é reje
 Comece por um lote (30–60 itens) para conferir a qualidade dos preços antes de mandar o evento
 todo.
 
-### 7. Já tem um `precos.json` na mão?
+### 8. Já tem um `precos.json` na mão?
 
 Os preços moram num named volume, não em pasta do host. Para carregar um arquivo existente:
 
@@ -188,7 +202,7 @@ E para tirar cópia de segurança — vale fazer, é o trabalho acumulado:
 docker compose cp painel:/app/dados/precos.json ./precos-backup-$(date +%F).json
 ```
 
-### 8. Cron do host
+### 9. Cron do host
 
 ```bash
 crontab -e
@@ -236,7 +250,7 @@ reboot && sleep 60 && docker compose ps               # painel de pé por restar
 mas sem acesso ao daemon. Você já rodou o build na VPS e ele passou (`✔ Image leilao:local
 Built`), o que cobre justamente essa lacuna.
 
-O que **foi** verificado de fato: os 243 testes, o servidor estático (traversal
+O que **foi** verificado de fato: os 276 testes, o servidor estático (traversal
 percent-encoded incluído), toda a API da tela de precificação contra o manifesto real do lote 3,
 os três modos de acesso (loopback, senha certa, senha errada), e a própria tela em navegador
 real — 61 lotes na lista, 59 itens na tabela, preço digitado e teto recalculado.

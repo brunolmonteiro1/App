@@ -31,6 +31,7 @@ import { montarLinha } from './estudo/montar.ts';
 import { gerarPaginaPrecificar } from './estudo/precificar.ts';
 import { gravarSnapshot, NOME_SNAPSHOT, type Snapshot } from './estudo/snapshot.ts';
 import { gravarPrecos, lerPrecos, mesclar } from './precos/arquivo.ts';
+import { aplicarRegra, lerRegra, NOME_REGRA } from './precos/regra.ts';
 import { exportar, importar } from './precos/troca.ts';
 
 const FIXTURE = new URL('../recon/fixtures/evento-790754-offers.json', import.meta.url).pathname;
@@ -99,7 +100,10 @@ async function comandoBaixar(): Promise<void> {
 }
 
 async function comandoEstudo(): Promise<void> {
-  const cfg = { ...CONFIG_PADRAO };
+  // A regra e a venda média por categoria vêm do arquivo que o painel grava. Sem ele, vale o
+  // padrão do config.ts — o `gerar` do cron passa a respeitar o que o operador ajustou na tela.
+  const caminhoRegra = resolve(arg('regra') ?? join(dirname(resolve(arg('precos') ?? 'precos.json')), NOME_REGRA));
+  const cfg = aplicarRegra(await lerRegra(caminhoRegra), CONFIG_PADRAO);
   const frete = arg('frete');
   if (frete !== undefined) {
     cfg.freteporLote = Number(frete);
@@ -157,13 +161,20 @@ async function comandoEstudo(): Promise<void> {
   // internamente e ainda assim não oferecê-lo por falta de cobertura.
   const conta = (s: string) => linhas.filter((l) => l.av.semaforo === s).length;
   const utilizavel = conta('verde') + conta('amarelo') + conta('vermelho');
+  const porBase = (b: string) => linhas.filter((l) => l.av.baseDoTeto === b).length;
+  const dentroDaRegra = linhas.filter(
+    (l) => l.av.custoPorItemTitulo !== null && l.av.custoPorItemTitulo <= cfg.regra.custoPorItemMaximo,
+  ).length;
   console.log(`\nestudo gerado: ${saida}`);
   console.log(`  ${linhas.length} lotes · ${utilizavel} com teto utilizável`);
-  console.log(`  ${conta('sem-cobertura')} com cobertura abaixo de ${(cfg.coberturaMinima * 100).toFixed(0)}% (teto omitido de propósito) · ${conta('sem-teto')} sem preço nenhum`);
-  if (utilizavel === 0) {
-    console.log('\n  nenhum teto utilizável ainda. Rode `shortlist` e precifique UM lote inteiro:');
-    console.log('    npm run cli -- shortlist --fixture --frete 150');
-    console.log('    npm run cli -- precos --lote <n do topo da shortlist> --fixture');
+  console.log(`  teto pela sua regra de R$/item: ${porBase('regra')} · por valor de revenda: ${porBase('valor')} · pelos dois: ${porBase('ambos')}`);
+  console.log(`  ${dentroDaRegra} lote(s) com custo/item declarado <= R$ ${cfg.regra.custoPorItemMaximo} no lance atual`);
+  const emCaixa = linhas.filter((l) => l.av.fracaoEmCaixa >= cfg.regra.fracaoEmCaixaGrave).length;
+  if (emCaixa) console.log(`  ${emCaixa} lote(s) com mais de ${(cfg.regra.fracaoEmCaixaGrave * 100).toFixed(0)}% do volume em caixa de "diversos"`);
+  const semVenda = Object.values(cfg.vendaMediaPorItemUtil).every((v) => v == null);
+  if (semVenda) {
+    console.log('\n  lucro estimado NÃO calculado: falta o preço médio de venda por peça útil, por');
+    console.log('  categoria. É um número por categoria (8 no total), não preço por item.');
   }
   if (!cfg.freteInformado) console.log('  custo marcado INCOMPLETO: passe --frete <valor> para fechar');
   if (refresh) console.log(`  refresh ligado: a página busca lances a cada ${refresh}s`);
