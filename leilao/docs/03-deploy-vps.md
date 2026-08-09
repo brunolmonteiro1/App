@@ -26,34 +26,52 @@ Por isso o mapeamento é `"127.0.0.1:8080:8080"` e o acesso é túnel SSH. O
 
 ## Passo a passo
 
-### 1. VPS — Docker oficial
+Escrito para o servidor real em uso: **Ubuntu 24.04 LTS, operado como `root`**, com a convenção
+de um clone deste monorepo por finalidade em **`/opt/<nome>/App`** (já existem
+`/opt/vosz/App`, `/opt/casa-rocha/App`, `/opt/mission-control/repo`).
 
-O Docker do `apt` do Ubuntu costuma ser antigo e não traz `docker compose` v2.
+### 1. Confira o que já existe — antes de instalar nada
+
+```bash
+docker --version && docker compose version   # provavelmente já instalado
+ss -tlnp | grep -E ':8080|:3000'             # 8080 está livre?
+git -C /opt/vosz/App remote -v               # confirma a convenção de clone
+```
+
+Se o `docker compose version` falhar, só então:
 
 ```bash
 curl -fsSL https://get.docker.com | sh
-sudo usermod -aG docker $USER
-# saia e entre de novo na sessão SSH para o grupo valer
-docker compose version
 ```
 
-Requisitos são modestos: **1 vCPU, 1 GB de RAM e ~2 GB de disco** dão conta. Só `zod`,
-`pdfjs-dist` e `tsx` em runtime, e nada compila código nativo.
+Como root, **não** rode `usermod -aG docker` — é para usuário comum.
 
-### 2. Código
+Se `8080` estiver ocupado, troque a porta do host no `docker-compose.yml`
+(`"127.0.0.1:8090:8080"`) e ajuste o túnel no passo 7. A porta de dentro do container
+continua 8080.
+
+Requisitos são modestos: **1 vCPU, 1 GB de RAM e ~2 GB de disco**. O servidor tem 95 GB com
+34% usado, então sobra.
+
+### 2. Clone — separado, não em cima de outro projeto
 
 ```bash
+mkdir -p /opt/leilao && cd /opt/leilao
 git clone <url-do-repo> App
-cd App/leilao
+cd /opt/leilao/App/leilao
 cp .env.exemplo .env
 nano .env          # ajuste EVENTO e FRETE
 ```
+
+**Não faça `git pull` em `/opt/vosz/App`.** Aquele clone serve o deploy do `vosz-site`;
+compartilhar diretório entre dois deploys transforma qualquer `git checkout` em risco para o
+outro serviço.
 
 ### 3. Os preços — é o que faz o teto existir
 
 ```bash
 # do SEU PC:
-scp precos.json usuario@vps:~/App/leilao/precos.json
+scp precos.json root@187.77.63.219:/opt/leilao/App/leilao/precos.json
 ```
 
 Sem este arquivo o estudo sai com todos os lotes em `PRECIFIQUE`. **Isso é o comportamento
@@ -64,10 +82,14 @@ caro", quando significa "ainda não sei".
 
 ```bash
 docker compose build
+
+# --fixture usa o evento capturado no repo; --saida em /tmp porque este teste é descartável
 docker compose run --rm gerar sh -c \
-  "npx tsx src/cli.ts estudo --fixture --frete 150 --saida saida/teste.html"
-ls -la saida/teste.html
+  "npx tsx src/cli.ts estudo --fixture --frete 150 --saida /tmp/teste.html && \
+   grep -c 'class=\"lote' /tmp/teste.html"
 ```
+
+Tem de imprimir **61** — os 61 lotes do evento capturado. É a mesma asserção que o CI faz.
 
 O modo `--fixture` usa o evento capturado no repo. Se isto funciona, a instalação está boa — e
 você descobriu isso sem depender de o leilão estar aberto.
@@ -91,7 +113,7 @@ docker compose logs painel      # deve dizer: servindo ... em http://0.0.0.0:808
 ### 7. Do seu PC: túnel e abrir
 
 ```bash
-ssh -L 8080:127.0.0.1:8080 usuario@vps
+ssh -L 8080:127.0.0.1:8080 root@187.77.63.219
 ```
 
 Deixe essa sessão aberta e abra **http://localhost:8080/estudo.html** no navegador.
@@ -107,7 +129,7 @@ crontab -e
 
 ```cron
 # Atualiza os lances a cada 3 horas. Zero custo de IA: só refaz a coleta e o cálculo.
-0 */3 * * * cd $HOME/App/leilao && docker compose run --rm gerar >> $HOME/leilao.log 2>&1
+0 */3 * * * cd /opt/leilao/App/leilao && docker compose run --rm gerar >> /var/log/leilao.log 2>&1
 ```
 
 Na véspera e no dia do pregão, vale trocar para `0 * * * *` (de hora em hora). Não desça abaixo
@@ -123,8 +145,8 @@ de qualquer forma.
 ss -tlnp | grep 8080
 
 # Do seu PC, contra o IP público: tem de dar timeout ou connection refused.
-# Se responder, seus tetos estão na internet.
-curl -m 5 http://IP-DA-VPS:8080/estudo.html
+# Se responder, seus tetos estão na internet para qualquer licitante do mesmo leilão.
+curl -m 5 http://187.77.63.219:8080/estudo.html
 ```
 
 Outras:
@@ -156,13 +178,31 @@ build em si é o primeiro passo que você roda. Se ele falhar, é provável que 
 O que **foi** verificado de fato: o servidor estático (7 testes, incluindo traversal
 percent-encoded), o pipeline end-to-end offline, e o refresh em navegador real.
 
+## Onde ficam os arquivos
+
+`cache` e `saida` são **named volumes**, não pastas no host — de propósito. A imagem roda como
+uid 1001 e bind mount sobrepõe o dono da imagem pelo dono da pasta no host: operando como root,
+`./cache` nasceria `root:root` e o container falharia ao escrever.
+
+Para tirar o estudo de dentro do volume:
+
+```bash
+docker compose cp painel:/app/saida/estudo.html .
+```
+
+Para inspecionar o cache de manifestos:
+
+```bash
+docker compose run --rm gerar ls -la cache/anexos | head
+```
+
 ## Solução de problemas
 
 | Sintoma | Causa provável |
 |---|---|
 | `tsx: not found` no container | `tsx` saiu de `dependencies`; o teste de deploy pega isso |
 | Estudo todo em `PRECIFIQUE` | falta `precos.json`, ou cobertura abaixo de 60% das unidades e 50% das linhas — comportamento correto |
-| `permission denied` em `cache/` | dono do bind mount; `sudo chown -R 1001:1001 cache saida` |
+| `permission denied` em `cache/` | não deve mais ocorrer: `cache` e `saida` são named volumes justamente por isso. Se ocorrer, alguém trocou por bind mount — ver o comentário no compose |
 | Página abre mas não atualiza | sem `--refresh` no comando, ou o **seu** navegador sem internet — a VPS não intermedia |
 | `zod` estourando erro de schema | o Superbid mudou o payload. É o alarme funcionando; o conserto fica em `src/superbid/` |
 | Cron não roda | `docker compose` precisa de caminho absoluto no cron, e o `cd` tem de vir antes |

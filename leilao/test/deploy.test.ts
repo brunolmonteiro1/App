@@ -44,6 +44,32 @@ describe('compose — nenhuma porta publicada fora do loopback', () => {
   });
 });
 
+describe('volumes — named, não bind mount', () => {
+  it('cache e saida são named volumes declarados', () => {
+    // A imagem roda como uid 1001. Bind mount sobrepõe o dono da imagem pelo dono da pasta
+    // no host: numa VPS operada como root, `./cache` nasce root:root e o container falha ao
+    // escrever no primeiro `gerar`. Named volume o Docker inicializa com o dono da imagem.
+    expect(compose).toMatch(/^volumes:$/m);
+    expect(compose).toMatch(/^\s+cache:$/m);
+    expect(compose).toMatch(/^\s+saida:$/m);
+  });
+
+  it('nenhum bind mount de cache ou saida sobrou', () => {
+    expect(compose).not.toMatch(/-\s*\.\/cache:/);
+    expect(compose).not.toMatch(/-\s*\.\/saida:/);
+  });
+
+  it('o único bind mount é o arquivo de preços, e é read-only', () => {
+    const binds = [...compose.matchAll(/-\s*(\.\/[^\s:]+):/g)].map((m) => m[1]!);
+    expect(binds).toEqual(['./precos.json']);
+  });
+
+  it('o comentário que explica o porquê continua no arquivo', () => {
+    expect(compose).toContain('NAMED VOLUMES');
+    expect(compose).toContain('uid 1001');
+  });
+});
+
 describe('imagem — o CLI tem como rodar', () => {
   it('tsx está em dependencies, não em devDependencies', () => {
     // A imagem instala com --omit=dev. Com tsx em devDeps, o container subiria sem tsx e o

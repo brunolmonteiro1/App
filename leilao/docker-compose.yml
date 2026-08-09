@@ -29,7 +29,8 @@ services:
       # └──────────────────────────────────────────────────────────────────────────────┘
       - "127.0.0.1:8080:8080"
     volumes:
-      - ./saida:/app/saida:ro
+      # Named volume, NÃO bind mount. Ver o bloco "volumes:" no fim do arquivo.
+      - saida:/app/saida:ro
 
   # Job one-shot: baixa os manifestos que faltam e regenera o estudo.
   # Não sobe com `up` (profile), roda sob demanda ou por cron do host:
@@ -45,9 +46,10 @@ services:
     volumes:
       # Os 57 PDFs persistem aqui. Sem este volume, cada execução rebaixaria tudo e
       # martelaria o site do Superbid a cada rodada do cron.
-      - ./cache:/app/cache
-      - ./saida:/app/saida
+      - cache:/app/cache
+      - saida:/app/saida
       # Preços do operador, somente leitura: o container não tem por que alterá-los.
+      # Bind mount aqui é seguro — arquivo criado por root nasce 644, e uid 1001 só lê.
       - ./precos.json:/app/precos.json:ro
     # Ajuste --url para o evento da semana, e --frete quando souber o custo de retirada.
     command: >
@@ -57,3 +59,21 @@ services:
                --saida saida/estudo.html"
     env_file:
       - .env
+
+# ┌──────────────────────────────────────────────────────────────────────────────────┐
+# │ NAMED VOLUMES, e não bind mount (./cache, ./saida) — de propósito.               │
+# │                                                                                  │
+# │ A imagem roda como usuário não-root (uid 1001). Bind mount SOBREPÕE o dono        │
+# │ definido na imagem pelo dono do diretório no host: numa VPS operada como root,    │
+# │ as pastas nascem root:root e o processo do container falha ao escrever no         │
+# │ primeiro `gerar`.                                                                │
+# │                                                                                  │
+# │ Named volume o Docker inicializa com o dono que a imagem definiu, então o         │
+# │ problema não existe — em vez de ser contornado com chown depois de quebrar.       │
+# │                                                                                  │
+# │ Para tirar o estudo de dentro do volume:                                         │
+# │   docker compose cp painel:/app/saida/estudo.html .                              │
+# └──────────────────────────────────────────────────────────────────────────────────┘
+volumes:
+  cache:
+  saida:
