@@ -193,9 +193,18 @@ async function comandoEstudo(): Promise<void> {
   await mkdir(dirname(saida), { recursive: true });
   await writeFile(saida, html, 'utf8');
 
-  const comTeto = linhas.filter((l) => l.av.tetoSeguro > 0).length;
+  // Contar pelo SEMÁFORO, não por `tetoSeguro > 0`: um lote pode ter teto calculado
+  // internamente e ainda assim não oferecê-lo por falta de cobertura.
+  const conta = (s: string) => linhas.filter((l) => l.av.semaforo === s).length;
+  const utilizavel = conta('verde') + conta('amarelo') + conta('vermelho');
   console.log(`\nestudo gerado: ${saida}`);
-  console.log(`  ${linhas.length} lotes · ${comTeto} com teto · ${linhas.length - comTeto} aguardando manifesto/preço`);
+  console.log(`  ${linhas.length} lotes · ${utilizavel} com teto utilizável`);
+  console.log(`  ${conta('sem-cobertura')} com cobertura abaixo de ${(cfg.coberturaMinima * 100).toFixed(0)}% (teto omitido de propósito) · ${conta('sem-teto')} sem preço nenhum`);
+  if (utilizavel === 0) {
+    console.log('\n  nenhum teto utilizável ainda. Rode `shortlist` e precifique UM lote inteiro:');
+    console.log('    npm run cli -- shortlist --fixture --frete 150');
+    console.log('    npm run cli -- precos --lote 4 --fixture');
+  }
   if (!cfg.freteInformado) console.log('  custo marcado INCOMPLETO: passe --frete <valor> para fechar');
   if (refresh) console.log(`  refresh ligado: a página busca lances a cada ${refresh}s`);
 }
@@ -219,6 +228,30 @@ function comandoCusto(): void {
 }
 
 async function comandoEsqueleto(): Promise<void> {
+  const numLote = arg('lote');
+  if (numLote !== undefined) {
+    // Precificar UM lote até o fim é o que produz teto. A lista global espalha esforço por
+    // 57 lotes e não fecha nenhum — foi o erro da primeira versão deste fluxo.
+    const evento = await carregarEvento();
+    const { porLote } = await lerManifestosDoCache(evento);
+    const m = porLote.get(Number(numLote));
+    if (!m) {
+      console.error(`lote ${numLote} sem manifesto em cache — rode \`baixar\` primeiro`);
+      process.exit(2);
+    }
+    const linhas = priorizar(new Map([[Number(numLote), m.itens]]));
+    const relevantes = linhas.filter((l) => l.faixa !== 'C');
+    const saida = resolve(arg('saida') ?? `precos-lote${numLote}.json`);
+    await writeFile(saida, JSON.stringify(esqueletoPriorizado(linhas), null, 2), 'utf8');
+    console.log(`esqueleto do lote ${numLote}: ${saida}`);
+    console.log(`  ${m.itens.length} itens · ${relevantes.length} a precificar (faixa A/B) · ${linhas.length - relevantes.length} irrisórios`);
+    console.log('\n  itens, em ordem de impacto — cole TODOS num prompt de uma vez:');
+    for (const l of relevantes) {
+      console.log(`    ${JSON.stringify({ chave: l.chave, item: l.descricao, un: l.unidadesTotais, faixa: l.faixa })}`);
+    }
+    return;
+  }
+
   if (!temFlag('todos')) {
     // Modo antigo: só o lote 3, útil para inspecionar um manifesto isolado.
     const m = await lerManifesto(MANIFESTO_LOTE3);
@@ -256,8 +289,63 @@ async function comandoEsqueleto(): Promise<void> {
   console.log('\n  preencha "preco" de cima para baixo; deixe null o que não souber');
 }
 
+/**
+ * Shortlist por custo/unidade efetiva — métrica que **não precisa de preço nenhum**.
+ *
+ * É o filtro barato que deve vir ANTES de precificar: precificar um lote até o fim rende um
+ * teto real, e é melhor escolher quais lotes merecem esse esforço com uma métrica gratuita.
+ */
+async function comandoShortlist(): Promise<void> {
+  const cfg = { ...CONFIG_PADRAO };
+  const frete = arg('frete');
+  if (frete !== undefined) {
+    cfg.freteporLote = Number(frete);
+    cfg.freteInformado = true;
+  }
+  const evento = await carregarEvento();
+  const { porLote } = await lerManifestosDoCache(evento);
+  const caminhoPrecos = arg('precos');
+  const precos = caminhoPrecos ? await carregarPrecos(caminhoPrecos) : null;
+
+  const f = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+  const rows = [];
+  for (const lote of evento.lotes) {
+    const m = porLote.get(lote.numero);
+    if (!m || lote.encerrado) continue;
+    const itens = aplicar(m.itens, precos?.itens ?? {});
+    const relevantes = itens.filter((i) => i.faixa !== 'C');
+    const efetivas = relevantes.reduce((s, i) => s + i.quantidade, 0);
+    if (efetivas === 0) continue;
+    const custo = calcularCusto(lote.lance, cfg).total;
+    const declaradas = reconciliar(lote.titulo, null).valor ?? 0;
+    const cob = cobertura(itens);
+    rows.push({
+      n: lote.numero,
+      cpu: custo / efetivas,
+      efetivas,
+      declaradas,
+      custo,
+      aPrecificar: cob.pendentes,
+      cat: detectar(lote.titulo),
+    });
+  }
+  rows.sort((a, b) => a.cpu - b.cpu);
+  const n = Number(arg('top') ?? 12);
+
+  console.log(`\ncandidatos por custo/unidade efetiva — nenhum preço necessário para este ranking\n`);
+  console.log('  lote   custo/un   efetivas/declaradas        custo   a precificar  categoria');
+  for (const r of rows.slice(0, n)) {
+    const infla = r.declaradas > 0 ? `${((1 - r.efetivas / r.declaradas) * 100).toFixed(0)}%` : '—';
+    console.log(
+      `  ${String(r.n).padStart(4)}  ${f(r.cpu).padStart(9)}  ${String(r.efetivas).padStart(4)}/${String(r.declaradas).padEnd(4)} (infla ${infla.padStart(3)})  ${f(r.custo).padStart(9)}  ${String(r.aPrecificar).padStart(4)} itens   ${r.cat}`,
+    );
+  }
+  console.log(`\n  para dar teto a um destes: npm run cli -- precos --lote <n> --fixture`);
+}
+
 const comando = process.argv[2];
 if (comando === 'baixar') await comandoBaixar();
+else if (comando === 'shortlist') await comandoShortlist();
 else if (comando === 'estudo') await comandoEstudo();
 else if (comando === 'precos') await comandoEsqueleto();
 else if (comando === 'custo') comandoCusto();
@@ -266,7 +354,9 @@ else {
   npm run cli -- estudo --fixture [--refresh 15] [--frete 150] [--precos p.json]
   npm run cli -- estudo --url https://www.superbid.net/evento/<slug>-<id>
   npm run cli -- baixar --fixture              # baixa os 57 manifestos (throttle + cache)
-  npm run cli -- precos --todos --fixture      # esqueleto priorizado por impacto
+  npm run cli -- shortlist --fixture --frete 150   # candidatos, sem precisar de preço
+  npm run cli -- precos --lote 4 --fixture         # itens de UM lote, para precificar até o fim
+  npm run cli -- precos --todos --fixture          # lista global (espalha esforço, ver README)
   npm run cli -- precos                        # só o lote 3
   npm run cli -- custo --lance 3460`);
   process.exit(comando ? 2 : 0);

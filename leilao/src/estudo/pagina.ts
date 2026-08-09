@@ -65,6 +65,10 @@ export function gerarPagina(
 ): string {
   const incompleto = !cfg.freteInformado;
   const semTeto = linhas.filter((l) => l.av.semaforo === 'sem-teto').length;
+  const semCobertura = linhas.filter((l) => l.av.semaforo === 'sem-cobertura').length;
+  const comTeto = linhas.filter(
+    (l) => l.av.semaforo === 'verde' || l.av.semaforo === 'amarelo' || l.av.semaforo === 'vermelho',
+  ).length;
 
   return `<!doctype html>
 <html lang="pt-BR">
@@ -103,6 +107,10 @@ export function gerarPagina(
   .lote[data-cor=amarelo]{border-left-color:var(--amarelo)}
   .lote[data-cor=vermelho]{border-left-color:var(--vermelho)}
   .lote[data-cor=sem-teto],.lote[data-cor=encerrado]{border-left-color:var(--cinza);opacity:.62}
+  /* Azul, nunca vermelho: "não sei" e "lote caro" são coisas opostas. */
+  .lote[data-cor=sem-cobertura]{border-left-color:#4a7ab8}
+  .sem-cobertura .val{font-size:19px;color:#8ab4f8}
+  @media (prefers-color-scheme: light){ .sem-cobertura .val{color:#1a4d8f} }
   .num{font-weight:700;font-size:15px}
   .num span{color:var(--fraco);font-weight:400;font-size:13px;margin-left:6px}
   .tit{color:var(--fraco);font-size:13px;margin:3px 0 8px}
@@ -145,10 +153,12 @@ export function gerarPagina(
       : ''
   }
   ${
-    incompleto || semTeto
+    incompleto || semTeto || semCobertura
       ? `<div class="aviso">
       ${incompleto ? '<b>Custo incompleto:</b> frete de retirada não informado, então o teto está mais alto do que deveria. ' : ''}
-      ${semTeto ? `<b>${semTeto} lote(s) sem teto:</b> falta manifesto ou preço — o teto só aparece depois de precificar os itens.` : ''}
+      ${semTeto ? `<b>${semTeto} lote(s) sem preço nenhum.</b> ` : ''}
+      ${semCobertura ? `<b>${semCobertura} lote(s) com cobertura abaixo de ${pct(cfg.coberturaMinima)}:</b> o teto deles NÃO é exibido de propósito — teto calculado sobre poucos itens sairia baixo e pareceria "lote caro", quando na verdade é "ainda não sei". Precifique um lote inteiro para ele virar verde/amarelo/vermelho de verdade.` : ''}
+      ${comTeto ? `<b>${comTeto} lote(s) com teto utilizável.</b>` : ''}
     </div>`
       : ''
   }
@@ -204,17 +214,21 @@ function linhaHtml(l: LinhaEstudo, fuso: FusoPayload): string {
     cor === 'encerrado'
       ? 'encerrado'
       : cor === 'sem-teto'
-        ? 'sem teto ainda'
-        : av.lanceSugerido === null
-          ? 'não cobre'
-          : 'pode ir até';
+        ? 'sem preço ainda'
+        : cor === 'sem-cobertura'
+          ? `cobertura ${pct(av.cobertura)}`
+          : av.lanceSugerido === null
+            ? 'não cobre'
+            : 'pode ir até';
 
   const valor =
     cor === 'encerrado' || cor === 'sem-teto'
       ? '—'
-      : av.lanceSugerido === null
-        ? 'PARE'
-        : brl(av.lanceSugerido);
+      : cor === 'sem-cobertura'
+        ? 'PRECIFIQUE'
+        : av.lanceSugerido === null
+          ? 'PARE'
+          : brl(av.lanceSugerido);
 
   const busca = `${t.numero} ${t.titulo}`.toLowerCase();
 
@@ -232,8 +246,12 @@ function linhaHtml(l: LinhaEstudo, fuso: FusoPayload): string {
         ${t.temLances ? `<small>(${t.totalLances})</small>` : '<small>sem lances</small>'}</div>
       <div><b>Custo se levar</b> ${brl(av.custoAtual.total)}
         <small>+${pct(av.custoAtual.overhead)}</small></div>
-      <div><b>Teto seguro</b> ${brl(av.tetoSeguro)}</div>
-      <div><b>Teto máximo</b> ${brl(av.tetoMaximo)}</div>
+      ${
+        cor === 'sem-cobertura' || cor === 'sem-teto'
+          ? `<div><b>Falta precificar</b> ${av.unidadesSemPreco} un efetivas</div>`
+          : `<div><b>Teto seguro</b> ${brl(av.tetoSeguro)}</div>
+      <div><b>Teto máximo</b> ${brl(av.tetoMaximo)}</div>`
+      }
       <div><b>Unidades</b> ${l.unidadesDeclaradas ?? '?'} decl.
         · <strong>${av.unidadesEfetivas} efet.</strong>
         ${av.volumeBazar ? ` · ${av.volumeBazar} volume` : ''}</div>

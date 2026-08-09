@@ -19,8 +19,11 @@ npm run cli -- custo --lance 3010
 # Baixa os 57 manifestos (throttle 1,5 req/s, cache, idempotente)
 npm run cli -- baixar --fixture
 
-# Lista de preços ordenada por impacto — preencha de cima para baixo
-npm run cli -- precos --todos --fixture --saida precos.json
+# Candidatos a precificar — ranking que NÃO precisa de preço nenhum
+npm run cli -- shortlist --fixture --frete 150
+
+# Itens de UM lote, para precificar até o fim (é isso que produz teto)
+npm run cli -- precos --lote 4 --fixture
 
 # Estudo dos 61 lotes, offline, a partir do evento capturado
 npm run cli -- estudo --fixture --frete 150 --refresh 15 \
@@ -33,7 +36,7 @@ npm run cli -- estudo --url https://www.superbid.net/evento/logistica-reversa-79
 # Esqueleto de preços para preencher (sem números inventados)
 npm run cli -- precos --saida precos.json
 
-npm test          # 108 testes
+npm test          # 119 testes
 npm run typecheck
 ```
 
@@ -50,7 +53,8 @@ npm run typecheck
 | Estudo HTML com refresh | ✅ |
 | Preço automático por LLM | ⬜ fora de escopo por decisão do operador |
 | Download dos 57 PDFs de anexo | ✅ 57/57, com cache e throttle |
-| Lista de preços priorizada por impacto | ✅ 2.421 descrições distintas |
+| Shortlist por custo/un efetiva (sem preço) | ✅ |
+| Gate de cobertura: não exibe teto que engana | ✅ |
 | Extração do Edital | ❌ ver "tarefa zero" abaixo |
 
 ## Documentos
@@ -78,6 +82,40 @@ coluna é o detector de lote inchado**, e só existe porque o manifesto é item 
 
 **4 lotes (2, 5, 16 e 26) não têm anexo nenhum** — todos de cosméticos. Aparecem no estudo
 marcados como "sem PDF de anexo", nunca com teto zero silencioso.
+
+## Precifique UM lote até o fim, não o evento todo
+
+Erro que já foi cometido aqui e está travado em teste: a lista global de preços, ordenada por
+impacto no evento, **é a ferramenta errada para produzir teto**. Ela espalha esforço por 57
+lotes; o teto é calculado por lote e item sem preço vale zero. Resultado real: 71 preços
+preenchidos deram **3% de cobertura** e **zero teto utilizável**.
+
+O fluxo certo tem três passos:
+
+```bash
+npm run cli -- shortlist --fixture --frete 150   # 1. escolhe candidatos (grátis)
+npm run cli -- precos --lote 4 --fixture         # 2. precifica UM lote até o fim
+npm run cli -- estudo --fixture --precos p.json  # 3. aquele lote ganha teto real
+```
+
+O passo 1 usa **custo / unidade efetiva**, que funciona com zero preços e já separa lote
+honesto de lote inchado. No evento de referência ele aponta o lote 4 (R$ 13/un efetiva, infla
+só 10%, **25 itens** a precificar) e o lote 56 (R$ 14/un, infla 1%, 60 itens).
+
+### O gate de cobertura existe para a tela não mentir
+
+Com cobertura baixa, o teto sai baixo — e um teto baixo **parece "lote caro"** quando na
+verdade significa "ainda não sei". Isso faria o operador descartar lote bom. Então abaixo de
+60% das unidades **e** 50% das linhas precificadas, o estudo mostra `PRECIFIQUE` em azul e
+**omite o teto**, em vez de um vermelho.
+
+Duas armadilhas reais que os testes travam:
+
+- **Falso vermelho por unidade:** o lote 202 tinha 6 linhas e só "48 rodas de patinete" com
+  preço. Cobria 68% das unidades e passava, enquanto o climatizador Springer — o valor do
+  lote — contava zero, produzindo "teto R$ 0 · PARE". Daí o gate exigir as **duas** coberturas.
+- **Teto R$ 0 nunca é resposta.** É resultado aritmético válido, mas não é decisão que se possa
+  usar; vira `sem-cobertura`.
 
 ## O teto ainda depende de preço
 

@@ -76,6 +76,23 @@ export interface Config {
    * O teto sai como faixa por causa disso.
    */
   fatorBazar: { conservador: number; otimista: number };
+  /**
+   * Peso do item faixa B no valor do lote. B é "só sai a preço baixo de bazar", então entra
+   * no teto valendo menos que A — sem isso a faixa B seria rótulo decorativo.
+   */
+  fatorB: number;
+  /**
+   * Fração mínima das unidades efetivas que precisa ter preço para o teto ser exibido.
+   * Abaixo disso o estudo diz "cobertura insuficiente" em vez de um teto baixo, porque teto
+   * calculado sobre 3% dos itens não é conservador — é enganoso, e faria o operador descartar
+   * lote bom pensando que é lote caro.
+   */
+  coberturaMinima: number;
+  /**
+   * Fração mínima das LINHAS relevantes com preço. Checada junto com `coberturaMinima`,
+   * porque cobertura só por unidade deixa passar lote onde o item caro está sem preço.
+   */
+  coberturaMinimaLinhas: number;
   categorias: Record<Categoria, ConfigCategoria>;
   /** Custo de retirada por lote. Retirada é em Embu das Artes-SP. */
   freteporLote: number;
@@ -108,6 +125,9 @@ export const ENCARGOS_790754: Encargos = {
 export const CONFIG_PADRAO: Config = {
   encargos: ENCARGOS_790754,
   fatorBazar: { conservador: 0.40, otimista: 0.60 },
+  fatorB: 0.6,
+  coberturaMinima: 0.6,
+  coberturaMinimaLinhas: 0.5,
   freteporLote: 0,
   freteInformado: false,
   categorias: {

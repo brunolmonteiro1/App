@@ -12,7 +12,18 @@ import { CONFIG_PADRAO, type Categoria, type Config } from '../config.ts';
 import { calcularCusto, martelaDoTeto, ultimoLanceValido, type Custo } from './custo.ts';
 import type { ItemAvaliado } from './faixa.ts';
 
-export type Semaforo = 'verde' | 'amarelo' | 'vermelho' | 'sem-teto' | 'encerrado';
+/**
+ * `sem-cobertura` é distinto de `vermelho` de propósito. Vermelho significa "lote caro, para";
+ * sem-cobertura significa "não sei ainda". Dar a mesma cor aos dois faria o operador descartar
+ * lote bom achando que é lote caro — foi exatamente o que aconteceu quando a cobertura era 3%.
+ */
+export type Semaforo =
+  | 'verde'
+  | 'amarelo'
+  | 'vermelho'
+  | 'sem-teto'
+  | 'sem-cobertura'
+  | 'encerrado';
 
 export interface Avaliacao {
   categoria: Categoria;
@@ -36,6 +47,19 @@ export interface Avaliacao {
 
   /** Concentração de valor nos 5 maiores itens. Alta = risco. */
   concentracao: number;
+
+  /** Fração das unidades efetivas que tem preço. */
+  cobertura: number;
+  /**
+   * Fração das LINHAS relevantes que tem preço. Precisa ser checada junto com `cobertura`:
+   * um lote pode ter 68% das unidades precificadas por causa de uma única linha de item
+   * barato e alto volume, enquanto o item caro — que é o valor do lote — fica sem preço.
+   * Foi o caso do lote 202: 48 rodas de patinete passavam o gate e o climatizador Springer
+   * contava zero, produzindo "teto R$ 0 · PARE" num lote que ninguém avaliou.
+   */
+  coberturaLinhas: number;
+  /** Unidades efetivas ainda sem preço — o que falta precificar neste lote. */
+  unidadesSemPreco: number;
 
   custoAtual: Custo;
   custoPorUnidadeEfetiva: number | null;
@@ -62,8 +86,28 @@ export function avaliar(e: EntradaAvaliacao, cfg: Config = CONFIG_PADRAO): Avali
   const cat = cfg.categorias[e.categoria];
   const comPreco = e.itens.filter((i) => i.faixa !== 'C');
 
-  const valorOnline = comPreco.reduce((s, i) => s + i.quantidade * (i.precoOnline ?? 0), 0);
+  // Faixa B entra com peso menor: "só sai a preço baixo de bazar".
+  const peso = (f: string) => (f === 'B' ? cfg.fatorB : 1);
+  const valorOnline = comPreco.reduce(
+    (s, i) => s + i.quantidade * (i.precoOnline ?? 0) * peso(i.faixa),
+    0,
+  );
   const unidadesEfetivas = comPreco.reduce((s, i) => s + i.quantidade, 0);
+
+  // Cobertura é medida em UNIDADES, não em linhas: precificar um item de 96 unidades vale
+  // muito mais que precificar 96 itens de 1 unidade.
+  const unidadesComPreco = comPreco
+    .filter((i) => i.precoOnline != null)
+    .reduce((s, i) => s + i.quantidade, 0);
+  const cobertura = unidadesEfetivas > 0 ? unidadesComPreco / unidadesEfetivas : 0;
+
+  const linhasComPreco = comPreco.filter((i) => i.precoOnline != null).length;
+  const coberturaLinhas = comPreco.length > 0 ? linhasComPreco / comPreco.length : 0;
+
+  // AS DUAS têm de passar. Só unidades deixa escapar o lote onde uma linha de item barato e
+  // alto volume cobre o gate enquanto o item caro fica sem preço.
+  const coberturaOk =
+    cobertura >= cfg.coberturaMinima && coberturaLinhas >= cfg.coberturaMinimaLinhas;
   const volumeBazar = e.itens
     .filter((i) => i.faixa === 'C')
     .reduce((s, i) => s + i.quantidade, 0);
@@ -85,13 +129,14 @@ export function avaliar(e: EntradaAvaliacao, cfg: Config = CONFIG_PADRAO): Avali
 
   // Concentração: quanto do valor está nos 5 maiores itens.
   const porItem = comPreco
-    .map((i) => i.quantidade * (i.precoOnline ?? 0))
+    .map((i) => i.quantidade * (i.precoOnline ?? 0) * peso(i.faixa))
     .sort((a, b) => b - a);
   const top5 = porItem.slice(0, 5).reduce((s, v) => s + v, 0);
 
   const custoAtual = calcularCusto(e.lanceAtual, cfg);
 
-  const temTeto = valorOnline > 0;
+  // Sem cobertura suficiente o teto existe internamente mas NÃO é oferecido como decisão.
+  const temTeto = valorOnline > 0 && coberturaOk;
   const lanceSugerido = temTeto && !e.encerrado
     ? ultimoLanceValido(e.lanceAtual, e.incremento, tetoSeguro, e.temLances)
     : null;
@@ -108,6 +153,9 @@ export function avaliar(e: EntradaAvaliacao, cfg: Config = CONFIG_PADRAO): Avali
     unidadesEfetivas,
     volumeBazar,
     concentracao: valorOnline > 0 ? top5 / valorOnline : 0,
+    cobertura,
+    coberturaLinhas,
+    unidadesSemPreco: unidadesEfetivas - unidadesComPreco,
     custoAtual,
     custoPorUnidadeEfetiva: unidadesEfetivas > 0 ? custoAtual.total / unidadesEfetivas : null,
     custoPorUnidadeDeclarada:
@@ -116,7 +164,7 @@ export function avaliar(e: EntradaAvaliacao, cfg: Config = CONFIG_PADRAO): Avali
         : null,
     margem: temTeto && custoAtual.total > 0 ? valorRealizadoMin / custoAtual.total : null,
     lanceSugerido,
-    semaforo: semaforoDe(e, tetoSeguro, tetoMaximo, temTeto),
+    semaforo: semaforoDe(e, tetoSeguro, tetoMaximo, valorOnline > 0, coberturaOk),
   };
 }
 
@@ -124,10 +172,12 @@ function semaforoDe(
   e: EntradaAvaliacao,
   tetoSeguro: number,
   tetoMaximo: number,
-  temTeto: boolean,
+  temValor: boolean,
+  coberturaOk: boolean,
 ): Semaforo {
   if (e.encerrado) return 'encerrado';
-  if (!temTeto) return 'sem-teto';
+  if (!temValor) return 'sem-teto';
+  if (!coberturaOk) return 'sem-cobertura';
   // O que decide é o próximo lance que ele teria de dar, não o lance atual: cobrir
   // significa pagar um degrau acima de quem está na frente.
   const proximo = e.temLances ? e.lanceAtual + e.incremento : e.lanceAtual;
