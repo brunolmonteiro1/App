@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+
+import '../../data/app_state.dart';
 
 class _Slide {
   const _Slide(this.emoji, this.title, this.body);
@@ -74,6 +77,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               child: FilledButton(
                 onPressed: () {
                   Navigator.of(sheetContext).pop();
+                  context.read<AppState>().completeOnboarding();
                   context.go('/home');
                 },
                 child: const Text('Autorizar e começar'),
@@ -85,6 +89,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               child: TextButton(
                 onPressed: () {
                   Navigator.of(sheetContext).pop();
+                  context.read<AppState>().completeOnboarding();
                   context.go('/home');
                 },
                 child: const Text('Agora não (modo demonstração)'),
@@ -106,7 +111,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             Align(
               alignment: Alignment.topRight,
               child: TextButton(
-                onPressed: () => context.go('/home'),
+                onPressed: () {
+                  context.read<AppState>().completeOnboarding();
+                  context.go('/home');
+                },
                 child: const Text('Pular'),
               ),
             ),

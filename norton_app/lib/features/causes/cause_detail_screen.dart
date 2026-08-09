@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../data/app_state.dart';
 import '../../data/mock_data.dart';
 
 class CauseDetailScreen extends StatelessWidget {
@@ -103,14 +105,23 @@ class CauseDetailScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
-          FilledButton.icon(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                  content: Text('Você entrou na campanha! (protótipo)')));
-            },
-            icon: const Icon(Icons.favorite),
-            label: const Text('Participar desta causa'),
-          ),
+          Builder(builder: (context) {
+            final app = context.watch<AppState>();
+            final isActive = app.activeCauseId == c.id;
+            return FilledButton.icon(
+              onPressed: isActive
+                  ? null
+                  : () {
+                      context.read<AppState>().setActiveCause(c.id);
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text(
+                              '${c.name} agora é a sua causa ativa! Seus treinos contam para ela.')));
+                    },
+              icon: Icon(isActive ? Icons.check : Icons.favorite),
+              label: Text(
+                  isActive ? 'Esta é a sua causa ativa' : 'Participar desta causa'),
+            );
+          }),
         ],
       ),
     );

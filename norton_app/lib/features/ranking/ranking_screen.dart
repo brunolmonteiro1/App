@@ -1,20 +1,42 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../data/app_state.dart';
 import '../../data/mock_data.dart';
+import '../../data/models.dart';
 
-class RankingScreen extends StatefulWidget {
+class RankingScreen extends StatelessWidget {
   const RankingScreen({super.key});
 
-  @override
-  State<RankingScreen> createState() => _RankingScreenState();
-}
-
-class _RankingScreenState extends State<RankingScreen> {
-  String? _leagueCode = demoUser.leagueCode;
+  /// Insere o usuário (pontos REAIS dos treinos) entre os concorrentes de
+  /// exemplo e reordena — o ranking muda conforme você treina.
+  List<LeaderboardEntry> _boardWithUser(AppState app) {
+    final others = leagueLeaderboard.where((e) => !e.isMe);
+    final all = [
+      ...others,
+      LeaderboardEntry(
+          rank: 0,
+          name: app.userName,
+          points: app.totalPoints,
+          isMe: true,
+          team: 'Você'),
+    ]..sort((a, b) => b.points.compareTo(a.points));
+    return [
+      for (var i = 0; i < all.length; i++)
+        LeaderboardEntry(
+            rank: i + 1,
+            name: all[i].name,
+            points: all[i].points,
+            isMe: all[i].isMe,
+            team: all[i].team),
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final app = context.watch<AppState>();
+    final board = _boardWithUser(app);
     return DefaultTabController(
       length: 2,
       child: Scaffold(
@@ -27,17 +49,19 @@ class _RankingScreenState extends State<RankingScreen> {
         ),
         body: TabBarView(
           children: [
-            _leagueCode == null ? _JoinLeague(onJoin: _join) : _leagueBoard(scheme),
-            _board(scheme, leagueLeaderboard),
+            app.leagueCode == null
+                ? _JoinLeague(
+                    onJoin: (code) => context.read<AppState>().joinLeague(code))
+                : _leagueBoard(context, scheme, app, board),
+            _board(scheme, board),
           ],
         ),
       ),
     );
   }
 
-  void _join(String code) => setState(() => _leagueCode = code.toUpperCase());
-
-  Widget _leagueBoard(ColorScheme scheme) {
+  Widget _leagueBoard(BuildContext context, ColorScheme scheme, AppState app,
+      List<LeaderboardEntry> board) {
     return Column(
       children: [
         Container(
@@ -52,20 +76,24 @@ class _RankingScreenState extends State<RankingScreen> {
               const Text('🏢', style: TextStyle(fontSize: 24)),
               const SizedBox(width: 12),
               Expanded(
-                child: Text('Liga ACME S.A. · código $_leagueCode',
+                child: Text('Liga · código ${app.leagueCode}',
                     style: TextStyle(
                         fontWeight: FontWeight.w700,
                         color: scheme.onPrimaryContainer)),
               ),
+              TextButton(
+                onPressed: () => context.read<AppState>().leaveLeague(),
+                child: const Text('Sair'),
+              ),
             ],
           ),
         ),
-        Expanded(child: _board(scheme, leagueLeaderboard)),
+        Expanded(child: _board(scheme, board)),
       ],
     );
   }
 
-  Widget _board(ColorScheme scheme, List entries) {
+  Widget _board(ColorScheme scheme, List<LeaderboardEntry> entries) {
     return ListView.separated(
       padding: const EdgeInsets.all(16),
       itemCount: entries.length,
@@ -85,8 +113,8 @@ class _RankingScreenState extends State<RankingScreen> {
                 ? Text(medal, style: const TextStyle(fontSize: 26))
                 : CircleAvatar(
                     radius: 16,
-                    child: Text('${e.rank}',
-                        style: const TextStyle(fontSize: 13))),
+                    child:
+                        Text('${e.rank}', style: const TextStyle(fontSize: 13))),
             title: Text(e.isMe ? '${e.name} (você)' : e.name,
                 style: const TextStyle(fontWeight: FontWeight.w600)),
             subtitle: e.team != null ? Text(e.team!) : null,
