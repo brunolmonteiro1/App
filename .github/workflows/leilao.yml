@@ -1,0 +1,49 @@
+name: leilao
+
+on:
+  push:
+    branches: ['**']
+    paths:
+      - 'leilao/**'
+      - '.github/workflows/leilao.yml'
+  pull_request:
+    paths:
+      - 'leilao/**'
+  workflow_dispatch:
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: leilao
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: leilao/package-lock.json
+
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      # Os testes rodam contra os fixtures capturados do site — nunca contra a rede, para
+      # não quebrarem sozinhos quando o Superbid mudar. O detector de mudança do site é o
+      # schema zod falhando alto em produção, não o CI.
+      - run: npm test
+
+      # Prova de que o pipeline inteiro roda: coleta do fixture, lê os manifestos que
+      # estiverem em cache, calcula e gera a página. Sem PDF em cache o estudo sai com os
+      # lotes em "sem preço", o que também é resultado válido e não deve falhar o build.
+      - name: estudo end-to-end (offline)
+        run: npm run cli -- estudo --fixture --frete 150 --saida /tmp/estudo.html
+
+      - name: confere que o estudo saiu com os 61 lotes
+        run: |
+          test -s /tmp/estudo.html
+          n=$(grep -c 'class="lote' /tmp/estudo.html)
+          echo "lotes na página: $n"
+          test "$n" -eq 61

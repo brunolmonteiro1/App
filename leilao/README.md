@@ -1,0 +1,396 @@
+# leilao — teto de lance por lote (Superbid / BidTV)
+
+A partir do link de um evento, gera um **estudo com o teto máximo de lance de cada lote** —
+a página que o operador mantém aberta ao lado do BidTV para decidir, no último segundo, se
+cobre ou não. Com `--refresh`, ela busca os lances sozinha e repinta 🟢/🟡/🔴.
+
+**A ferramenta nunca dá lance.** O clique é sempre do operador, na janela do BidTV.
+
+## O que decide a compra: custo real por item
+
+A pergunta que a ferramenta responde primeiro **não precisa de preço nenhum**:
+
+```
+lote  título nomeados em caixa   custo  R$/título  R$/nomeado
+  15     375      373        0     2831       7,55        7,59   ← quase tudo nomeado
+  21     510      493        0     4580       8,98        9,29
+  44     908      558      350     7569       8,34       13,54   ← 39% em caixa fechada
+  11     283       27      256     2578       9,11       95,48   ← 92% em caixa fechada
+```
+
+A regra do operador é `custo total ÷ itens declarados ≤ R$ 15` (histórico de compra: R$ 10–14).
+Isso dá um **teto de lance para os 61 lotes desde o primeiro segundo** — 53 deles, contra zero
+pelo caminho do valor de revenda.
+
+### O que infla um lote, medido
+
+Duas coisas distintas, e o manifesto denuncia as duas:
+
+- **Caixa de diversos.** Uma linha com quantidade 1 e a contagem no texto:
+  `"APROXIMADAMENTE 256 ITENS SUPLEMENTO DIVERSOS ALWAYSFIT, MAX HEYLLAIR…"`. São 256 peças que
+  vêm sem nome. No lote 11 isso é 92% do lote.
+- **Kit comercial.** `"Faqueiro Viena 30 Peças"` é **1 produto** com um preço, não 30 itens.
+  Contar as peças faria o lote 42 saltar de 304 para 5.556 "unidades" por causa de seis caixas de
+  5.000 grampos, e o R$/item viraria ficção — para baixo, que é o lado que faz pagar caro.
+
+O título **não mente**: ele conta o conteúdo das caixas. Lote 11 → 27 + 256 = 283, exato. O que
+ele não diz é quanto do lote vem sem nome, e é isso que a coluna `R$/nomeado` mostra.
+
+Quando o título conta peças *dentro* de embalagem — lote 41 declara 799 e o manifesto lista 291,
+porque conta parafuso por parafuso — a linha ganha alerta e o fator de correção (2,7× ali).
+
+### Três camadas, por custo de esforço
+
+| Camada | Esforço | Entrega |
+|---|---|---|
+| **custo real** | zero | R$/item nas duas bases, composição, âncoras, **teto pela regra** |
+| **venda média** | 8 números | faturamento e lucro estimados nos 61 lotes |
+| **preço por item** | horas | teto por valor de revenda; vale o **menor** dos dois tetos |
+
+A camada 1 é o atalho que evita as ~1.900 pesquisas: **9 números** que o operador já sabe de
+cabeça — venda média por peça útil em cada categoria, mais **um** para a peça de volume (faixa C e
+conteúdo das caixas).
+
+O número do volume não é opcional, e a razão é um erro que a primeira versão cometeu: contando só
+os itens nomeados, o lucro saía **negativo em quase todo lote** — lote 15 com −R$ 109 onde contar o
+volume dá +R$ 998. Nas palavras do operador, *"volume alto é ativo; bazar com 500 pessoas gira item
+barato"*. A bugiganga vale **zero no teto** (ele não paga por ela) e vale algo na **venda**. Dizer
+"todo lote dá prejuízo" é tão enganoso quanto inflar o teto, só faz perder lote bom em vez de pagar
+caro — então, faltando o número, o estudo não mostra lucro nenhum.
+
+### As âncoras saem de graça
+
+`classeValor()` + `especificidade()` separam `"Martelete Rompedor Bosch Gbh 2-24d 820w"` de
+`"máscara de gatinho"` **sem preço**. É o que justifica furar a regra dos R$ 15 — nas palavras do
+operador, *"se tem alguma máquina ou item de valor agregado alto, faz sentido para mim"*.
+
+## As duas telas
+
+O painel serve duas páginas, e a primeira é onde o trabalho acontece:
+
+| Página | Para quê |
+|---|---|
+| `precificar.html` | **põe os preços** e vê o teto se formar ao vivo. É a tela de trabalho |
+| `estudo.html` | os 61 lotes com teto, lance sugerido e semáforo, para ler ao lado do BidTV |
+
+Preço é sempre **valor online por unidade** — o que o item custa na internet, não o que ele
+vende no bazar. A conta do bazar (40%–60%), a perda da categoria, o múltiplo e os encargos o
+programa aplica em cima disso.
+
+E preço é gravado **pela descrição do item**, não pelo lote: preenchido uma vez, ele volta
+sozinho em todo lote e todo leilão futuro onde a mesma descrição aparecer. Por isso o esforço
+diminui a cada evento em vez de recomeçar.
+
+## Precificar em bloco, com outra IA
+
+São ~1.900 descrições distintas neste evento. Pesquisar preço de cada uma à mão não é viável, e
+era exatamente isso que mantinha a cobertura em 3% — sem cobertura não existe teto. Então o
+caminho é o ciclo:
+
+```bash
+npm run cli -- exportar --fixture --lote 56          # ou --lote todos [--top 300]
+#   → precos-para-ia-790754.json
+
+#   entregue a um chat: "preencha conforme o campo instrucoes"
+
+npm run cli -- importar --arquivo resposta.json --fixture --precos precos.json
+```
+
+Na tela, os mesmos dois passos ficam no botão **Precificar com IA**.
+
+**O prompt vai dentro do arquivo**, no campo `instrucoes` — assim não há instrução para guardar
+entre um leilão e o próximo.
+
+A parte interessante é a volta. Arquivo que passa por um chat não volta igual, e os modos de
+falha são todos conhecidos:
+
+| O que o chat faz | O que a importação faz |
+|---|---|
+| envolve em ` ```json ` ou põe prosa em volta | remove antes do parse |
+| devolve só o array, ou `{ itens: { chave: {...} } }` | aceita os três formatos |
+| escreve `"R$ 1.299,90"` | normaliza, milhar e decimal inclusive |
+| **reescreve a `chave`** | casa pela descrição do item |
+| reordena, remove ou duplica linhas | irrelevante: casa por chave, não por posição |
+| **inventa item que não existe** | rejeita e lista no relatório |
+| preço ilegível (`"uns cem reais"`) | pula a linha, não grava 0 |
+| preço absurdo numa caneca | grava mas sinaliza para conferência |
+
+E o relatório é obrigatório justamente pelo pior caso: uma importação que dissesse "sucesso"
+tendo casado zero linhas deixaria o operador entrar no pregão confiando num teto inexistente.
+
+## Como rodar
+
+```bash
+cd leilao && npm install
+
+# Confere a conta de encargos contra os números reais do site
+npm run cli -- custo --lance 3010
+#   → leiloeiro 150,50 + premium 150,50 + adm 187,50 + fee 62,50
+#   → encargos R$ 551,00 · total R$ 3.561,00 · overhead 18,3%
+
+# Baixa os 57 manifestos (throttle 1,5 req/s, cache, idempotente)
+npm run cli -- baixar --fixture
+
+# Candidatos a precificar — ranking que NÃO precisa de preço nenhum
+npm run cli -- shortlist --fixture --frete 150
+
+# Itens de UM lote, para precificar até o fim (é isso que produz teto)
+npm run cli -- precos --lote 56 --fixture
+
+# Estudo dos 61 lotes, offline, a partir do evento capturado
+npm run cli -- estudo --fixture --frete 150 --refresh 15 \
+  --precos exemplos/precos-operador.json
+#   → saida/estudo-790754.html
+
+# Ao vivo, contra o site
+npm run cli -- estudo --url https://www.superbid.net/evento/logistica-reversa-790754 --refresh 15
+
+# Esqueleto de preços para preencher (sem números inventados)
+npm run cli -- precos --saida precos.json
+
+# O painel: estudo + tela de precificação
+npm run servir    # http://127.0.0.1:8080/precificar.html
+
+npm test          # 276 testes
+npm run typecheck
+```
+
+## Status
+
+| Parte | Estado |
+|---|---|
+| Coleta da API, validada por zod | ✅ |
+| Aviso de degrau da tabela de encargos | ✅ |
+| Parser do manifesto (PDF → itens) | ✅ 71 itens / 304 un no lote 3 |
+| Quantidade do título (6 formatos + typo) | ✅ 58+/61 |
+| Encargos e teto (10% + tabela por faixa) | ✅ ancorado em 2 pontos reais do site |
+| Faixas A/B/C e unidades efetivas | ✅ heurística; preço vem de arquivo |
+| Estudo HTML com refresh | ✅ |
+| Preço automático por LLM | ⬜ fora de escopo por decisão do operador |
+| Download dos 57 PDFs de anexo | ✅ 57/57, com cache e throttle |
+| Shortlist por custo/un efetiva (sem preço) | ✅ |
+| Gate de cobertura: não exibe teto que engana | ✅ |
+| Filtro de categorias que o operador não trabalha | ✅ cosmético, limpeza, bebida |
+| CI (typecheck + testes + estudo end-to-end) | ✅ `.github/workflows/leilao.yml` |
+| Refresh validado em navegador real | ✅ ver abaixo |
+| Deploy em VPS (Docker + túnel SSH) | ✅ `docs/03-deploy-vps.md` |
+| Extração do Edital | ❌ ver "tarefa zero" abaixo |
+
+## Documentos
+
+| Arquivo | Conteúdo |
+|---|---|
+| [`docs/01-reconhecimento.md`](docs/01-reconhecimento.md) | O que foi verificado no site real e as evidências. Leia primeiro. |
+| [`docs/02-plano-implementacao.md`](docs/02-plano-implementacao.md) | Arquitetura, modelo de dados, fases e verificação. |
+| [`docs/03-deploy-vps.md`](docs/03-deploy-vps.md) | Passo a passo do deploy em VPS com Docker. |
+
+## O que os 57 manifestos revelaram
+
+Todos os 57 parseiam, e as somas batem com os títulos. O par **declarado × efetivo** confirma
+exatamente o que o operador descreveu — "dizem que tem 400 itens, mas tem 300, porque 100 é um
+negócio muito barato":
+
+| Lote | Declaradas | Efetivas | Volume de bazar | Inflação |
+|---|---|---|---|---|
+| 9 | 402 | 185 | 217 | **54%** |
+| 13 | 453 | 83 | 370 | **82%** |
+| 3 | 304 | 146 | 158 | 52% |
+| 8 | 34 | 34 | 0 | 0% |
+
+Lote 13 promete 453 unidades e entrega 83 com valor de revenda. Lote 8 não infla nada. **Essa
+coluna é o detector de lote inchado**, e só existe porque o manifesto é item a item.
+
+**4 lotes (2, 5, 16 e 26) não têm anexo nenhum** — todos de cosméticos. Aparecem no estudo
+marcados como "sem PDF de anexo", nunca com teto zero silencioso.
+
+## Precifique UM lote até o fim, não o evento todo
+
+Erro que já foi cometido aqui e está travado em teste: a lista global de preços, ordenada por
+impacto no evento, **é a ferramenta errada para produzir teto**. Ela espalha esforço por 57
+lotes; o teto é calculado por lote e item sem preço vale zero. Resultado real: 71 preços
+preenchidos deram **3% de cobertura** e **zero teto utilizável**.
+
+O fluxo certo tem três passos:
+
+```bash
+npm run cli -- shortlist --fixture --frete 150   # 1. escolhe candidatos (grátis)
+npm run cli -- precos --lote 56 --fixture        # 2. precifica UM lote até o fim
+npm run cli -- estudo --fixture --precos p.json  # 3. aquele lote ganha teto real
+```
+
+O passo 1 usa **custo / unidade efetiva**, que funciona com zero preços e já separa lote
+honesto de lote inchado. No evento de referência, com cosmético/limpeza/bebida fora, ele aponta o lote 56
+(R$ 15/un efetiva, infla 6%, 58 itens) e o lote 12 (R$ 17/un, 32 itens).
+
+### O gate de cobertura existe para a tela não mentir
+
+Com cobertura baixa, o teto sai baixo — e um teto baixo **parece "lote caro"** quando na
+verdade significa "ainda não sei". Isso faria o operador descartar lote bom. Então abaixo de
+60% das unidades **e** 50% das linhas precificadas, o estudo mostra `PRECIFIQUE` em azul e
+**omite o teto**, em vez de um vermelho.
+
+Duas armadilhas reais que os testes travam:
+
+- **Falso vermelho por unidade:** o lote 202 tinha 6 linhas e só "48 rodas de patinete" com
+  preço. Cobria 68% das unidades e passava, enquanto o climatizador Springer — o valor do
+  lote — contava zero, produzindo "teto R$ 0 · PARE". Daí o gate exigir as **duas** coberturas.
+- **Teto R$ 0 nunca é resposta.** É resultado aritmético válido, mas não é decisão que se possa
+  usar; vira `sem-cobertura`.
+
+## O teto ainda depende de preço
+
+Baixar os PDFs deu contagem real e custo por unidade efetiva nos 57. O **teto** precisa de
+preço por item, e há **2.421 descrições distintas** — inviável à mão inteiro.
+
+Daí `precos --todos`, que ordena por impacto:
+
+```
+impacto = 4^classeValor × unidadesTotais^0,55 × especificidade × √(nº de lotes)
+```
+
+A **classe de valor** domina de propósito: preço unitário varia três ordens de grandeza (R$ 2
+num copo descartável, R$ 1.200 num martelete Bosch) e quantidade só uma. A primeira versão
+ordenava por quantidade e enchia o topo de copo descartável, papel sulfite e vela — com o
+martelete fora das 15 primeiras. Corrigido, o topo é ferramenta elétrica e eletrodoméstico.
+
+O `√(nº de lotes)` entra porque precificar uma linha que aparece em 6 lotes destrava 6 tetos.
+
+## Deploy: com senha, e a senha não é opcional
+
+```bash
+cp .env.exemplo .env && nano .env       # SENHA obrigatória; BIND=0.0.0.0 abre no navegador
+docker compose build
+docker compose run --rm gerar
+docker compose up -d painel
+```
+
+**O estudo contém os tetos de lance do operador.** Outro licitante do mesmo leilão que visse
+aquela página saberia exatamente até onde empurrá-lo antes de ele parar. E a tela de
+precificação **grava** em disco. Então o painel tem Basic auth, e **se recusa a subir** quando a
+porta está publicada com `SENHA` vazia — o processo para com mensagem, em vez de servir os tetos
+e um formulário de escrita para a internet.
+
+Quem preferir zero exposição continua atendido: `BIND=127.0.0.1` (o padrão) e
+`ssh -L 8080:127.0.0.1:8080`.
+
+Vale saber que **o Docker passa por cima do UFW** — escreve direto na cadeia `DOCKER-USER` do
+iptables, então `ufw deny 8080` daria falsa segurança. Quem protege aqui é a senha, não o
+firewall. `test/deploy.test.ts` falha o CI se alguém tirar a obrigatoriedade da senha, puser
+porta nua no compose, ou trocar os named volumes por bind mount.
+
+Passo a passo completo em [`docs/03-deploy-vps.md`](docs/03-deploy-vps.md).
+
+## O refresh foi validado em navegador de verdade
+
+Não bastava assumir. O caminho `fetch` → parse → repintar foi exercitado em Chromium com um
+payload servido localmente **com o mesmo header CORS que a API real manda**: o cabeçalho
+atualizou a hora e o lote 3 repintou de R$ 2.130 para R$ 9.999. Com a API inalcançável, o
+cabeçalho mostra `sem conexão` em vez de mentir com dado velho.
+
+Duas armadilhas apareceram no caminho, ambas da bancada de teste e não do código: o Chromium
+do ambiente de build não tem rede, e `python -m http.server` não envia
+`Access-Control-Allow-Origin` — então o navegador bloqueia igual bloquearia qualquer API sem
+CORS.
+
+Como teste de navegador não roda no CI, o que ficou travado é o **contrato entre as duas
+metades**: `test/refresh.test.ts` asserta que todo `dataset.x` que o script lê corresponde a um
+`data-x` que o HTML emite. Esse bug já aconteceu — o script lia `data-teto-seguro` que o HTML
+não emitia, e o refresh repintava contra zero.
+
+## Categorias fora do escopo
+
+O operador não trabalha com **cosmético, limpeza nem bebida**. Isso vale em dois níveis, e o
+segundo é o que evita inflar teto:
+
+- **Lote inteiro** dessas categorias vira `IGNORADO` — 7 dos 61 neste evento (1, 2, 4, 5, 16,
+  24, 26). Fica visível na lista, apagado, porque durante o pregão o leiloeiro chama o lote e a
+  ausência dele na tela pareceria falha da ferramenta.
+- **Item dessas categorias dentro de lote misto** é forçado para faixa C, valendo zero — e isso
+  **ganha até de preço posto à mão**. Sem essa regra, um lote de "utensílios, vestuário e
+  cosméticos" contaria o shampoo no valor e produziria um teto que autoriza pagar por mercadoria
+  que ele não revende. O lote 56 caiu de 288 para 274 unidades efetivas por causa disso.
+
+### O falso positivo que quase custou um lote bom
+
+A detecção de categoria usava o primeiro termo que casasse, e classificou o **lote 22** como
+*bebidas*:
+
+```
+FRIGIDEIRA REDSILVER, FOGÃO COOKTOP PORTÁTIL, TAÇAS DIAMOND, COPOS PARA WHISKY WOLFF
+```
+
+O termo era "copos para **whisky**" — é o copo, não a bebida. Com bebidas ignoradas, o lote
+seria descartado sendo utensílio de cozinha. Agora a detecção **conta** termos por categoria:
+bebidas=1 contra utensílios=2, e utensílios ganha. Travado em teste.
+
+## Os encargos são tabelados — e é isso que engana
+
+Do Edital: **leiloeiro 5% + buyer's premium 5%**, mais **Encargos de Administração e Fee
+Plataforma tabelados por faixa de lance** (R$ 50 até R$ 499,99; R$ 125 até R$ 999,99;
+R$ 250 até R$ 4.999,99; R$ 500 até R$ 9.999,99; e assim por diante até R$ 6.500).
+
+Duas consequências que mudam a estratégia:
+
+1. **O overhead real vai de ~15% a ~35%** nos lances deste evento, e o card do site diz
+   "+10%" em todos. O melhor ponto não é "o maior lote possível" — é o **topo de uma faixa**
+   (o lote 42, a R$ 4.990, é o mais eficiente do evento com +15,0%).
+2. **Cruzar uma faixa custa caro por um centavo:** de R$ 4.999,99 para R$ 5.000,00 o custo
+   sobe R$ 250. O estudo avisa quando o próximo lance atravessa um degrau.
+
+Uma versão anterior deste código tratava o R$ 250 como taxa fixa universal, porque os dois
+exemplos disponíveis caíam na mesma faixa. Ficou registrado em `config.ts` para não repetir.
+
+## A tarefa zero falhou, e o impacto foi baixo
+
+O plano dependia de `pdfjs-dist` conseguir ler o **Edital**. Não consegue: a fonte tem
+subset sem `/ToUnicode` e o texto sai como código de glifo (`! " # $ %`). Está travado em
+teste para avisar se um dia mudar.
+
+Impacto baixo, e por dois motivos. O manifesto — que é o que o produto realmente precisa —
+`pdfjs-dist` lê perfeitamente. E a tabela de encargos, único dado que o Edital tinha de
+entregar, **o operador extraiu à mão e conferimos contra o estimador do site**, o que fecha
+no centavo em dois pontos independentes. Automatizar a leitura do Edital seria conveniência,
+não requisito: é um documento por evento, revisado uma vez.
+
+## Conclusões que definem o projeto
+
+1. **Não precisa navegador, extensão do Chrome nem login.** A página expõe a API real;
+   os 61 lotes do evento de referência vêm em **uma requisição HTTP**, já com lance
+   atual, URLs das 662 fotos e URLs dos 57 PDFs de anexo.
+2. **O PDF de anexo é o manifesto item a item**, com camada de texto. No lote 3 são 71
+   itens cuja soma de quantidades é exatamente as 304 unidades declaradas no título.
+   Isso torna a análise de imagem um passo secundário e barato, não o motor.
+3. **Custo por unidade, isolado, engana.** No lote 3 dá R$ 7,01/un, mas ~170 das 304
+   unidades são itens de valor irrisório (60x máscara de gatinho, 36x roupas diversas).
+   Ordenar por R$/unidade premiaria justamente os lotes cheios de tranqueira.
+4. **O produto final é um teto de lance, não um relatório.** A mercadoria vai para bazar
+   solidário e evento de outlet, com venda realizada a **40–60% do valor online** — então o
+   teto sai como faixa (seguro / máximo), calculado de trás para frente a partir do
+   múltiplo exigido por categoria. Itens irrisórios entram como **zero**: não pagamos por
+   volume, mas ele gira no bazar como upside.
+
+## Reproduzir o reconhecimento
+
+```bash
+cd leilao/recon
+
+# Manifesto do lote 3 -> deve imprimir: itens=71 soma=304 refs={'SB0032812'}
+python3 extrai_manifesto.py fixtures/manifesto-lote3-SB0032812.pdf
+
+# Listagem completa do evento, direto da API (sem autenticação)
+curl -s 'https://offer-query.superbid.net/seo/offers/?locale=pt_BR&portalId=%5B2,15%5D&requestOrigin=marketplace&timeZoneId=UTC&filter=auction.id:790754&orderBy=lotNumber:asc;subLotNumber:asc&pageNumber=1&pageSize=100&urlSeo=https://www.superbid.net' \
+  | python3 -c 'import json,sys; d=json.load(sys.stdin); print("total:",d["total"],"| recebidos:",len(d["offers"]))'
+```
+
+`recon/fixtures/` guarda as evidências para servirem de fixture dos testes:
+o JSON dos 61 lotes, o manifesto do lote 3 e o Edital do evento.
+
+> `extrai_manifesto.py` é prova de conceito, não o produto. O extrator caseiro dele
+> funciona nos manifestos, mas devolve lixo no Edital, que usa fonte com subset sem
+> `/ToUnicode`. O produto vai usar `pdfjs-dist`. Detalhes em `docs/01-reconhecimento.md`.
+
+## Aviso
+
+Os PDFs e o JSON em `recon/fixtures/` são material público do evento
+`logistica-reversa-790754`, capturados como evidência técnica. Preço de mercado estimado
+por IA é chute informado, não cotação — a decisão de lance é sempre do operador.

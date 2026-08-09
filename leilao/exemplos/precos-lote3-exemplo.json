@@ -1,0 +1,361 @@
+{
+  "exemplo": true,
+  "fonte": "PRECOS ILUSTRATIVOS de mercado online, para demonstrar o calculo do teto. NAO use para dar lance: revise item por item com os seus numeros de giro.",
+  "itens": {
+    "fralda pompom 86 und": {
+      "preco": 90,
+      "faixa": "A",
+      "nota": "FRALDA POMPOM 86 UND"
+    },
+    "lencos umedecidos pampers cuidado de bebe": {
+      "preco": 15,
+      "faixa": "A",
+      "nota": "Lenços Umedecidos Pampers Cuidado de bebê"
+    },
+    "fralda descartavel huggies maxima protecao tamanho xxxg 128": {
+      "preco": 120,
+      "faixa": "A",
+      "nota": "Fralda Descartável Huggies Máxima Proteção Tamanho XXXG 128"
+    },
+    "roupa intima tena pants noturna g eg 32 unidades": {
+      "preco": 70,
+      "faixa": "A",
+      "nota": "Roupa Íntima Tena Pants Noturna G,EG 32 Unidades"
+    },
+    "fralda descartavel turma da monica baby xg pacote 42 unidades": {
+      "preco": 50,
+      "faixa": "A",
+      "nota": "Fralda Descartável Turma da Mônica Baby XG Pacote 42 Unidades"
+    },
+    "fraldas pampers recem nascido tamanho rn com 36 unidades": {
+      "preco": 40,
+      "faixa": "A",
+      "nota": "Fraldas Pampers Recém-Nascido Tamanho RN COM 36 unidades"
+    },
+    "controle universal": {
+      "preco": 25,
+      "faixa": "A",
+      "nota": "CONTROLE UNIVERSAL"
+    },
+    "kit de piso plastico modular 25 pcs": {
+      "preco": 150,
+      "faixa": "A",
+      "nota": "KIT DE Piso Plástico Modular 25 PÇS"
+    },
+    "jogo de ferramentas sata incompleto": {
+      "preco": 150,
+      "faixa": "A",
+      "nota": "JOGO DE FERRAMENTAS SATA INCOMPLETO"
+    },
+    "ultensilios de cozinha diversos": {
+      "preco": null,
+      "faixa": "C",
+      "nota": "ULTENSILIOS DE COZINHA DIVERSOS"
+    },
+    "suporte para varal": {
+      "preco": null,
+      "faixa": "A",
+      "nota": "SUPORTE PARA VARAL"
+    },
+    "potes diversos": {
+      "preco": null,
+      "faixa": "C",
+      "nota": "POTES DIVERSOS"
+    },
+    "travessa retangular 1 6l branca coza uno": {
+      "preco": 35,
+      "faixa": "A",
+      "nota": "Travessa Retangular 1,6L Branca Coza Uno"
+    },
+    "travessa retangular 1 4l branca coza uno": {
+      "preco": 30,
+      "faixa": "A",
+      "nota": "Travessa Retangular 1,4L Branca Coza Uno"
+    },
+    "travessa oval 550ml branca coza uno": {
+      "preco": 25,
+      "faixa": "A",
+      "nota": "Travessa Oval 550ml Branca Coza Uno"
+    },
+    "travessa oval branca 800ml coza uno plastico": {
+      "preco": 28,
+      "faixa": "A",
+      "nota": "Travessa Oval Branca 800ml Coza Uno Plástico"
+    },
+    "prato ret 27x13cm coza": {
+      "preco": 20,
+      "faixa": "A",
+      "nota": "PRATO RET 27X13CM COZA"
+    },
+    "chuveiro usado": {
+      "preco": 40,
+      "faixa": "A",
+      "nota": "CHUVEIRO (USADO)"
+    },
+    "frigideiras diversas": {
+      "preco": 45,
+      "faixa": "A",
+      "nota": "FRIGIDEIRAS DIVERSAS"
+    },
+    "jogo de panela tramontina inox 4 pcs": {
+      "preco": 450,
+      "faixa": "A",
+      "nota": "JOGO DE PANELA TRAMONTINA INOX 4 PÇS"
+    },
+    "ralador com pote lyor": {
+      "preco": 35,
+      "faixa": "A",
+      "nota": "RALADOR COM POTE LYOR"
+    },
+    "fonte de alimentacao": {
+      "preco": null,
+      "faixa": "A",
+      "nota": "FONTE DE ALIMENTAÇÃO"
+    },
+    "trena vonder 5 metros": {
+      "preco": 30,
+      "faixa": "A",
+      "nota": "TRENA VONDER 5 METROS"
+    },
+    "pilha alcalina duracell aa kit 16 unidades": {
+      "preco": 60,
+      "faixa": "A",
+      "nota": "Pilha Alcalina Duracell AA Kit 16 Unidades"
+    },
+    "bijuterias diversas": {
+      "preco": null,
+      "faixa": "B",
+      "nota": "BIJUTERIAS DIVERSAS"
+    },
+    "abridor de latas multifuncional kitchenaid": {
+      "preco": 60,
+      "faixa": "A",
+      "nota": "Abridor de latas multifuncional KitchenAid"
+    },
+    "capa para celular ip 15": {
+      "preco": null,
+      "faixa": "A",
+      "nota": "CAPA PARA CELULAR IP 15"
+    },
+    "bateria notebook": {
+      "preco": 150,
+      "faixa": "A",
+      "nota": "BATERIA NOTEBOOK"
+    },
+    "carteira de bolso": {
+      "preco": null,
+      "faixa": "A",
+      "nota": "CARTEIRA DE BOLSO"
+    },
+    "bolsa termica lyor": {
+      "preco": 60,
+      "faixa": "A",
+      "nota": "BOLSA TÉRMICA LYOR"
+    },
+    "veda porta": {
+      "preco": null,
+      "faixa": "A",
+      "nota": "VEDA PORTA"
+    },
+    "porta faca tramontina madeira": {
+      "preco": 90,
+      "faixa": "A",
+      "nota": "PORTA FACA TRAMONTINA MADEIRA"
+    },
+    "taco medieval": {
+      "preco": null,
+      "faixa": "A",
+      "nota": "TACO MEDIEVAL"
+    },
+    "amaciador de carne": {
+      "preco": null,
+      "faixa": "A",
+      "nota": "AMACIADOR DE CARNE"
+    },
+    "seladora com temporizador": {
+      "preco": 300,
+      "faixa": "A",
+      "nota": "SELADORA COM TEMPORIZADOR"
+    },
+    "controle xbox usado": {
+      "preco": 150,
+      "faixa": "A",
+      "nota": "CONTROLE XBOX (USADO)"
+    },
+    "prateleira": {
+      "preco": 60,
+      "faixa": "A",
+      "nota": "PRATELEIRA"
+    },
+    "mascara de gatinho": {
+      "preco": null,
+      "faixa": "C",
+      "nota": "MASCARA DE GATINHO"
+    },
+    "rodo de limpeza": {
+      "preco": null,
+      "faixa": "A",
+      "nota": "RODO DE LIMPEZA"
+    },
+    "saco de lixo 50 litros": {
+      "preco": null,
+      "faixa": "A",
+      "nota": "SACO DE LIXO 50 LITROS"
+    },
+    "pa de bico tramontina": {
+      "preco": 70,
+      "faixa": "A",
+      "nota": "PÁ DE BICO TRAMONTINA"
+    },
+    "livros diversos": {
+      "preco": null,
+      "faixa": "C",
+      "nota": "LIVROS DIVERSOS"
+    },
+    "grampo rapido bessey 6": {
+      "preco": 120,
+      "faixa": "A",
+      "nota": "GRAMPO RÁPIDO BESSEY 6"
+    },
+    "alicate wattimetro aw 4800 digital solden": {
+      "preco": 400,
+      "faixa": "A",
+      "nota": "Alicate Wattímetro Aw-4800 Digital Solden"
+    },
+    "balanca bioimpedancia": {
+      "preco": 120,
+      "faixa": "A",
+      "nota": "Balança bioimpedância"
+    },
+    "faca spyderco": {
+      "preco": 350,
+      "faixa": "A",
+      "nota": "Faca Spyderco"
+    },
+    "grampo rapido bessey ehkxl24 24 600mm forca de aperto 600lb": {
+      "preco": 250,
+      "faixa": "A",
+      "nota": "Grampo Rápido Bessey Ehkxl24 24,600mm Força De Aperto 600lb"
+    },
+    "corda": {
+      "preco": null,
+      "faixa": "A",
+      "nota": "corda"
+    },
+    "canivete multi uso": {
+      "preco": 40,
+      "faixa": "A",
+      "nota": "canivete multi uso"
+    },
+    "quebra cabeca 1000 pecas": {
+      "preco": 50,
+      "faixa": "A",
+      "nota": "Quebra Cabeça 1000 Peças"
+    },
+    "carga gillette fusion 5 com 4 unidades": {
+      "preco": 80,
+      "faixa": "A",
+      "nota": "Carga Gillette Fusion 5 Com 4 Unidades"
+    },
+    "balanca de bioimpedancia de vidro lyor": {
+      "preco": 130,
+      "faixa": "A",
+      "nota": "Balança de Bioimpedância de Vidro Lyor"
+    },
+    "saco baloes 50 unidades": {
+      "preco": null,
+      "faixa": "A",
+      "nota": "SAco balões 50 unidades"
+    },
+    "stanley bomba mate com mola ajustavel": {
+      "preco": 90,
+      "faixa": "A",
+      "nota": "Stanley - Bomba Mate com mola ajustável"
+    },
+    "sanduicheira mondial": {
+      "preco": 90,
+      "faixa": "A",
+      "nota": "SANDUICHEIRA MONDIAL"
+    },
+    "blusa decathlon": {
+      "preco": 80,
+      "faixa": "A",
+      "nota": "BLUSA DECATHLON"
+    },
+    "calca adidas": {
+      "preco": 150,
+      "faixa": "A",
+      "nota": "CALÇA ADIDAS"
+    },
+    "roupas diversas": {
+      "preco": null,
+      "faixa": "C",
+      "nota": "ROUPAS DIVERSAS"
+    },
+    "trilho de gaveta": {
+      "preco": null,
+      "faixa": "A",
+      "nota": "TRILHO DE GAVETA"
+    },
+    "porta joia": {
+      "preco": null,
+      "faixa": "A",
+      "nota": "PORTA JOIA"
+    },
+    "rastreador de dispositivo": {
+      "preco": null,
+      "faixa": "A",
+      "nota": "RASTREADOR DE DISPOSITIVO"
+    },
+    "sapateira banco": {
+      "preco": 120,
+      "faixa": "A",
+      "nota": "SAPATEIRA BANCO"
+    },
+    "chapa de inox": {
+      "preco": null,
+      "faixa": "A",
+      "nota": "CHAPA DE INOX"
+    },
+    "carregador hc 11": {
+      "preco": null,
+      "faixa": "C",
+      "nota": "CARREGADOR HC 11"
+    },
+    "air fryer britania 5 5 litros": {
+      "preco": 350,
+      "faixa": "A",
+      "nota": "AIR FRYER BRITANIA 5,5 LITROS"
+    },
+    "martelete rompedor bosch gbh 2 24d 820w com maleta": {
+      "preco": 1200,
+      "faixa": "A",
+      "nota": "Martelete Rompedor Bosch Gbh 2-24d 820w Com Maleta"
+    },
+    "pantufa": {
+      "preco": null,
+      "faixa": "A",
+      "nota": "PANTUFA"
+    },
+    "bota diversas": {
+      "preco": null,
+      "faixa": "A",
+      "nota": "BOTA DIVERSAS"
+    },
+    "sandalias diversas": {
+      "preco": null,
+      "faixa": "A",
+      "nota": "SANDALIAS DIVERSAS"
+    },
+    "tenis diversos": {
+      "preco": null,
+      "faixa": "C",
+      "nota": "TENIS DIVERSOS"
+    },
+    "havaianas diversas": {
+      "preco": 30,
+      "faixa": "A",
+      "nota": "HAVAIANAS DIVERSAS"
+    }
+  }
+}
