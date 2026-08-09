@@ -27,7 +27,7 @@ npm run cli -- precos --lote 56 --fixture
 
 # Estudo dos 61 lotes, offline, a partir do evento capturado
 npm run cli -- estudo --fixture --frete 150 --refresh 15 \
-  --precos exemplos/precos-lote3-exemplo.json
+  --precos exemplos/precos-operador.json
 #   → saida/estudo-790754.html
 
 # Ao vivo, contra o site
@@ -36,7 +36,7 @@ npm run cli -- estudo --url https://www.superbid.net/evento/logistica-reversa-79
 # Esqueleto de preços para preencher (sem números inventados)
 npm run cli -- precos --saida precos.json
 
-npm test          # 129 testes
+npm test          # 135 testes
 npm run typecheck
 ```
 
@@ -56,6 +56,8 @@ npm run typecheck
 | Shortlist por custo/un efetiva (sem preço) | ✅ |
 | Gate de cobertura: não exibe teto que engana | ✅ |
 | Filtro de categorias que o operador não trabalha | ✅ cosmético, limpeza, bebida |
+| CI (typecheck + testes + estudo end-to-end) | ✅ `.github/workflows/leilao.yml` |
+| Refresh validado em navegador real | ✅ ver abaixo |
 | Extração do Edital | ❌ ver "tarefa zero" abaixo |
 
 ## Documentos
@@ -135,6 +137,23 @@ ordenava por quantidade e enchia o topo de copo descartável, papel sulfite e ve
 martelete fora das 15 primeiras. Corrigido, o topo é ferramenta elétrica e eletrodoméstico.
 
 O `√(nº de lotes)` entra porque precificar uma linha que aparece em 6 lotes destrava 6 tetos.
+
+## O refresh foi validado em navegador de verdade
+
+Não bastava assumir. O caminho `fetch` → parse → repintar foi exercitado em Chromium com um
+payload servido localmente **com o mesmo header CORS que a API real manda**: o cabeçalho
+atualizou a hora e o lote 3 repintou de R$ 2.130 para R$ 9.999. Com a API inalcançável, o
+cabeçalho mostra `sem conexão` em vez de mentir com dado velho.
+
+Duas armadilhas apareceram no caminho, ambas da bancada de teste e não do código: o Chromium
+do ambiente de build não tem rede, e `python -m http.server` não envia
+`Access-Control-Allow-Origin` — então o navegador bloqueia igual bloquearia qualquer API sem
+CORS.
+
+Como teste de navegador não roda no CI, o que ficou travado é o **contrato entre as duas
+metades**: `test/refresh.test.ts` asserta que todo `dataset.x` que o script lê corresponde a um
+`data-x` que o HTML emite. Esse bug já aconteceu — o script lia `data-teto-seguro` que o HTML
+não emitia, e o refresh repintava contra zero.
 
 ## Categorias fora do escopo
 
