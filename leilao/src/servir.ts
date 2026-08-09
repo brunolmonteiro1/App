@@ -20,7 +20,7 @@
  */
 
 import { createReadStream } from 'node:fs';
-import { stat, writeFile, rename } from 'node:fs/promises';
+import { readdir, stat, writeFile, rename } from 'node:fs/promises';
 import { timingSafeEqual } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { extname, join, resolve, sep } from 'node:path';
@@ -402,6 +402,80 @@ async function apiRegerarEstudo(): Promise<unknown> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// A porta de entrada: `/` tem de dizer o que existe e o que falta
+// ─────────────────────────────────────────────────────────────────────────────
+
+function paginaTexto(res: ServerResponse, status: number, html: string): void {
+  const corpo = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Painel do leilão</title>
+<style>body{background:#12141a;color:#e6e8ee;font:15px/1.5 ui-sans-serif,system-ui,sans-serif;
+margin:0;padding:34px 22px}a{color:#5b9bf0}h1{font-size:19px;margin:0 0 14px}
+code{background:#1b1e26;padding:2px 6px;border-radius:4px;font-size:13px}
+li{margin:5px 0}.ok{color:#37a86b}.falta{color:#c9a227}
+.caixa{max-width:70ch}pre{background:#1b1e26;padding:11px 13px;border-radius:6px;
+overflow-x:auto;font-size:13px}</style></head><body><div class="caixa">${html}</div></body></html>`;
+  res.writeHead(status, {
+    // Sem charset explícito o navegador lê UTF-8 como latin-1 e "não" sai "nÃ£o".
+    'content-type': 'text/html; charset=utf-8',
+    'content-length': Buffer.byteLength(corpo),
+    'cache-control': 'no-store',
+  });
+  res.end(corpo);
+}
+
+/**
+ * Nome do arquivo do estudo, que **não é fixo**.
+ *
+ * O `estudo` grava em `saida/estudo-<auctionId>.html` por padrão, e só sai como `estudo.html`
+ * quando alguém passa `--saida`. Um link fixo para `/estudo.html` dá 404 sempre que o comando
+ * roda sem essa flag — e um 404 nesse ponto parece que a ferramenta inteira não funciona.
+ */
+async function arquivoDoEstudo(): Promise<string | null> {
+  for (const nome of ['estudo.html']) {
+    if (await stat(join(RAIZ, nome)).then(() => true, () => false)) return nome;
+  }
+  // Vale a leitura do snapshot: ele registra o nome usado na última geração.
+  const doSnapshot = await snapshot()
+    .then((s) => s.arquivoEstudo)
+    .catch(() => null);
+  if (doSnapshot && (await stat(join(RAIZ, doSnapshot)).then(() => true, () => false))) {
+    return doSnapshot;
+  }
+  const achados = await readdir(RAIZ).catch(() => [] as string[]);
+  return achados.find((f) => /^estudo.*\.html$/.test(f)) ?? null;
+}
+
+/** Página inicial: diz o que já existe, o que falta, e leva às duas telas. */
+async function paginaInicial(res: ServerResponse): Promise<void> {
+  const estudo = await arquivoDoEstudo();
+  const temTela = await stat(join(RAIZ, 'precificar.html')).then(() => true, () => false);
+  const temEstado = await stat(join(RAIZ, NOME_SNAPSHOT)).then(() => true, () => false);
+
+  const linha = (ok: boolean, texto: string) =>
+    `<li class="${ok ? 'ok' : 'falta'}">${ok ? '✓' : '✗'} ${texto}</li>`;
+
+  const pendencia = !temEstado || !estudo
+    ? `<p class="falta">Falta rodar o job que baixa os manifestos e gera as páginas:</p>
+<pre>cd /opt/leilao/App/leilao
+docker compose run --rm gerar</pre>
+<p>Se ele já rodou e ainda falta arquivo, o mais provável é que o
+<code>gerar</code> tenha escrito num volume diferente do que o painel lê. Confira com:</p>
+<pre>docker compose run --rm gerar ls -la saida</pre>`
+    : '';
+
+  paginaTexto(res, 200, `<h1>Painel do leilão</h1>
+<ul>
+  <li><a href="precificar.html"><strong>Precificar</strong></a> — onde você põe os preços${temTela ? '' : ' <span class="falta">(arquivo ainda não gerado)</span>'}</li>
+  <li>${estudo ? `<a href="${estudo}"><strong>Estudo</strong></a> — os tetos, para ler ao lado do BidTV` : '<span class="falta"><strong>Estudo</strong> — ainda não gerado</span>'}</li>
+</ul>
+<h1>Estado</h1>
+<ul>
+${linha(temEstado, `<code>${NOME_SNAPSHOT}</code> — evento e manifestos (a tela de precificação depende dele)`)}
+${linha(!!estudo, `estudo em HTML${estudo ? ` — <code>${estudo}</code>` : ''}`)}
+${linha(temTela, '<code>precificar.html</code>')}
+</ul>
+${pendencia}`);
+}
 
 const servidor = createServer(async (req, res) => {
   if (!autorizado(req)) {
@@ -458,6 +532,22 @@ const servidor = createServer(async (req, res) => {
     return;
   }
 
+  // A raiz nunca pode dar 404: é o endereço que o operador digita, e um 404 aqui parece que
+  // a ferramenta inteira não subiu.
+  if (rota === '/' || rota === '/index.html') {
+    return paginaInicial(res);
+  }
+
+  // `estudo.html` é o nome que a documentação e a tela de precificação usam, mas o comando
+  // grava `estudo-<id>.html` quando roda sem `--saida`. Redireciona em vez de 404.
+  if (rota === '/estudo.html') {
+    const real = await arquivoDoEstudo();
+    if (real && real !== 'estudo.html') {
+      res.writeHead(302, { location: '/' + real, 'cache-control': 'no-store' }).end();
+      return;
+    }
+  }
+
   const alvo = caminhoSeguro(req.url ?? '/');
   if (!alvo) {
     res.writeHead(403).end('fora do diretório servido\n');
@@ -468,8 +558,7 @@ const servidor = createServer(async (req, res) => {
     const st = await stat(alvo);
     // Diretório sem index: listar arquivos seria vazar nomes sem ganho nenhum aqui.
     if (st.isDirectory()) {
-      res.writeHead(404).end('não encontrado\n');
-      return;
+      return naoEncontrado(res, rota);
     }
     res.writeHead(200, {
       'content-type': TIPOS[extname(alvo).toLowerCase()] ?? 'application/octet-stream',
@@ -483,9 +572,21 @@ const servidor = createServer(async (req, res) => {
     }
     createReadStream(alvo).pipe(res);
   } catch {
-    res.writeHead(404).end('não encontrado\n');
+    return naoEncontrado(res, rota);
   }
 });
+
+/** 404 que diz o que existe. Um "não encontrado" pelado não ajuda ninguém a sair do lugar. */
+async function naoEncontrado(res: ServerResponse, rota: string): Promise<void> {
+  const estudo = await arquivoDoEstudo();
+  paginaTexto(res, 404, `<h1>Não encontrado</h1>
+<p><code>${rota.replace(/[<>&]/g, '')}</code> não existe nesta pasta.</p>
+<ul>
+  <li><a href="/">página inicial do painel</a> — mostra o que já foi gerado</li>
+  <li><a href="precificar.html">precificar.html</a></li>
+  ${estudo ? `<li><a href="${estudo}">${estudo}</a></li>` : '<li>o estudo ainda não foi gerado</li>'}
+</ul>`);
+}
 
 // Publicar sem senha não é opção de configuração: o processo para aqui.
 if (!LOOPBACK && !SENHA) {

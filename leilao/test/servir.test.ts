@@ -1,4 +1,4 @@
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -86,5 +86,58 @@ describe('painel — não sai do diretório servido', () => {
     expect([403, 404]).toContain(r.status);
     // e continua respondendo depois
     expect((await fetch(`${base}/estudo.html`)).status).toBe(200);
+  });
+});
+
+/**
+ * A raiz e o 404 são a primeira coisa que o operador vê quando algo não está no lugar.
+ *
+ * Custou uma sessão: ele digitou o IP, recebeu `nÃ£o encontrado` numa página branca, e concluiu
+ * que a ferramenta não funcionava. Eram dois defeitos meus somados — resposta de erro sem
+ * charset, e um 404 que não dizia nada.
+ */
+describe('painel — a porta de entrada não pode ser um 404 mudo', () => {
+  it('a raiz responde 200 e diz o que fazer', async () => {
+    const r = await fetch(`${base}/`);
+    expect(r.status).toBe(200);
+    const html = await r.text();
+    expect(html).toContain('precificar.html');
+    // Com a pasta vazia de estudo, tem de mandar rodar o job em vez de só falhar.
+    expect(html).toMatch(/docker compose run --rm gerar|Estudo/);
+  });
+
+  it('erro vem com charset, senão o acento chega quebrado no navegador', async () => {
+    // `nÃ£o encontrado` é UTF-8 lido como latin-1 — exatamente o que apareceu na tela dele.
+    const r = await fetch(`${base}/naoexiste.html`);
+    expect(r.status).toBe(404);
+    expect(r.headers.get('content-type')).toContain('charset=utf-8');
+    expect(await r.text()).toContain('Não encontrado');
+  });
+
+  it('o 404 oferece saída, não deixa o operador na página branca', async () => {
+    const html = await (await fetch(`${base}/qualquercoisa`)).text();
+    expect(html).toContain('href="/"');
+    expect(html).toContain('precificar.html');
+  });
+});
+
+describe('painel — o estudo não tem nome fixo', () => {
+  it('/estudo.html redireciona para estudo-<id>.html quando é esse o nome no disco', async () => {
+    // O comando grava `estudo-<auctionId>.html` quando roda sem `--saida`, e a documentação
+    // linka `estudo.html`. Sem o redirect, o link certo dá 404 e parece defeito da ferramenta.
+    await writeFile(join(dir, 'estudo-790754.html'), '<h1>o estudo</h1>');
+    // Só há redirect quando `estudo.html` NÃO existe — que é o caso na VPS dele.
+    await rm(join(dir, 'estudo.html'));
+    try {
+      const r = await fetch(`${base}/estudo.html`, { redirect: 'manual' });
+      expect(r.status).toBe(302);
+      expect(r.headers.get('location')).toBe('/estudo-790754.html');
+
+      const seguindo = await fetch(`${base}/estudo.html`);
+      expect(seguindo.status).toBe(200);
+      expect(await seguindo.text()).toContain('o estudo');
+    } finally {
+      await writeFile(join(dir, 'estudo.html'), '<h1>estudo</h1>');
+    }
   });
 });
