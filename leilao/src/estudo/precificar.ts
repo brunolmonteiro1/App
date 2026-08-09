@@ -184,6 +184,17 @@ export function gerarPaginaPrecificar(auctionId: number): string {
       <div id="vendas"></div>
     </div>
     <div class="passo">
+      <strong>2b. Venda média da peça de VOLUME</strong>
+      <p class="ajuda">
+        A bugiganga: faixa C e o que vem dentro das caixas de "diversos". Um número só, porque
+        bugiganga é bugiganga em qualquer categoria. <strong>Sem ele o lucro não é calculado</strong> —
+        40% das unidades deste evento são volume, e ignorá-las pintaria prejuízo em quase todo lote.
+        Elas valem <em>zero no teto</em> (você não paga por elas) e valem algo na venda.
+      </p>
+      <label><span>venda média da peça de volume</span>
+        <input type="text" id="rVolume" inputmode="decimal" placeholder="R$ por peça"></label>
+    </div>
+    <div class="passo">
       <strong>3. Perda por categoria</strong>
       <p class="ajuda">
         Fração que você descarta: avaria, faltando peça, desmontado que não remonta, vencido.
@@ -512,6 +523,10 @@ document.getElementById('abrirRegra').onclick = function () {
     document.getElementById('rAlvo').value = String(j.regra.custoPorItemAlvo).replace('.', ',');
     document.getElementById('rMax').value = String(j.regra.custoPorItemMaximo).replace('.', ',');
     campos('vendas', j.rotulos, j.vendaMediaPorItemUtil, 'v-', 'R$ por peça');
+    document.getElementById('rVolume').value =
+      j.vendaMediaPorItemVolume === null || j.vendaMediaPorItemVolume === undefined
+        ? ''
+        : String(j.vendaMediaPorItemVolume).replace('.', ',');
     campos('perdas', j.rotulos, j.perdaPorCategoria, 'p-', 'fração 0–1');
     document.getElementById('recadoRegra').textContent = 'gravado em ' + j.arquivo;
   }).catch(function (e) {
@@ -555,6 +570,7 @@ document.getElementById('salvarRegra').onclick = function () {
       custoPorItemMaximo: document.getElementById('rMax').value,
     },
     vendaMediaPorItemUtil: venda,
+    vendaMediaPorItemVolume: document.getElementById('rVolume').value.trim() || null,
     perdaPorCategoria: perda,
   })
     .then(function () { return pedir('api/estudo', {}); })

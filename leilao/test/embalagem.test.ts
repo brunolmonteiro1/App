@@ -215,3 +215,106 @@ describe('o evento inteiro: a inversão do painel', () => {
     expect(comTetoPorRegra).toBeGreaterThanOrEqual(55);
   });
 });
+
+/**
+ * O erro que a estimativa de lucro cometia, e o portão que impede a volta dele.
+ *
+ * A primeira versão calculava faturamento só sobre os itens NOMEADOS, ignorando a faixa C e o
+ * conteúdo das caixas de diversos. Nos lotes deste evento isso é ~40% das unidades, e o resultado
+ * era prejuízo em praticamente tudo: o lote 15 aparecia com −R$ 109 quando contar o volume dá
+ * +R$ 998, e o lote 3 com −R$ 378 contra +R$ 475.
+ *
+ * Isso é tão perigoso quanto inflar o teto, só erra para o outro lado: faria o operador descartar
+ * lote bom. O volume vale ZERO no teto — ele não paga por bugiganga — e vale algo na venda.
+ */
+describe('lucro estimado — o volume conta na venda e não conta no teto', () => {
+  const comVolume = {
+    itens: aplicar(
+      [
+        { descricao: 'AIR FRYER BRITANIA 5,5 LITROS', quantidade: 100, ref: 'SB1' },
+        { descricao: 'MASCARA DE GATINHO', quantidade: 200, ref: 'SB1' },
+      ],
+      { 'air fryer britania 5 5 litros': { preco: 300 } },
+      [],
+      [],
+    ),
+    categoria: 'utensilios' as const,
+    lanceAtual: 1000,
+    incremento: 200,
+    temLances: true,
+    encerrado: false,
+    unidadesDeclaradas: 300,
+    composicao: compor([{ descricao: 'X', quantidade: 1, ref: 'SB1' }]),
+  };
+
+  it('sem o preço da peça de volume, o lucro NÃO é exibido', () => {
+    const av = avaliar(comVolume, { ...cfg, vendaMediaPorItemUtil: { ...cfg.vendaMediaPorItemUtil, utensilios: 20 } });
+    expect(av.volumeBazar).toBe(200);
+    expect(av.faltaVendaVolume).toBe(true);
+    // Exibir só a parte dos nomeados daria negativo em quase todo lote — o erro na direção oposta.
+    expect(av.lucroEstimado).toBeNull();
+  });
+
+  it('com os dois números, o lucro sai e mostra a composição', () => {
+    const c = {
+      ...cfg,
+      vendaMediaPorItemUtil: { ...cfg.vendaMediaPorItemUtil, utensilios: 20 },
+      vendaMediaPorItemVolume: 6,
+    };
+    const av = avaliar(comVolume, c);
+    expect(av.faltaVendaVolume).toBe(false);
+    const perda = 1 - c.categorias.utensilios.perda;
+    expect(av.faturamentoNomeados).toBeCloseTo(100 * 20 * perda, 2);
+    expect(av.faturamentoVolume).toBeCloseTo(200 * 6 * perda, 2);
+    expect(av.faturamentoEstimado).toBeCloseTo(av.faturamentoNomeados! + av.faturamentoVolume!, 2);
+    expect(av.lucroEstimado).toBeCloseTo(av.faturamentoEstimado! - av.custoAtual.total, 2);
+  });
+
+  it('o volume NÃO entra no teto, mesmo entrando no faturamento', () => {
+    const c = {
+      ...cfg,
+      vendaMediaPorItemUtil: { ...cfg.vendaMediaPorItemUtil, utensilios: 20 },
+      vendaMediaPorItemVolume: 6,
+    };
+    const pouco = avaliar(comVolume, c);
+    const muito = avaliar(
+      {
+        ...comVolume,
+        itens: aplicar(
+          [
+            { descricao: 'AIR FRYER BRITANIA 5,5 LITROS', quantidade: 100, ref: 'SB1' },
+            { descricao: 'MASCARA DE GATINHO', quantidade: 2000, ref: 'SB1' },
+          ],
+          { 'air fryer britania 5 5 litros': { preco: 300 } },
+          [],
+          [],
+        ),
+      },
+      c,
+    );
+    // Dez vezes mais bugiganga: o faturamento sobe, o teto por valor não se move um centavo.
+    expect(muito.faturamentoVolume!).toBeGreaterThan(pouco.faturamentoVolume!);
+    expect(muito.tetoSeguro).toBeCloseTo(pouco.tetoSeguro, 2);
+    expect(muito.valorOnline).toBeCloseTo(pouco.valorOnline, 2);
+  });
+
+  it('lote sem volume nenhum dispensa o parâmetro e mostra lucro', () => {
+    // Foi o caso do lote 56 no evento: 288 itens nomeados, zero em caixa, zero faixa C.
+    const semVolume = {
+      ...comVolume,
+      itens: aplicar(
+        [{ descricao: 'AIR FRYER BRITANIA 5,5 LITROS', quantidade: 100, ref: 'SB1' }],
+        { 'air fryer britania 5 5 litros': { preco: 300 } },
+        [],
+        [],
+      ),
+    };
+    const av = avaliar(semVolume, {
+      ...cfg,
+      vendaMediaPorItemUtil: { ...cfg.vendaMediaPorItemUtil, utensilios: 20 },
+    });
+    expect(av.volumeBazar).toBe(0);
+    expect(av.faltaVendaVolume).toBe(false);
+    expect(av.lucroEstimado).not.toBeNull();
+  });
+});

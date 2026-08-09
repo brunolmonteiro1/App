@@ -147,6 +147,20 @@ export interface Config {
    * Enquanto for null, o estudo não mostra lucro nenhum.
    */
   vendaMediaPorItemUtil: Record<Categoria, number | null>;
+  /**
+   * Venda média de UMA peça de volume: faixa C e conteúdo de caixa de "diversos".
+   *
+   * Um número só, global, porque bugiganga é bugiganga em qualquer categoria. Existe porque sem
+   * ele a estimativa de lucro fica **sistematicamente negativa**: nos lotes deste evento, 40% das
+   * unidades são faixa C, e ignorá-las levou o lote 15 a aparecer com −R$ 109 quando contando o
+   * volume dá +R$ 998. Dizer "todo lote dá prejuízo" é tão perigoso quanto inflar o teto — só
+   * erra para o outro lado, fazendo perder lote bom.
+   *
+   * Nas palavras do operador: *"volume alto é ativo, bazar com 500 pessoas gira item barato; as
+   * 60 máscaras de gatinho são exatamente o que vende ali"*. Elas valem zero no TETO — ele não
+   * paga por elas — e valem algo no FATURAMENTO.
+   */
+  vendaMediaPorItemVolume: number | null;
   /** Custo de retirada por lote. Retirada é em Embu das Artes-SP. */
   freteporLote: number;
   /** Marca o custo como incompleto enquanto o frete não for informado. */
@@ -229,6 +243,7 @@ export const CONFIG_PADRAO: Config = {
     bebidas: null,
     outros: null,
   },
+  vendaMediaPorItemVolume: null,
   freteporLote: 0,
   freteInformado: false,
   categorias: {

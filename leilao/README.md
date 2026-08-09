@@ -47,10 +47,16 @@ porque conta parafuso por parafuso — a linha ganha alerta e o fator de correç
 | **venda média** | 8 números | faturamento e lucro estimados nos 61 lotes |
 | **preço por item** | horas | teto por valor de revenda; vale o **menor** dos dois tetos |
 
-A camada 1 é o atalho que evita as ~1.900 pesquisas: um preço médio de venda por peça útil **por
-categoria**, que o operador já sabe de cabeça. Enquanto estiver em branco, o estudo **não mostra
-lucro nenhum** — é o lugar mais fácil de inventar número neste projeto, e lucro inventado vira
-lance real.
+A camada 1 é o atalho que evita as ~1.900 pesquisas: **9 números** que o operador já sabe de
+cabeça — venda média por peça útil em cada categoria, mais **um** para a peça de volume (faixa C e
+conteúdo das caixas).
+
+O número do volume não é opcional, e a razão é um erro que a primeira versão cometeu: contando só
+os itens nomeados, o lucro saía **negativo em quase todo lote** — lote 15 com −R$ 109 onde contar o
+volume dá +R$ 998. Nas palavras do operador, *"volume alto é ativo; bazar com 500 pessoas gira item
+barato"*. A bugiganga vale **zero no teto** (ele não paga por ela) e vale algo na **venda**. Dizer
+"todo lote dá prejuízo" é tão enganoso quanto inflar o teto, só faz perder lote bom em vez de pagar
+caro — então, faltando o número, o estudo não mostra lucro nenhum.
 
 ### As âncoras saem de graça
 

@@ -63,10 +63,21 @@ export interface Avaliacao {
 
   // ── Camada 1: lucro estimado, um número por categoria ───────────────────────
 
-  /** `unidadesEfetivas × venda média da categoria`. null sem o parâmetro. */
+  /** Faturamento dos itens NOMEADOS: `unidadesEfetivas × venda média da categoria`. */
+  faturamentoNomeados: number | null;
+  /** Faturamento do VOLUME: faixa C + conteúdo das caixas de diversos. */
+  faturamentoVolume: number | null;
+  /** Soma dos dois. `null` enquanto faltar um dos dois parâmetros — ver `faltaVendaVolume`. */
   faturamentoEstimado: number | null;
   lucroEstimado: number | null;
   margemEstimada: number | null;
+  /**
+   * true quando o lote TEM volume mas falta o preço de venda dele.
+   *
+   * O lucro fica `null` neste caso, de propósito. Mostrar só a parte dos nomeados daria número
+   * negativo em quase todo lote — o mesmo erro do teto sem cobertura, na direção oposta.
+   */
+  faltaVendaVolume: boolean;
 
   /** Os itens de valor agregado alto, detectados sem preço. */
   ancoras: { descricao: string; quantidade: number; classe: number }[];
@@ -216,10 +227,25 @@ export function avaliar(e: EntradaAvaliacao, cfg: Config = CONFIG_PADRAO): Avali
       ? martelaDoTeto(cfg.regra.custoPorItemMaximo * divisorDaRegra, cfg.encargos, cfg.freteporLote)
       : 0;
 
-  // ── Camada 1: lucro por venda média da categoria. Um número, não mil. ─────────
+  // ── Camada 1: lucro por venda média. Dois números, não mil. ───────────────────
+  //
+  // O volume entra no faturamento e NÃO entra no teto, e essa assimetria é deliberada: ele não
+  // paga por bugiganga, mas vende bugiganga. Ignorar isso no faturamento pintava prejuízo em
+  // quase todo lote do evento.
   const vendaMedia = cfg.vendaMediaPorItemUtil[e.categoria];
-  const faturamentoEstimado =
+  const vendaVolume = cfg.vendaMediaPorItemVolume;
+  const unidadesDeVolume = volumeBazar + (comp?.volumeEmCaixa ?? 0);
+
+  const faturamentoNomeados =
     vendaMedia != null && unidadesEfetivas > 0 ? unidadesEfetivas * vendaMedia * (1 - cat.perda) : null;
+  const faturamentoVolume =
+    vendaVolume != null && unidadesDeVolume > 0 ? unidadesDeVolume * vendaVolume * (1 - cat.perda) : null;
+
+  const faltaVendaVolume = unidadesDeVolume > 0 && vendaVolume == null;
+  const faturamentoEstimado =
+    faturamentoNomeados === null || faltaVendaVolume
+      ? null
+      : faturamentoNomeados + (faturamentoVolume ?? 0);
   const lucroEstimado = faturamentoEstimado != null ? faturamentoEstimado - custoAtual.total : null;
 
   // Sem cobertura suficiente o teto por VALOR existe internamente mas não decide nada.
@@ -267,6 +293,9 @@ export function avaliar(e: EntradaAvaliacao, cfg: Config = CONFIG_PADRAO): Avali
     custoPorItemNomeado: nomeados && nomeados > 0 ? custoAtual.total / nomeados : null,
     tetoPorRegra,
     divisorDaRegra,
+    faturamentoNomeados,
+    faturamentoVolume,
+    faltaVendaVolume,
     faturamentoEstimado,
     lucroEstimado,
     margemEstimada:

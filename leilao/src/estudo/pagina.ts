@@ -73,6 +73,7 @@ export function gerarPagina(
   const incompleto = !cfg.freteInformado;
   const semTeto = linhas.filter((l) => l.av.semaforo === 'sem-teto').length;
   const soPelaRegra = linhas.filter((l) => l.av.baseDoTeto === 'regra').length;
+  const semVolume = linhas.filter((l) => l.av.faltaVendaVolume).length;
   const ignorados = linhas.filter((l) => l.av.semaforo === 'ignorado').length;
   const comTeto = linhas.filter(
     (l) => l.av.semaforo === 'verde' || l.av.semaforo === 'amarelo' || l.av.semaforo === 'vermelho',
@@ -177,10 +178,11 @@ export function gerarPagina(
       : ''
   }
   ${
-    incompleto || semTeto || soPelaRegra || ignorados
+    incompleto || semTeto || soPelaRegra || ignorados || semVolume
       ? `<div class="aviso">
       ${incompleto ? '<b>Custo incompleto:</b> frete de retirada não informado, então o teto está mais alto do que deveria. ' : ''}
       ${semTeto ? `<b>${semTeto} lote(s) sem teto:</b> nem contagem no título nem preço, então não há de onde calcular. ` : ''}
+      ${semVolume ? `<b>${semVolume} lote(s) sem lucro estimado:</b> falta a venda média da peça de volume (faixa C e conteúdo das caixas de "diversos"). São ~40% das unidades deste evento — sem esse número o lucro sairia negativo em quase tudo, o que seria tão enganoso quanto inflar o teto. ` : ''}
       ${soPelaRegra ? `<b>${soPelaRegra} lote(s) com teto só pela sua regra de R$/item</b> (custo ÷ itens ≤ R$ ${cfg.regra.custoPorItemMaximo}). Isso já decide, e é o que você usa hoje. Precificar um lote acrescenta a segunda visão — valor de revenda — e aí vale o menor dos dois tetos. ` : ''}
       ${ignorados ? `<b>${ignorados} lote(s) ignorado(s)</b> por categoria (${cfg.categoriasIgnoradas.join(', ')}) — ficam na lista para você reconhecê-los quando o leiloeiro chamar, mas sem teto. ` : ''}
       ${comTeto ? `<b>${comTeto} lote(s) com teto utilizável.</b>` : ''}
@@ -370,8 +372,12 @@ function linhaHtml(l: LinhaEstudo, fuso: FusoPayload, cfg: Config): string {
         ${av.volumeEmCaixa ? ` · ${av.volumeEmCaixa} em caixa fechada (${pct(av.fracaoEmCaixa)})` : ''}</div>
       ${
         av.lucroEstimado !== null
-          ? `<div><b>Lucro estimado</b> ${brl(av.lucroEstimado)} <small>margem ${av.margemEstimada?.toFixed(2)}x</small></div>`
-          : ''
+          ? `<div class="cpi ${av.lucroEstimado > 0 ? 'alvo' : 'fora'}"><b>Lucro estimado</b>
+        <strong>${brl(av.lucroEstimado)}</strong>
+        <small>${brl(av.faturamentoNomeados)} nomeados + ${brl(av.faturamentoVolume)} volume</small></div>`
+          : av.faltaVendaVolume
+            ? `<div><b>Lucro</b> — <small>falta a venda média da peça de volume</small></div>`
+            : ''
       }
       ${av.concentracao > 0.6 ? `<div><b>Concentração</b> ${pct(av.concentracao)} ⚠</div>` : ''}
     </div>

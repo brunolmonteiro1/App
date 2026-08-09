@@ -171,10 +171,21 @@ async function comandoEstudo(): Promise<void> {
   console.log(`  ${dentroDaRegra} lote(s) com custo/item declarado <= R$ ${cfg.regra.custoPorItemMaximo} no lance atual`);
   const emCaixa = linhas.filter((l) => l.av.fracaoEmCaixa >= cfg.regra.fracaoEmCaixaGrave).length;
   if (emCaixa) console.log(`  ${emCaixa} lote(s) com mais de ${(cfg.regra.fracaoEmCaixaGrave * 100).toFixed(0)}% do volume em caixa de "diversos"`);
-  const semVenda = Object.values(cfg.vendaMediaPorItemUtil).every((v) => v == null);
-  if (semVenda) {
-    console.log('\n  lucro estimado NÃO calculado: falta o preço médio de venda por peça útil, por');
-    console.log('  categoria. É um número por categoria (8 no total), não preço por item.');
+  const comLucro = linhas.filter((l) => l.av.lucroEstimado !== null).length;
+  const semVolume = linhas.filter((l) => l.av.faltaVendaVolume).length;
+  if (comLucro) {
+    const positivos = linhas.filter((l) => (l.av.lucroEstimado ?? 0) > 0).length;
+    console.log(`  lucro estimado em ${comLucro} lote(s) · ${positivos} com lucro positivo`);
+  }
+  if (!comLucro || semVolume) {
+    console.log('\n  lucro estimado incompleto. Faltam, na tela "Minha regra e venda média":');
+    if (Object.values(cfg.vendaMediaPorItemUtil).every((v) => v == null)) {
+      console.log('    · venda média por peça útil, por categoria (8 números)');
+    }
+    if (cfg.vendaMediaPorItemVolume == null && semVolume) {
+      console.log('    · venda média da peça de VOLUME (1 número) — sem ela o lucro sairia');
+      console.log('      negativo em quase todo lote, porque ~40% das unidades são volume');
+    }
   }
   if (!cfg.freteInformado) console.log('  custo marcado INCOMPLETO: passe --frete <valor> para fechar');
   if (refresh) console.log(`  refresh ligado: a página busca lances a cada ${refresh}s`);

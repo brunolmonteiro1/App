@@ -551,6 +551,7 @@ const servidor = createServer(async (req, res) => {
         return json(res, 200, {
           regra: cfg.regra,
           vendaMediaPorItemUtil: cfg.vendaMediaPorItemUtil,
+          vendaMediaPorItemVolume: cfg.vendaMediaPorItemVolume,
           perdaPorCategoria: Object.fromEntries(
             Object.entries(cfg.categorias).map(([k, v]) => [k, v.perda]),
           ),
@@ -565,6 +566,8 @@ const servidor = createServer(async (req, res) => {
         const novo: ArquivoRegra = {
           regra: { ...anterior.regra, ...corpo.regra },
           vendaMediaPorItemUtil: { ...anterior.vendaMediaPorItemUtil, ...corpo.vendaMediaPorItemUtil },
+          vendaMediaPorItemVolume:
+            'vendaMediaPorItemVolume' in corpo ? corpo.vendaMediaPorItemVolume : anterior.vendaMediaPorItemVolume,
           perdaPorCategoria: { ...anterior.perdaPorCategoria, ...corpo.perdaPorCategoria },
         };
         await gravarRegra(ARQUIVO_REGRA, novo);
@@ -572,6 +575,7 @@ const servidor = createServer(async (req, res) => {
         return json(res, 200, {
           regra: cfg.regra,
           vendaMediaPorItemUtil: cfg.vendaMediaPorItemUtil,
+          vendaMediaPorItemVolume: cfg.vendaMediaPorItemVolume,
           arquivo: ARQUIVO_REGRA,
         });
       }

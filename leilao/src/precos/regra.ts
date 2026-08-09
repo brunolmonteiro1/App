@@ -17,6 +17,8 @@ import { CONFIG_PADRAO, type Categoria, type Config } from '../config.ts';
 export interface ArquivoRegra {
   regra?: Partial<Config['regra']>;
   vendaMediaPorItemUtil?: Partial<Record<Categoria, number | null>>;
+  /** Venda média da peça de volume (faixa C + conteúdo de caixa). Um número, global. */
+  vendaMediaPorItemVolume?: number | string | null;
   /** Perda por categoria — hoje placeholder meu, esperando o histórico dele. */
   perdaPorCategoria?: Partial<Record<Categoria, number>>;
   atualizadoEm?: string;
@@ -82,6 +84,11 @@ export function aplicarRegra(a: ArquivoRegra, base: Config = CONFIG_PADRAO): Con
     if (!(cat in cfg.vendaMediaPorItemUtil)) continue;
     // Aqui `null` é significativo: apaga o valor e some com o lucro estimado da categoria.
     cfg.vendaMediaPorItemUtil[cat as Categoria] = v === null ? null : numeroOuNulo(v, 100_000);
+  }
+
+  if ('vendaMediaPorItemVolume' in a) {
+    const v = a.vendaMediaPorItemVolume;
+    cfg.vendaMediaPorItemVolume = v === null || v === undefined || v === '' ? null : numeroOuNulo(v, 100_000);
   }
 
   for (const [cat, v] of Object.entries(a.perdaPorCategoria ?? {})) {
