@@ -99,3 +99,24 @@ describe('Edital — outro tipo de PDF, e pdfjs-dist NÃO resolve a fonte dele',
     // que é fonte melhor que o Edital de qualquer forma.
   }, 120_000);
 });
+
+describe('o parser generaliza — três manifestos reais de lotes diferentes', () => {
+  // Cada soma tem de bater com o "APROX. N UN" do título do respectivo lote. É a prova de
+  // que o formato do manifesto é estável no evento, não uma coincidência do lote 3.
+  const casos: [string, number, number, string][] = [
+    ['manifesto-lote1-SB0032793.pdf', 21, 142, 'SB0032793'],
+    ['manifesto-lote3-SB0032812.pdf', 71, 304, 'SB0032812'],
+    ['manifesto-lote4-SB0032796.pdf', 26, 147, 'SB0032796'],
+  ];
+
+  for (const [arquivo, itens, soma, ref] of casos) {
+    it(`${arquivo}: ${itens} itens somando ${soma}`, async () => {
+      const m = await lerManifesto(new URL(`../recon/fixtures/${arquivo}`, import.meta.url).pathname);
+      expect(m.itens).toHaveLength(itens);
+      expect(m.somaQuantidades).toBe(soma);
+      expect(m.refs).toEqual([ref]);
+      // A conferência contra o título não pode gerar alerta quando tudo bate.
+      expect(conferir(m, ref, soma)).toEqual([]);
+    }, 60_000);
+  }
+});

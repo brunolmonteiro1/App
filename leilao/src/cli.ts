@@ -13,13 +13,25 @@ import { CONFIG_PADRAO, type Config } from './config.ts';
 import { auctionIdDaUrl, buscarEvento, parsearEvento, type Evento, type Lote } from './superbid/api.ts';
 import { detectar } from './analise/categoria.ts';
 import { calcularCusto, degrauProximo } from './analise/custo.ts';
-import { aplicar, carregarPrecos, cobertura, esqueleto, type ArquivoPrecos } from './analise/valor.ts';
+import {
+  aplicar,
+  carregarPrecos,
+  cobertura,
+  esqueleto,
+  esqueletoPriorizado,
+  priorizar,
+  type ArquivoPrecos,
+} from './analise/valor.ts';
+import type { ItemManifesto } from './analise/faixa.ts';
 import { reconciliar, refDoTitulo } from './analise/quantidade.ts';
 import { avaliar } from './analise/teto.ts';
 import { conferir, lerManifesto, type Manifesto } from './superbid/manifesto.ts';
+import { baixarManifestos, indexarCache } from './superbid/baixar.ts';
 import { gerarPagina, type LinhaEstudo } from './estudo/pagina.ts';
 
 const FIXTURE = new URL('../recon/fixtures/evento-790754-offers.json', import.meta.url).pathname;
+/** Onde os 57 manifestos ficam. Está no .gitignore: material do vendedor não vai pro repo. */
+const CACHE_ANEXOS = new URL('../cache/anexos', import.meta.url).pathname;
 const MANIFESTO_LOTE3 = new URL(
   '../recon/fixtures/manifesto-lote3-SB0032812.pdf',
   import.meta.url,
@@ -94,6 +106,57 @@ function montarLinha(
   };
 }
 
+/** Carrega o evento do fixture (offline) ou da API ao vivo. */
+async function carregarEvento(): Promise<Evento> {
+  if (temFlag('fixture')) {
+    // O fixture foi capturado com timeZoneId=UTC; o ao vivo pede America/Sao_Paulo.
+    const ev = parsearEvento(JSON.parse(await readFile(FIXTURE, 'utf8')), 'UTC');
+    console.log(`[fixture] evento ${ev.auctionId} · ${ev.lotes.length} lotes`);
+    return ev;
+  }
+  const url = arg('url');
+  if (!url) {
+    console.error('faltou --url <url do evento> (ou use --fixture)');
+    process.exit(2);
+  }
+  const id = auctionIdDaUrl(url);
+  console.log(`buscando evento ${id}…`);
+  const ev = await buscarEvento(id);
+  console.log(`recebidos ${ev.lotes.length} de ${ev.total} lotes`);
+  return ev;
+}
+
+/** Lê do cache os manifestos de todos os lotes que têm PDF baixado. */
+async function lerManifestosDoCache(
+  evento: Evento,
+): Promise<{ porLote: Map<number, Manifesto>; falhas: number[] }> {
+  const indice = await indexarCache(CACHE_ANEXOS);
+  const porLote = new Map<number, Manifesto>();
+  const falhas: number[] = [];
+  for (const lote of evento.lotes) {
+    const caminho = indice.get(lote.numero);
+    if (!caminho) continue;
+    try {
+      porLote.set(lote.numero, await lerManifesto(caminho));
+    } catch (e) {
+      falhas.push(lote.numero);
+      console.warn(`  lote ${lote.numero}: manifesto ilegível (${(e as Error).message})`);
+    }
+  }
+  return { porLote, falhas };
+}
+
+async function comandoBaixar(): Promise<void> {
+  const evento = await carregarEvento();
+  console.log(`baixando manifestos para ${CACHE_ANEXOS}`);
+  const r = await baixarManifestos(evento.lotes, CACHE_ANEXOS, (m) => console.log(`  ${m}`));
+  console.log(`\nbaixados ${r.baixados} · já em cache ${r.emCache} · sem anexo ${r.semAnexo.length}`);
+  if (r.semAnexo.length) {
+    console.log(`  lotes sem anexo (nunca terão teto por manifesto): ${r.semAnexo.join(', ')}`);
+  }
+  for (const f of r.falhas) console.log(`  FALHA lote ${f.lote}: ${f.motivo}`);
+}
+
 async function comandoEstudo(): Promise<void> {
   const cfg = { ...CONFIG_PADRAO };
   const frete = arg('frete');
@@ -102,22 +165,7 @@ async function comandoEstudo(): Promise<void> {
     cfg.freteInformado = true;
   }
 
-  let evento: Evento;
-  if (temFlag('fixture')) {
-    // O fixture foi capturado com timeZoneId=UTC; o ao vivo pede America/Sao_Paulo.
-    evento = parsearEvento(JSON.parse(await readFile(FIXTURE, 'utf8')), 'UTC');
-    console.log(`[fixture] evento ${evento.auctionId} · ${evento.lotes.length} lotes`);
-  } else {
-    const url = arg('url');
-    if (!url) {
-      console.error('faltou --url <url do evento> (ou use --fixture)');
-      process.exit(2);
-    }
-    const id = auctionIdDaUrl(url);
-    console.log(`buscando evento ${id}…`);
-    evento = await buscarEvento(id);
-    console.log(`recebidos ${evento.lotes.length} de ${evento.total} lotes`);
-  }
+  const evento = await carregarEvento();
 
   const caminhoPrecos = arg('precos');
   const precos = caminhoPrecos ? await carregarPrecos(caminhoPrecos) : null;
@@ -129,21 +177,14 @@ async function comandoEstudo(): Promise<void> {
   const limite = arg('limite') ? Number(arg('limite')) : undefined;
   const lotes = limite ? evento.lotes.slice(0, limite) : evento.lotes;
 
-  // Só o lote 3 tem manifesto capturado no repo. Baixar os 57 PDFs é a etapa seguinte;
-  // sem manifesto o lote entra no estudo com teto vazio e alerta, nunca com número
-  // inventado.
+  // Manifestos vêm do cache preenchido por `baixar`. Sem manifesto o lote entra no estudo
+  // com teto vazio e alerta, nunca com número inventado.
+  const { porLote } = await lerManifestosDoCache(evento);
+  console.log(`manifestos em cache: ${porLote.size}`);
+
   const linhas: LinhaEstudo[] = [];
   for (const lote of lotes) {
-    const ehLote3 = refDoTitulo(lote.titulo) === 'SB0032812';
-    let manifesto: Manifesto | null = null;
-    if (ehLote3) {
-      try {
-        manifesto = await lerManifesto(MANIFESTO_LOTE3);
-      } catch (e) {
-        console.warn(`  lote ${lote.numero}: manifesto ilegível (${(e as Error).message})`);
-      }
-    }
-    linhas.push(montarLinha(lote, manifesto, cfg, precos));
+    linhas.push(montarLinha(lote, porLote.get(lote.numero) ?? null, cfg, precos));
   }
 
   const refresh = arg('refresh');
@@ -178,24 +219,55 @@ function comandoCusto(): void {
 }
 
 async function comandoEsqueleto(): Promise<void> {
-  const m = await lerManifesto(MANIFESTO_LOTE3);
-  const saida = resolve(arg('saida') ?? 'precos-lote3.json');
-  await writeFile(saida, JSON.stringify(esqueleto(m.itens), null, 2), 'utf8');
-  const distintas = Object.keys(esqueleto(m.itens).itens).length;
-  console.log(`esqueleto de preços: ${saida}`);
-  console.log(`  ${m.itens.length} itens do manifesto · ${distintas} descrições distintas`);
-  console.log('  preencha "preco" com o valor online por unidade; deixe null o que não souber');
+  if (!temFlag('todos')) {
+    // Modo antigo: só o lote 3, útil para inspecionar um manifesto isolado.
+    const m = await lerManifesto(MANIFESTO_LOTE3);
+    const saida = resolve(arg('saida') ?? 'precos-lote3.json');
+    await writeFile(saida, JSON.stringify(esqueleto(m.itens), null, 2), 'utf8');
+    console.log(`esqueleto de preços: ${saida} · ${m.itens.length} itens`);
+    return;
+  }
+
+  const evento = await carregarEvento();
+  const { porLote } = await lerManifestosDoCache(evento);
+  if (porLote.size === 0) {
+    console.error('nenhum manifesto em cache — rode `baixar` primeiro');
+    process.exit(2);
+  }
+
+  const itensPorLote = new Map<number, ItemManifesto[]>(
+    [...porLote].map(([n, m]) => [n, m.itens]),
+  );
+  const linhas = priorizar(itensPorLote);
+  const saida = resolve(arg('saida') ?? 'precos.json');
+  await writeFile(saida, JSON.stringify(esqueletoPriorizado(linhas), null, 2), 'utf8');
+
+  const totalItens = [...itensPorLote.values()].reduce((s, i) => s + i.length, 0);
+  const relevantes = linhas.filter((l) => l.faixa !== 'C');
+  console.log(`esqueleto priorizado: ${saida}`);
+  console.log(`  ${porLote.size} manifestos · ${totalItens} linhas de item · ${linhas.length} descrições distintas`);
+  console.log(`  ${relevantes.length} relevantes (faixa A/B) · ${linhas.length - relevantes.length} irrisórias (C, valem zero)`);
+  console.log('\n  as 15 primeiras, por impacto:');
+  for (const l of linhas.slice(0, 15)) {
+    console.log(
+      `    ${String(l.unidadesTotais).padStart(4)} un · ${l.lotes.length} lote(s) · ${l.faixa} · ${l.descricao.slice(0, 58)}`,
+    );
+  }
+  console.log('\n  preencha "preco" de cima para baixo; deixe null o que não souber');
 }
 
 const comando = process.argv[2];
-if (comando === 'estudo') await comandoEstudo();
+if (comando === 'baixar') await comandoBaixar();
+else if (comando === 'estudo') await comandoEstudo();
 else if (comando === 'precos') await comandoEsqueleto();
 else if (comando === 'custo') comandoCusto();
 else {
   console.log(`uso:
   npm run cli -- estudo --fixture [--refresh 15] [--frete 150] [--precos p.json]
   npm run cli -- estudo --url https://www.superbid.net/evento/<slug>-<id>
-  npm run cli -- precos [--saida precos-lote3.json]
+  npm run cli -- baixar --fixture              # baixa os 57 manifestos (throttle + cache)
+  npm run cli -- precos --todos --fixture      # esqueleto priorizado por impacto
+  npm run cli -- precos                        # só o lote 3
   npm run cli -- custo --lance 3460`);
   process.exit(comando ? 2 : 0);
 }

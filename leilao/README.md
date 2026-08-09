@@ -16,6 +16,12 @@ npm run cli -- custo --lance 3010
 #   → leiloeiro 150,50 + premium 150,50 + adm 187,50 + fee 62,50
 #   → encargos R$ 551,00 · total R$ 3.561,00 · overhead 18,3%
 
+# Baixa os 57 manifestos (throttle 1,5 req/s, cache, idempotente)
+npm run cli -- baixar --fixture
+
+# Lista de preços ordenada por impacto — preencha de cima para baixo
+npm run cli -- precos --todos --fixture --saida precos.json
+
 # Estudo dos 61 lotes, offline, a partir do evento capturado
 npm run cli -- estudo --fixture --frete 150 --refresh 15 \
   --precos exemplos/precos-lote3-exemplo.json
@@ -27,7 +33,7 @@ npm run cli -- estudo --url https://www.superbid.net/evento/logistica-reversa-79
 # Esqueleto de preços para preencher (sem números inventados)
 npm run cli -- precos --saida precos.json
 
-npm test          # 95 testes
+npm test          # 108 testes
 npm run typecheck
 ```
 
@@ -42,8 +48,9 @@ npm run typecheck
 | Encargos e teto (10% + tabela por faixa) | ✅ ancorado em 2 pontos reais do site |
 | Faixas A/B/C e unidades efetivas | ✅ heurística; preço vem de arquivo |
 | Estudo HTML com refresh | ✅ |
-| Preço automático por LLM | ⬜ Fase 2 — exige `ANTHROPIC_API_KEY` |
-| Download dos 57 PDFs de anexo | ⬜ hoje só o lote 3 tem manifesto no repo |
+| Preço automático por LLM | ⬜ fora de escopo por decisão do operador |
+| Download dos 57 PDFs de anexo | ✅ 57/57, com cache e throttle |
+| Lista de preços priorizada por impacto | ✅ 2.421 descrições distintas |
 | Extração do Edital | ❌ ver "tarefa zero" abaixo |
 
 ## Documentos
@@ -52,6 +59,43 @@ npm run typecheck
 |---|---|
 | [`docs/01-reconhecimento.md`](docs/01-reconhecimento.md) | O que foi verificado no site real e as evidências. Leia primeiro. |
 | [`docs/02-plano-implementacao.md`](docs/02-plano-implementacao.md) | Arquitetura, modelo de dados, fases e verificação. |
+
+## O que os 57 manifestos revelaram
+
+Todos os 57 parseiam, e as somas batem com os títulos. O par **declarado × efetivo** confirma
+exatamente o que o operador descreveu — "dizem que tem 400 itens, mas tem 300, porque 100 é um
+negócio muito barato":
+
+| Lote | Declaradas | Efetivas | Volume de bazar | Inflação |
+|---|---|---|---|---|
+| 9 | 402 | 185 | 217 | **54%** |
+| 13 | 453 | 83 | 370 | **82%** |
+| 3 | 304 | 146 | 158 | 52% |
+| 8 | 34 | 34 | 0 | 0% |
+
+Lote 13 promete 453 unidades e entrega 83 com valor de revenda. Lote 8 não infla nada. **Essa
+coluna é o detector de lote inchado**, e só existe porque o manifesto é item a item.
+
+**4 lotes (2, 5, 16 e 26) não têm anexo nenhum** — todos de cosméticos. Aparecem no estudo
+marcados como "sem PDF de anexo", nunca com teto zero silencioso.
+
+## O teto ainda depende de preço
+
+Baixar os PDFs deu contagem real e custo por unidade efetiva nos 57. O **teto** precisa de
+preço por item, e há **2.421 descrições distintas** — inviável à mão inteiro.
+
+Daí `precos --todos`, que ordena por impacto:
+
+```
+impacto = 4^classeValor × unidadesTotais^0,55 × especificidade × √(nº de lotes)
+```
+
+A **classe de valor** domina de propósito: preço unitário varia três ordens de grandeza (R$ 2
+num copo descartável, R$ 1.200 num martelete Bosch) e quantidade só uma. A primeira versão
+ordenava por quantidade e enchia o topo de copo descartável, papel sulfite e vela — com o
+martelete fora das 15 primeiras. Corrigido, o topo é ferramenta elétrica e eletrodoméstico.
+
+O `√(nº de lotes)` entra porque precificar uma linha que aparece em 6 lotes destrava 6 tetos.
 
 ## Os encargos são tabelados — e é isso que engana
 
