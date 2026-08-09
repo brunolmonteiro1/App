@@ -79,12 +79,11 @@ leilao/
       edital.ts             # extrai tabela de taxas do Edital do evento
     analise/
       quantidade.ts         # normaliza os 6 formatos + reconcilia com manifesto
-      valor.ts              # LLM: precifica itens -> valor de mercado do lote
-      visao.ts              # LLM vision: condicao/avaria (so finalistas)
-      custo.ts              # lance + 5% + encargos + logistica
+      valor.ts              # preco por item (arquivo), faixas, ranking de impacto
+      custo.ts              # lance x 1,10 + faixa do Edital + logistica
       ranking.ts            # margem, concentracao de valor, alertas
-    persistencia/db.ts
-    relatorio/html.ts  relatorio/xlsx.ts
+    superbid/baixar.ts        # download dos 57 manifestos, throttle + cache
+    estudo/pagina.ts          # a pagina que o operador le ao lado do BidTV
   recon/                    # evidencias e prova de conceito (ja existe)
   test/fixtures/            # symlink ou copia de recon/fixtures
 ```
@@ -131,12 +130,16 @@ valor_online   = Σ (quantidade × preco_online_estimado)     // só itens com s
 valor_realizado = valor_online × fator_bazar × (1 − taxa_perda)
                                   ↑ 0,40 conservador … 0,60 otimista
 teto_custo     = valor_realizado / multiplo_da_categoria
-teto_martelo   = (teto_custo − encargos − frete − deslocamento) / 1,05
+teto_martelo   = resolve por faixa:  (teto_custo − faixaEncargo − frete) / 1,10
 ```
 
-**A divisão por 1,05 na última linha é o detalhe que mais se erra.** A comissão de 5%
-incide sobre o martelo, então ela é dividida, não subtraída. Quem subtrai 5% do teto de
-custo autoriza lance acima do que pode pagar.
+**A última linha concentra três erros possíveis, todos travados em teste:**
+
+1. O percentual **divide**, não subtrai — incide sobre o martelo.
+2. É **10%** (leiloeiro 5% + buyer's premium 5%), não os 5% que a API informa.
+3. O encargo da faixa **depende do lance**, que é a própria incógnita, então não há fórmula
+   fechada: resolve-se por faixa, testando cada candidato contra o orçamento e pegando o maior
+   válido. Ver `martelaDoTeto` em `src/analise/custo.ts`.
 
 Como o fator de realização é uma faixa (40–60%), o teto sai como **dois números**:
 
@@ -149,7 +152,9 @@ Como o fator de realização é uma faixa (40–60%), o teto sai como **dois nú
 Métricas de apoio, exibidas mas que **não definem o teto**:
 
 ```
-custo_unidade = custo_total / unidades_reconciliadas   // referência
+custo_unidade_efetiva = custo_total / unidades_efetivas   // a métrica real; também é o
+                                                          // ranking da shortlist, que
+                                                          // funciona com ZERO preços
 margem        = valor_realizado / custo_total          // ordena o ranking
 concentracao  = valor_top5 / valor_realizado           // risco
 volume_bazar  = Σ unidades da faixa C                  // upside não pago
@@ -164,9 +169,13 @@ Cada linha do manifesto cai numa faixa, e só A e B entram no teto:
 
 | Faixa | Critério | Entra no teto |
 |---|---|---|
-| **A** | vale vender com preço próprio no bazar | sim, × fator |
-| **B** | só sai em lote / preço de bazar baixo | sim, valor reduzido |
-| **C** | irrisório, sem preço individual | **zero** — só conta em `volume_bazar` |
+| **A** | vale vender com preço próprio no bazar | sim, integral |
+| **B** | só sai em lote / preço de bazar baixo | sim, × `fatorB` (0,6) |
+| **C** | irrisório **ou de categoria fora do escopo** | **zero** — só conta em `volume_bazar` |
+
+Faixa C também recebe os itens de **cosmético, limpeza e bebida**, categorias com que o
+operador não trabalha, e essa marca **ganha de preço posto à mão** — do contrário um lote misto
+contaria shampoo no valor e autorizaria pagar por mercadoria não revendível.
 
 ### Múltiplo por categoria (proposta inicial, ajustável)
 
@@ -231,6 +240,22 @@ Teto de gasto por rodada, que aborta com relatório parcial em vez de estourar.
    `.github/workflows/build-apk.yml` (path filter `leilao/**`, lint → test), com
    `schedule` de segunda e `workflow_dispatch` recebendo a URL. Job leve de preços.
 
+## Os erros que a implementação cometeu, e o que os trava
+
+Vale registrar porque cada um foi caro de descobrir e é fácil de reintroduzir.
+
+| Erro | Consequência | O que trava agora |
+|---|---|---|
+| `fixo: 250` como taxa fixa | subestimava custo em lote grande e superestimava em pequeno | tabela do Edital + 21 testes de fronteira |
+| Ranking de preço global | 71 preços → 3% de cobertura → zero teto utilizável | `shortlist` + `precos --lote N` |
+| Teto exibido sob cobertura baixa | lote 3 mostrava "teto R$ 26 · PARE", lido como lote caro | semáforo `sem-cobertura`, azul |
+| Cobertura só por unidade | lote 202 passava com 48 rodas e o climatizador sem preço | exige unidades **e** linhas |
+| Faixa B igual a A | 74 itens reclassificados não mudavam nada | `fatorB`, com teste |
+| Categoria pelo 1º termo | "copos para whisky" → lote 22 virava bebida e sumia | detecção por contagem |
+| Ranking por quantidade | copo descartável acima de martelete Bosch | `classeValor` dominante |
+| `workerSrc = ''` no pdfjs | quebrava em runtime passando o typecheck | comentário explícito no código |
+| Fixture em UTC exibido cru | 18:30 onde o site diz 15:30, 3 h a mais | `fuso` explícito + teste |
+
 ## Verificação
 
 Há **ground truth capturado** em `recon/fixtures/`, o que é raro neste tipo de projeto.
@@ -251,14 +276,18 @@ Há **ground truth capturado** em `recon/fixtures/`, o que é raro neste tipo de
 - Anexo órfão: o Edital **não pertence a lote nenhum** (verificado, 0 hits entre os 57
   anexos). Documento de evento e anexo de lote são caminhos separados; o código não pode
   tentar casar o Edital com um lote.
-- `custo.ts`: unitários por faixa, divisão por zero, `taxa_perda` extrema. Conferir o lote
-  3 (2130 + 5% = 2236,50) contra o widget "Estimar comissões" do site — é a validação da
-  tabela de encargos.
-- **`teto.ts` — o teste que mais importa.** Caso travado: comissão tem de ser **dividida
-  por 1,05**, não subtraída. Com `teto_custo = 2000`, encargos+frete `250`, o teto no
-  martelo é **1.666,67** — e um teste asserta que não é 1.662,50 (o valor errado de quem
-  subtrai 5%). Também: `teto_seguro ≤ teto_maximo` sempre, e itens faixa C **não podem**
-  mover o teto (mudar a quantidade de um item C e reasseverar que o teto não mudou).
+- **`custo.ts` — dois âncoras reais do site, não um.** `3.010 → 551,00 → 3.561,00` e
+  `3.460 → 596,00 → 4.056,00`. Um ponto só foi o que fez tratar R$ 250 como taxa fixa; dois
+  pontos na mesma faixa também não distinguiriam, então as 21 fronteiras da tabela entram
+  como casos separados.
+- **`teto.ts` — o teste que mais importa.** `teto_custo = 2000` → teto no martelo
+  **1.590,91**, e o teste asserta que **não** é 1.666,67 (quem usou os 5% da API), nem
+  1.575,00 (quem subtraiu em vez de dividir), nem 1.818,18 (quem esqueceu a faixa).
+  Também: `teto_seguro ≤ teto_maximo` sempre, e itens faixa C **não podem** mover o teto.
+- **Cobertura:** com 3% dos itens precificados, **nenhum** lote pode exibir teto — todos em
+  `sem-cobertura`. E o caso do lote 202: uma linha de 48 unidades baratas passando o gate de
+  unidades enquanto o item caro fica sem preço tem de reprovar pelo gate de linhas.
+- **Categoria por contagem:** "COPOS PARA WHISKY" tem de dar `utensilios`, não `bebidas`.
 - `faixa`: itens do lote 3 conhecidamente irrisórios (máscara de gatinho, roupas diversas,
   livros diversos) devem cair em C e aparecer só em `volume_bazar`.
 - Condição ausente: no lote 3, `vencimento`/`desmontado`/`incompleto` têm de sair **nulos**

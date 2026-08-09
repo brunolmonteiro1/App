@@ -128,7 +128,17 @@ fonte embutido, em vez de extrator caseiro de streams. Se ainda assim falhar, o 
 é rasterizar e passar por visão — 22 páginas, uma vez por evento, custo irrelevante e
 cacheável.
 
-## 5. Taxas: os 5% estão na API, o encargo administrativo está no Edital
+## 5. Taxas: os 5% da API estão errados — o encargo real é 10% + tabela
+
+> **Corrigido depois deste recon.** Os dois documentos que o operador forneceu (o Edital e o
+> estimador do site) mostraram que o encargo do comprador é **leiloeiro 5% + buyer's premium 5%,
+> mais Encargos de Administração e Fee Plataforma TABELADOS por faixa de lance** (R$ 50 até
+> R$ 499,99 … R$ 6.500 acima de R$ 150 mil). Conferido em dois pontos reais, no centavo:
+> lance 3.010 → 551,00 e lance 3.460 → 596,00.
+>
+> O overhead real vai de **15% a 35%** e **não é monotônico** — cruzar uma faixa salta o
+> encargo. Ver `docs/02-plano-implementacao.md`. A seção abaixo fica como registro do que a
+> API sozinha permitia concluir, e é um bom exemplo de por que ela não serve para custo.
 
 - `groupOffer.commissionPercent = 5` — idêntico nos 61 lotes. O evento confirma:
   "as ofertas desse evento estão divididas em 1 grupo(s)".
