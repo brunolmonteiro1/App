@@ -57,13 +57,19 @@ export function aplicar(
   itens: ItemManifesto[],
   tabela: TabelaPrecos = {},
   termosIgnorados: string[] = [],
+  excecoesIgnorados: string[] = [],
 ): ItemAvaliado[] {
   return itens.map((i) => {
     const reg = tabela[chave(i.descricao)];
     const d = chave(i.descricao);
     // Termo ignorado ganha até de override manual: se o operador não trabalha com a
     // categoria, o item vale zero mesmo que alguém tenha posto preço e faixa A nele.
-    const ignorado = termosIgnorados.some((t) => d.includes(chave(t)));
+    //
+    // A exceção vem ANTES, porque o casamento é por substring e substring não distingue o
+    // recipiente do conteúdo: "TAÇA PARA VINHO EM CRISTAL BOHEMIA" bate em `vinho` e é
+    // exatamente o tipo de item que gira bem no bazar.
+    const excecao = excecoesIgnorados.some((t) => d.includes(chave(t)));
+    const ignorado = !excecao && termosIgnorados.some((t) => d.includes(chave(t)));
     const faixa: Faixa = ignorado ? 'C' : (reg?.faixa ?? classificar(i));
     // Item da faixa C vale zero no teto por decisão do operador, mesmo que tenha preço.
     const preco = faixa === 'C' ? null : (reg?.preco ?? null);

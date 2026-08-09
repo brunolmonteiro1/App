@@ -29,7 +29,11 @@ COPY --chown=leilao:leilao recon/fixtures ./recon/fixtures
 
 # Montados como volume pelo compose; criados aqui já com o dono certo para o processo
 # não-root poder escrever.
-RUN mkdir -p cache/anexos saida && chown -R leilao:leilao cache saida
+#
+# `dados` guarda o precos.json, que a TELA DE PRECIFICAÇÃO grava. Ele tem de existir na
+# imagem com este dono: named volume cujo ponto de montagem NÃO existe na imagem nasce
+# root:root, e aí o processo uid 1001 não consegue gravar preço nenhum.
+RUN mkdir -p cache/anexos saida dados && chown -R leilao:leilao cache saida dados
 
 USER leilao
 

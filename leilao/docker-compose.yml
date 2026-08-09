@@ -1,5 +1,5 @@
 services:
-  # Painel: serve o estudo já gerado. Fica de pé; é o que o operador abre pelo túnel.
+  # Painel: serve o estudo E a tela de precificação. Fica de pé; é o que o operador abre.
   painel:
     build:
       context: .
@@ -11,28 +11,46 @@ services:
       TZ: America/Sao_Paulo
       PORT: "8080"
       # Dentro do container tem de ser 0.0.0.0, senão o Docker não alcança o processo.
-      # O isolamento real está no mapeamento de porta abaixo, não aqui.
+      # O que decide a exposição é o mapeamento de porta abaixo, não isto.
       HOST: "0.0.0.0"
+      # Login do painel. SENHA vem do .env — sem ela, o processo se RECUSA a subir quando
+      # a porta está publicada. Ver o bloco de comentário em src/servir.ts.
+      USUARIO: "${USUARIO:-leilao}"
+      SENHA: "${SENHA:?defina SENHA no .env — o painel mostra seus tetos e grava precos.json}"
+      ARQUIVO_PRECOS: /app/dados/precos.json
     ports:
       # ┌──────────────────────────────────────────────────────────────────────────────┐
-      # │ NÃO TROQUE por "8080:8080".                                                  │
+      # │ BIND controla quem alcança o painel, e o padrão é o loopback.                │
       # │                                                                              │
-      # │ O estudo contém os TETOS DE LANCE do operador. Outro licitante do mesmo      │
-      # │ leilão que visse esta página saberia exatamente até onde empurrá-lo antes    │
-      # │ de ele parar.                                                                │
+      # │   BIND=127.0.0.1  (padrão)  → só por túnel: ssh -L 8080:127.0.0.1:8080 …     │
+      # │   BIND=0.0.0.0              → aberto na rede, protegido por SENHA            │
       # │                                                                              │
-      # │ E o Docker não respeita UFW: ele escreve direto na cadeia DOCKER-USER do     │
-      # │ iptables. Um `ufw deny 8080` daria falsa segurança — a porta continuaria     │
-      # │ aberta na internet.                                                          │
+      # │ Por que a senha não é opcional: o estudo contém os TETOS DE LANCE. Outro      │
+      # │ licitante do mesmo leilão que visse esta página saberia exatamente até onde   │
+      # │ empurrá-lo antes de ele parar. E a tela de precificação GRAVA em disco.       │
       # │                                                                              │
-      # │ Acesso previsto:  ssh -L 8080:127.0.0.1:8080 usuario@vps                     │
+      # │ E o Docker não respeita UFW: ele escreve direto na cadeia DOCKER-USER do      │
+      # │ iptables. Um `ufw deny 8080` daria falsa segurança. Quem protege aqui é a     │
+      # │ senha, não o firewall.                                                       │
       # └──────────────────────────────────────────────────────────────────────────────┘
-      - "127.0.0.1:8080:8080"
+      - "${BIND:-127.0.0.1}:${PORTA_HOST:-8080}:8080"
     volumes:
       # Named volume, NÃO bind mount. Ver o bloco "volumes:" no fim do arquivo.
-      - saida:/app/saida:ro
+      # LEITURA E ESCRITA: a tela de precificação regenera o estudo.
+      - saida:/app/saida
+      # Preços em NAMED VOLUME, não bind mount de arquivo. Duas razões, as duas já custaram
+      # uma sessão de suporte:
+      #   1. bind mount de arquivo INEXISTENTE faz o Docker criar um DIRETÓRIO no lugar, e o
+      #      erro que sai (EISDIR) não diz nada a ninguém;
+      #   2. arquivo criado por root no host nasce 644, e o processo uid 1001 conseguiria LER
+      #      mas não GRAVAR — a tela de precificação salvaria com "permission denied".
+      # Named volume resolve os dois: nasce com o dono da imagem e não precisa existir antes.
+      #   backup:  docker compose cp painel:/app/dados/precos.json .
+      #   restaura: docker compose cp precos.json painel:/app/dados/precos.json
+      - dados:/app/dados
+    command: ["npx", "tsx", "src/servir.ts"]
 
-  # Job one-shot: baixa os manifestos que faltam e regenera o estudo.
+  # Job one-shot: baixa os manifestos que faltam e regenera o estudo + o snapshot.
   # Não sobe com `up` (profile), roda sob demanda ou por cron do host:
   #   docker compose run --rm gerar
   gerar:
@@ -48,14 +66,13 @@ services:
       # martelaria o site do Superbid a cada rodada do cron.
       - cache:/app/cache
       - saida:/app/saida
-      # Preços do operador, somente leitura: o container não tem por que alterá-los.
-      # Bind mount aqui é seguro — arquivo criado por root nasce 644, e uid 1001 só lê.
-      - ./precos.json:/app/precos.json:ro
+      # Somente leitura aqui: o job calcula com os preços, quem os altera é o painel.
+      - dados:/app/dados:ro
     # Ajuste --url para o evento da semana, e --frete quando souber o custo de retirada.
     command: >
       sh -c "npx tsx src/cli.ts baixar --url $${EVENTO} &&
              npx tsx src/cli.ts estudo --url $${EVENTO}
-               --precos precos.json --frete $${FRETE} --refresh 15
+               --precos dados/precos.json --frete $${FRETE} --refresh 15
                --saida saida/estudo.html"
     env_file:
       - .env
@@ -77,3 +94,4 @@ services:
 volumes:
   cache:
   saida:
+  dados:

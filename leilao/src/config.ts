@@ -105,6 +105,13 @@ export interface Config {
    * que o operador não revende.
    */
   termosIgnorados: string[];
+  /**
+   * Salvaguarda do filtro acima: descrição que contém um destes **nunca** é ignorada por
+   * termo. Existe porque o casamento é por substring, e substring confunde o recipiente com
+   * o conteúdo — "TAÇA PARA VINHO" batia em `vinho`, "SABONETEIRA" bate em `sabonete`.
+   * O erro é caro na direção errada: joga em C, valendo zero, item que ele vende bem.
+   */
+  excecoesIgnorados: string[];
   categorias: Record<Categoria, ConfigCategoria>;
   /** Custo de retirada por lote. Retirada é em Embu das Artes-SP. */
   freteporLote: number;
@@ -159,6 +166,17 @@ export const CONFIG_PADRAO: Config = {
     'martini', 'licor', 'cachaca', 'cachaça', 'tequila', 'rum', 'johnnie walker',
     'energetico', 'energético', 'monster', 'red bull', 'refrigerante', 'coca cola',
     'pepsi', 'guarana', 'guaraná', 'xeque mate', 'drink beats',
+  ],
+  excecoesIgnorados: [
+    // O RECIPIENTE não é a bebida. "TAÇA PARA VINHO EM CRISTAL BOHEMIA" batia em 'vinho' e
+    // ia para C valendo zero — e cristal Bohemia é justamente o que gira bem no bazar.
+    // Mesma família do falso positivo de "COPOS PARA WHISKY WOLFF", que já custou o lote 22.
+    'taca', 'taça', 'copo', 'caneca', 'jarra', 'garrafa', 'decanter', 'bowl', 'tigela',
+    'balde', 'cooler', 'abridor', 'saca rolha', 'saca-rolha', 'dosador', 'porta ',
+    'suporte', 'bandeja', 'travessa', 'prato', 'escorredor', 'adega', 'whiskeira',
+    // O acessório de higiene também não é o cosmético: 'saboneteira' contém 'sabonete',
+    // 'porta shampoo' contém 'shampoo'.
+    'saboneteira', 'porta escova', 'escova de dente', 'nécessaire', 'necessaire',
   ],
   freteporLote: 0,
   freteInformado: false,

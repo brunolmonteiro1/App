@@ -6,6 +6,23 @@ cobre ou não. Com `--refresh`, ela busca os lances sozinha e repinta 🟢/🟡/
 
 **A ferramenta nunca dá lance.** O clique é sempre do operador, na janela do BidTV.
 
+## As duas telas
+
+O painel serve duas páginas, e a primeira é onde o trabalho acontece:
+
+| Página | Para quê |
+|---|---|
+| `precificar.html` | **põe os preços** e vê o teto se formar ao vivo. É a tela de trabalho |
+| `estudo.html` | os 61 lotes com teto, lance sugerido e semáforo, para ler ao lado do BidTV |
+
+Preço é sempre **valor online por unidade** — o que o item custa na internet, não o que ele
+vende no bazar. A conta do bazar (40%–60%), a perda da categoria, o múltiplo e os encargos o
+programa aplica em cima disso.
+
+E preço é gravado **pela descrição do item**, não pelo lote: preenchido uma vez, ele volta
+sozinho em todo lote e todo leilão futuro onde a mesma descrição aparecer. Por isso o esforço
+diminui a cada evento em vez de recomeçar.
+
 ## Como rodar
 
 ```bash
@@ -36,7 +53,10 @@ npm run cli -- estudo --url https://www.superbid.net/evento/logistica-reversa-79
 # Esqueleto de preços para preencher (sem números inventados)
 npm run cli -- precos --saida precos.json
 
-npm test          # 155 testes
+# O painel: estudo + tela de precificação
+npm run servir    # http://127.0.0.1:8080/precificar.html
+
+npm test          # 195 testes
 npm run typecheck
 ```
 
@@ -140,21 +160,30 @@ martelete fora das 15 primeiras. Corrigido, o topo é ferramenta elétrica e ele
 
 O `√(nº de lotes)` entra porque precificar uma linha que aparece em 6 lotes destrava 6 tetos.
 
-## Deploy: nada publicado, e o motivo é concreto
+## Deploy: com senha, e a senha não é opcional
 
-`docker compose up -d painel` sobe o estudo em **`127.0.0.1:8080`** e o acesso é
-`ssh -L 8080:127.0.0.1:8080`. Não é preciosismo:
+```bash
+cp .env.exemplo .env && nano .env       # SENHA obrigatória; BIND=0.0.0.0 abre no navegador
+docker compose build
+docker compose run --rm gerar
+docker compose up -d painel
+```
 
 **O estudo contém os tetos de lance do operador.** Outro licitante do mesmo leilão que visse
-aquela página saberia exatamente até onde empurrá-lo antes de ele parar.
+aquela página saberia exatamente até onde empurrá-lo antes de ele parar. E a tela de
+precificação **grava** em disco. Então o painel tem Basic auth, e **se recusa a subir** quando a
+porta está publicada com `SENHA` vazia — o processo para com mensagem, em vez de servir os tetos
+e um formulário de escrita para a internet.
 
-E `ports: "8080:8080"` liga em todas as interfaces **passando por cima do UFW** — o Docker
-escreve direto na cadeia `DOCKER-USER` do iptables, então `ufw deny 8080` daria falsa segurança.
-`test/deploy.test.ts` falha o CI se alguém trocar o mapeamento, e trava também usuário não-root,
-`tsx` em `dependencies` (sem isso a imagem sobe sem o CLI) e os preços montados read-only.
+Quem preferir zero exposição continua atendido: `BIND=127.0.0.1` (o padrão) e
+`ssh -L 8080:127.0.0.1:8080`.
 
-Passo a passo completo em [`docs/03-deploy-vps.md`](docs/03-deploy-vps.md). O `docker build` não
-foi executado no ambiente de desenvolvimento — sem acesso ao daemon — e isso está dito no doc.
+Vale saber que **o Docker passa por cima do UFW** — escreve direto na cadeia `DOCKER-USER` do
+iptables, então `ufw deny 8080` daria falsa segurança. Quem protege aqui é a senha, não o
+firewall. `test/deploy.test.ts` falha o CI se alguém tirar a obrigatoriedade da senha, puser
+porta nua no compose, ou trocar os named volumes por bind mount.
+
+Passo a passo completo em [`docs/03-deploy-vps.md`](docs/03-deploy-vps.md).
 
 ## O refresh foi validado em navegador de verdade
 

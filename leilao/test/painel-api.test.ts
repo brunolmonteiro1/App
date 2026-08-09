@@ -1,0 +1,277 @@
+import { mkdtemp, readFile, writeFile, mkdir } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { CONFIG_PADRAO } from '../src/config.ts';
+import { parsearEvento } from '../src/superbid/api.ts';
+import { lerManifesto } from '../src/superbid/manifesto.ts';
+import type { Snapshot } from '../src/estudo/snapshot.ts';
+import { gravarSnapshot } from '../src/estudo/snapshot.ts';
+import { gerarPaginaPrecificar } from '../src/estudo/precificar.ts';
+
+/**
+ * A tela de precificação é a primeira parte do projeto que **grava**. Estes testes cobrem o
+ * que uma tela de escrita não pode errar:
+ *
+ * - **mesclar, nunca substituir** — a tela manda só o lote aberto; substituir o arquivo
+ *   apagaria os preços de todos os outros lotes, que é o trabalho acumulado do operador;
+ * - **o teto da tela é o teto do estudo** — os dois passam pelo mesmo `avaliar()`, e o teste
+ *   confere que a API devolve o mesmo número que o estudo calcula;
+ * - **o portão de cobertura vale na tela também** — preço em 3 itens não pode fazer aparecer
+ *   um teto na tela que o estudo se recusa a mostrar.
+ */
+let base: string;
+let dir: string;
+let arquivoPrecos: string;
+let fechar: () => void;
+let numeroLote: number;
+
+const FIXTURE = new URL('../recon/fixtures/evento-790754-offers.json', import.meta.url).pathname;
+const PDF_LOTE3 = new URL('../recon/fixtures/manifesto-lote3-SB0032812.pdf', import.meta.url).pathname;
+
+beforeAll(async () => {
+  dir = await mkdtemp(join(tmpdir(), 'painel-'));
+  await mkdir(join(dir, 'saida'), { recursive: true });
+  const saida = join(dir, 'saida');
+  arquivoPrecos = join(dir, 'precos.json');
+
+  const evento = parsearEvento(JSON.parse(await readFile(FIXTURE, 'utf8')), 'UTC');
+  const manifesto = await lerManifesto(PDF_LOTE3);
+  numeroLote = 3;
+
+  const snap: Snapshot = {
+    versao: 1,
+    geradoEm: '2026-08-08T15:21:00Z',
+    frete: 150,
+    refresh: 15,
+    arquivoEstudo: 'estudo.html',
+    evento,
+    manifestos: { [String(numeroLote)]: manifesto },
+  };
+  await gravarSnapshot(join(saida, 'estado.json'), snap);
+  await writeFile(join(saida, 'estudo.html'), '<h1>estudo antigo</h1>');
+  await writeFile(join(saida, 'precificar.html'), gerarPaginaPrecificar(evento.auctionId));
+  await writeFile(arquivoPrecos, JSON.stringify({ itens: { 'chave que nao existe': { preco: 9 } } }));
+
+  process.env.DIR_SAIDA = saida;
+  process.env.ARQUIVO_PRECOS = arquivoPrecos;
+  process.env.PORT = '0';
+  process.env.HOST = '127.0.0.1';
+  delete process.env.SENHA;
+
+  await import('../src/servir.ts?painel=' + Date.now());
+  await new Promise((r) => setTimeout(r, 400));
+
+  const handles = (process as unknown as { _getActiveHandles(): { address?: () => unknown }[] })
+    ._getActiveHandles();
+  const escutando = handles.find(
+    (h) => typeof h.address === 'function' && (h.address() as { port?: number })?.port,
+  );
+  const addr = escutando!.address!() as { port: number };
+  base = `http://127.0.0.1:${addr.port}`;
+  fechar = () => (escutando as unknown as { close(): void }).close();
+});
+
+afterAll(() => fechar?.());
+
+const get = (r: string) => fetch(base + r).then((x) => x.json());
+const post = (r: string, corpo: unknown) =>
+  fetch(base + r, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(corpo),
+  }).then((x) => x.json());
+
+describe('GET /api/lotes — a lista da esquerda', () => {
+  it('devolve os 61 lotes do evento', async () => {
+    const j = await get('/api/lotes');
+    expect(j.auctionId).toBe(790754);
+    expect(j.lotes).toHaveLength(61);
+  });
+
+  it('ordena por onde vale gastar esforço, deixando encerrado e ignorado no fim', async () => {
+    const j = await get('/api/lotes');
+    const pos = (s: string) => j.lotes.findIndex((l: { semaforo: string }) => l.semaforo === s);
+    const comManifesto = j.lotes.findIndex((l: { itens: number }) => l.itens > 0);
+    // O lote com manifesto (o único aqui) vem antes dos que não têm nada para precificar.
+    expect(comManifesto).toBe(0);
+    const ignorado = pos('ignorado');
+    if (ignorado > -1) expect(ignorado).toBeGreaterThan(comManifesto);
+  });
+
+  it('conta as descrições já precificadas', async () => {
+    const j = await get('/api/lotes');
+    expect(j.precificados).toBe(1);
+  });
+});
+
+describe('GET /api/lote — os itens de um lote', () => {
+  it('agrupa por descrição, para não haver dois campos gravando na mesma chave', async () => {
+    const j = await get(`/api/lote?n=${numeroLote}`);
+    const chaves = j.itens.map((i: { chave: string }) => i.chave);
+    expect(new Set(chaves).size).toBe(chaves.length);
+  });
+
+  it('soma a quantidade das linhas agrupadas', async () => {
+    const j = await get(`/api/lote?n=${numeroLote}`);
+    const soma = j.itens.reduce((s: number, i: { quantidade: number }) => s + i.quantidade, 0);
+    // O manifesto do lote 3 soma 304 unidades — o mesmo "APROX. 304 UN" do título.
+    expect(soma).toBe(304);
+  });
+
+  it('traz a categoria, o múltiplo e a perda que entram na conta', async () => {
+    const j = await get(`/api/lote?n=${numeroLote}`);
+    expect(j.multiplo).toBeGreaterThan(0);
+    expect(j.perda).toBeGreaterThanOrEqual(0);
+    expect(typeof j.categoria).toBe('string');
+  });
+
+  it('lote que não existe dá erro explicado, não 500 mudo', async () => {
+    const r = await fetch(base + '/api/lote?n=99999');
+    expect(r.status).toBe(400);
+    expect((await r.json()).erro).toMatch(/não existe/);
+  });
+});
+
+describe('POST /api/simular — o teto ao vivo, sem gravar', () => {
+  it('preço em poucos itens NÃO produz teto: o portão de cobertura vale na tela', async () => {
+    const lote = await get(`/api/lote?n=${numeroLote}`);
+    const um = lote.itens.find((i: { faixa: string }) => i.faixa !== 'C')!;
+    const j = await post('/api/simular', { lote: numeroLote, itens: { [um.chave]: { preco: 100 } } });
+    // É a regressão perigosa: teto baixo com 2% de cobertura lê como "lote caro" quando
+    // significa "ainda não sei".
+    expect(j.av.semaforo).toBe('sem-cobertura');
+  });
+
+  it('precificando o lote inteiro, aparece teto de verdade', async () => {
+    const lote = await get(`/api/lote?n=${numeroLote}`);
+    const itens: Record<string, { preco: number }> = {};
+    for (const i of lote.itens) if (i.faixa !== 'C') itens[i.chave] = { preco: 50 };
+    const j = await post('/api/simular', { lote: numeroLote, itens });
+    expect(['verde', 'amarelo', 'vermelho']).toContain(j.av.semaforo);
+    expect(j.av.tetoSeguro).toBeGreaterThan(0);
+    expect(j.av.cobertura).toBe(1);
+  });
+
+  it('não grava nada em disco', async () => {
+    const antes = await readFile(arquivoPrecos, 'utf8');
+    const lote = await get(`/api/lote?n=${numeroLote}`);
+    const um = lote.itens[0];
+    await post('/api/simular', { lote: numeroLote, itens: { [um.chave]: { preco: 777 } } });
+    expect(await readFile(arquivoPrecos, 'utf8')).toBe(antes);
+  });
+
+  it('aceita preço com vírgula, que é como a tela em pt-BR manda', async () => {
+    const lote = await get(`/api/lote?n=${numeroLote}`);
+    const um = lote.itens.find((i: { faixa: string }) => i.faixa !== 'C')!;
+    const j = await post('/api/simular', {
+      lote: numeroLote,
+      itens: { [um.chave]: { preco: '12,50' } },
+    });
+    const item = j.itens.find((i: { chave: string }) => i.chave === um.chave);
+    expect(item.subtotal).toBeCloseTo(um.quantidade * 12.5 * (item.faixa === 'B' ? CONFIG_PADRAO.fatorB : 1), 5);
+  });
+
+  it('faixa C entra valendo zero, mesmo com preço digitado', async () => {
+    const lote = await get(`/api/lote?n=${numeroLote}`);
+    const c = lote.itens.find((i: { faixa: string }) => i.faixa === 'C');
+    if (!c) return;
+    const j = await post('/api/simular', { lote: numeroLote, itens: { [c.chave]: { preco: 5000 } } });
+    const item = j.itens.find((i: { chave: string }) => i.chave === c.chave);
+    expect(item.subtotal ?? 0).toBe(0);
+  });
+});
+
+describe('POST /api/precos — gravação', () => {
+  it('MESCLA: não apaga preço de item que não veio no corpo', async () => {
+    const antes = JSON.parse(await readFile(arquivoPrecos, 'utf8'));
+    const preservar = Object.keys(antes.itens)[0]!;
+    const lote = await get(`/api/lote?n=${numeroLote}`);
+    const um = lote.itens.find((i: { faixa: string }) => i.faixa !== 'C')!;
+
+    const j = await post('/api/precos', { itens: { [um.chave]: { preco: 33 } } });
+    expect(j.gravados).toBe(1);
+
+    const depois = JSON.parse(await readFile(arquivoPrecos, 'utf8'));
+    expect(depois.itens[preservar]).toBeDefined();
+    expect(depois.itens[um.chave].preco).toBe(33);
+  });
+
+  it('preço vazio volta a null — é como o operador desfaz um erro de digitação', async () => {
+    const lote = await get(`/api/lote?n=${numeroLote}`);
+    const um = lote.itens.find((i: { faixa: string }) => i.faixa !== 'C')!;
+    await post('/api/precos', { itens: { [um.chave]: { preco: 40 } } });
+    await post('/api/precos', { itens: { [um.chave]: { preco: '' } } });
+    const d = JSON.parse(await readFile(arquivoPrecos, 'utf8'));
+    expect(d.itens[um.chave].preco).toBeNull();
+  });
+
+  it('preço inválido é rejeitado com motivo, e não corrompe o arquivo', async () => {
+    const j = await post('/api/precos', { itens: { 'chave x': { preco: 'abc' } } });
+    expect(j.gravados).toBe(0);
+    expect(j.rejeitados[0]).toMatch(/inválido/);
+    // O arquivo continua sendo JSON válido depois de uma rejeição.
+    JSON.parse(await readFile(arquivoPrecos, 'utf8'));
+  });
+
+  it('preço negativo é rejeitado', async () => {
+    const j = await post('/api/precos', { itens: { 'chave y': { preco: -5 } } });
+    expect(j.gravados).toBe(0);
+  });
+
+  it('a faixa escolhida na tela é gravada', async () => {
+    const lote = await get(`/api/lote?n=${numeroLote}`);
+    const um = lote.itens.find((i: { faixa: string }) => i.faixa === 'A')!;
+    await post('/api/precos', { itens: { [um.chave]: { preco: 10, faixa: 'B' } } });
+    const d = JSON.parse(await readFile(arquivoPrecos, 'utf8'));
+    expect(d.itens[um.chave].faixa).toBe('B');
+  });
+});
+
+describe('POST /api/estudo — fecha o ciclo', () => {
+  it('reescreve o estudo com os preços atuais', async () => {
+    const lote = await get(`/api/lote?n=${numeroLote}`);
+    const itens: Record<string, { preco: number }> = {};
+    for (const i of lote.itens) if (i.faixa !== 'C') itens[i.chave] = { preco: 60 };
+    await post('/api/precos', { itens });
+
+    const j = await post('/api/estudo', {});
+    expect(j.comTeto).toBeGreaterThanOrEqual(1);
+
+    const html = await readFile(join(dir, 'saida', 'estudo.html'), 'utf8');
+    expect(html).not.toContain('estudo antigo');
+    expect(html).toContain('Lote 3');
+  });
+
+  it('o teto do estudo é o MESMO que a tela mostrou', async () => {
+    // Se divergirem, a tela autoriza um lance que o estudo não autoriza. Os dois passam pelo
+    // mesmo `avaliar()` justamente para isto não poder acontecer.
+    const daTela = await get(`/api/lote?n=${numeroLote}`);
+    const html = await readFile(join(dir, 'saida', 'estudo.html'), 'utf8');
+    // Ancorado no offerId DESTE lote: pegar o primeiro `data-teto-seguro` da página pegaria
+    // outro lote, e o teste passaria comparando números de lotes diferentes.
+    const snap = JSON.parse(await readFile(join(dir, 'saida', 'estado.json'), 'utf8'));
+    const offerId = snap.evento.lotes.find((l: { numero: number }) => l.numero === numeroLote).offerId;
+    const bloco = new RegExp(`data-offer="${offerId}"[\\s\\S]{0,400}?data-teto-seguro="([\\d.]+)"`);
+    const m = bloco.exec(html);
+    expect(m).not.toBeNull();
+    expect(Number(m![1])).toBeCloseTo(daTela.av.tetoSeguro, 2);
+  });
+});
+
+describe('a página em si', () => {
+  it('é servida e não faz nenhuma chamada a host externo', async () => {
+    const r = await fetch(base + '/precificar.html');
+    expect(r.status).toBe(200);
+    const html = await r.text();
+    // Tudo que ela busca é do próprio painel: nada de CDN, nada de fonte remota.
+    expect(html).not.toMatch(/https?:\/\/(?!127\.0\.0\.1)/);
+    expect(html).toContain('api/lotes');
+  });
+
+  it('diz o que fazer quando o painel não responde', async () => {
+    // O erro clássico é abrir o arquivo com duplo clique, sem servidor. A página avisa.
+    const html = await (await fetch(base + '/precificar.html')).text();
+    expect(html).toContain('precisa do servidor');
+  });
+});

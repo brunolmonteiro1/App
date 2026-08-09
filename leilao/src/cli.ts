@@ -8,14 +8,13 @@
  */
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { CONFIG_PADRAO, type Config } from './config.ts';
 import { auctionIdDaUrl, buscarEvento, parsearEvento, type Evento, type Lote } from './superbid/api.ts';
 import { detectar } from './analise/categoria.ts';
 import { calcularCusto, degrauProximo } from './analise/custo.ts';
 import {
   aplicar,
-  carregarPrecos,
   cobertura,
   esqueleto,
   esqueletoPriorizado,
@@ -23,11 +22,14 @@ import {
   type ArquivoPrecos,
 } from './analise/valor.ts';
 import type { ItemManifesto } from './analise/faixa.ts';
-import { reconciliar, refDoTitulo } from './analise/quantidade.ts';
-import { avaliar } from './analise/teto.ts';
-import { conferir, lerManifesto, type Manifesto } from './superbid/manifesto.ts';
+import { reconciliar } from './analise/quantidade.ts';
+import { lerManifesto, type Manifesto } from './superbid/manifesto.ts';
 import { baixarManifestos, indexarCache } from './superbid/baixar.ts';
 import { gerarPagina, type LinhaEstudo } from './estudo/pagina.ts';
+import { montarLinha } from './estudo/montar.ts';
+import { gerarPaginaPrecificar } from './estudo/precificar.ts';
+import { gravarSnapshot, NOME_SNAPSHOT, type Snapshot } from './estudo/snapshot.ts';
+import { lerPrecos } from './precos/arquivo.ts';
 
 const FIXTURE = new URL('../recon/fixtures/evento-790754-offers.json', import.meta.url).pathname;
 /** Onde os 57 manifestos ficam. Está no .gitignore: material do vendedor não vai pro repo. */
@@ -42,76 +44,6 @@ function arg(nome: string): string | undefined {
   return i > -1 ? process.argv[i + 1] : undefined;
 }
 const temFlag = (nome: string) => process.argv.includes(`--${nome}`);
-
-/** Monta a linha do estudo de um lote. `manifesto` é opcional: sem ele, não há teto. */
-function montarLinha(
-  lote: Lote,
-  manifesto: Manifesto | null,
-  cfg: Config,
-  precos: ArquivoPrecos | null,
-): LinhaEstudo {
-  const itens = manifesto ? aplicar(manifesto.itens, precos?.itens ?? {}, cfg.termosIgnorados) : [];
-  const unidades = reconciliar(lote.titulo, manifesto?.somaQuantidades ?? null);
-  const declaradas = reconciliar(lote.titulo, null).valor;
-
-  const categoria = detectar(lote.titulo);
-  const ignorado = cfg.categoriasIgnoradas.includes(categoria);
-  const av = avaliar(
-    {
-      itens,
-      ignorado,
-      categoria,
-      lanceAtual: lote.lance,
-      incremento: lote.incremento,
-      temLances: lote.temLances,
-      encerrado: lote.encerrado,
-      unidadesDeclaradas: declaradas,
-    },
-    cfg,
-  );
-
-  const alertas = ignorado
-    ? [`categoria "${cfg.categorias[categoria].rotulo}" — você não trabalha com isso`]
-    : manifesto
-      ? conferir(manifesto, refDoTitulo(lote.titulo), declaradas)
-      : [];
-  if (!ignorado && !manifesto && lote.anexos.length === 0) alertas.push('lote sem PDF de anexo');
-  if (!ignorado && !manifesto && lote.anexos.length > 0) alertas.push('manifesto ainda não processado');
-  if (manifesto && !ignorado) {
-    const cob = cobertura(itens);
-    if (cob.pendentes > 0) {
-      alertas.push(
-        `${cob.pendentes} item(ns) sem preço (${cob.unidadesSemPreco} un) — teto sai baixo até precificar`,
-      );
-    }
-  }
-
-  const topItens = itens
-    .filter((i) => i.faixa !== 'C')
-    .map((i) => ({
-      descricao: i.descricao,
-      quantidade: i.quantidade,
-      valor: i.quantidade * (i.precoOnline ?? 0),
-    }))
-    .sort((a, b) => b.valor - a.valor || b.quantidade - a.quantidade)
-    .slice(0, 5);
-
-  // Avisa só quando o próximo lance de fato atravessa a fronteira da faixa — parar no topo
-  // da faixa de baixo pode valer mais que cobrir.
-  const proximoLance = lote.temLances ? lote.lance + lote.incremento : lote.lance;
-  const d = degrauProximo(lote.lance, cfg.encargos);
-  const degrau = d && proximoLance > d.limite ? d : null;
-
-  return {
-    lote,
-    av,
-    alertas,
-    unidadesDeclaradas: unidades.valor,
-    fonteUnidades: unidades.fonte,
-    topItens,
-    degrau,
-  };
-}
 
 /** Carrega o evento do fixture (offline) ou da API ao vivo. */
 async function carregarEvento(): Promise<Evento> {
@@ -174,9 +106,13 @@ async function comandoEstudo(): Promise<void> {
 
   const evento = await carregarEvento();
 
+  // Preços ausentes NÃO são erro: é o estado inicial, e o estudo sai todo em PRECIFIQUE.
   const caminhoPrecos = arg('precos');
-  const precos = caminhoPrecos ? await carregarPrecos(caminhoPrecos) : null;
-  if (precos) {
+  let precos: ArquivoPrecos | null = null;
+  if (caminhoPrecos) {
+    const r = await lerPrecos(resolve(caminhoPrecos));
+    precos = r.arquivo;
+    if (r.aviso) console.warn(`  AVISO: ${r.aviso}`);
     const n = Object.values(precos.itens).filter((i) => i.preco != null).length;
     console.log(`tabela de preços: ${n} item(ns) precificados${precos.exemplo ? ' [EXEMPLO]' : ''}`);
   }
@@ -197,8 +133,23 @@ async function comandoEstudo(): Promise<void> {
   const refresh = arg('refresh');
   const html = gerarPagina(evento, linhas, cfg, refresh ? Number(refresh) : null, precos?.exemplo ?? false);
   const saida = resolve(arg('saida') ?? `saida/estudo-${evento.auctionId}.html`);
-  await mkdir(dirname(saida), { recursive: true });
+  const dirSaida = dirname(saida);
+  await mkdir(dirSaida, { recursive: true });
   await writeFile(saida, html, 'utf8');
+
+  // O snapshot é o que permite ao painel recalcular teto sem reparsear PDF nem chamar a API,
+  // e a tela de precificação depende dele. Escrito junto do estudo, sempre.
+  const snap: Snapshot = {
+    versao: 1,
+    geradoEm: evento.agora ?? new Date().toISOString(),
+    frete: cfg.freteInformado ? cfg.freteporLote : null,
+    refresh: refresh ? Number(refresh) : null,
+    arquivoEstudo: basename(saida),
+    evento,
+    manifestos: Object.fromEntries([...porLote].map(([n, m]) => [String(n), m])),
+  };
+  await gravarSnapshot(join(dirSaida, NOME_SNAPSHOT), snap);
+  await writeFile(join(dirSaida, 'precificar.html'), gerarPaginaPrecificar(evento.auctionId), 'utf8');
 
   // Contar pelo SEMÁFORO, não por `tetoSeguro > 0`: um lote pode ter teto calculado
   // internamente e ainda assim não oferecê-lo por falta de cobertura.
@@ -214,6 +165,7 @@ async function comandoEstudo(): Promise<void> {
   }
   if (!cfg.freteInformado) console.log('  custo marcado INCOMPLETO: passe --frete <valor> para fechar');
   if (refresh) console.log(`  refresh ligado: a página busca lances a cada ${refresh}s`);
+  console.log(`\n  tela de precificação: ${join(dirSaida, 'precificar.html')} (precisa do painel de pé)`);
 }
 
 function comandoCusto(): void {
@@ -257,7 +209,7 @@ async function comandoEsqueleto(): Promise<void> {
       process.exit(2);
     }
     // Itens de categoria ignorada saem do bloco: não faz sentido pedir preço deles.
-    const avaliados = aplicar(m.itens, {}, cfg0.termosIgnorados);
+    const avaliados = aplicar(m.itens, {}, cfg0.termosIgnorados, cfg0.excecoesIgnorados);
     const semIgnorados = m.itens.filter((_, k) => avaliados[k]!.faixa !== 'C');
     const linhas = priorizar(new Map([[Number(numLote), semIgnorados]]));
     const relevantes = linhas.filter((l) => l.faixa !== 'C');
@@ -325,7 +277,7 @@ async function comandoShortlist(): Promise<void> {
   const evento = await carregarEvento();
   const { porLote } = await lerManifestosDoCache(evento);
   const caminhoPrecos = arg('precos');
-  const precos = caminhoPrecos ? await carregarPrecos(caminhoPrecos) : null;
+  const precos = caminhoPrecos ? (await lerPrecos(resolve(caminhoPrecos))).arquivo : null;
 
   const f = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
   const rows = [];
@@ -334,7 +286,7 @@ async function comandoShortlist(): Promise<void> {
     if (!m || lote.encerrado) continue;
     const cat = detectar(lote.titulo);
     if (cfg.categoriasIgnoradas.includes(cat)) continue;
-    const itens = aplicar(m.itens, precos?.itens ?? {}, cfg.termosIgnorados);
+    const itens = aplicar(m.itens, precos?.itens ?? {}, cfg.termosIgnorados, cfg.excecoesIgnorados);
     const relevantes = itens.filter((i) => i.faixa !== 'C');
     const efetivas = relevantes.reduce((s, i) => s + i.quantidade, 0);
     if (efetivas === 0) continue;

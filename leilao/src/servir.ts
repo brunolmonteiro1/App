@@ -1,27 +1,46 @@
 #!/usr/bin/env node
 /**
- * Servidor estático mínimo para o estudo, com `node:http` — zero dependência nova.
+ * O painel: serve o estudo E a tela de precificação, com `node:http` — zero dependência nova.
  *
- * **Liga em 127.0.0.1 por padrão, de propósito.** O estudo contém os tetos de lance do
- * operador: outro licitante do mesmo leilão que visse esta página saberia exatamente até onde
- * empurrá-lo antes de ele parar. O acesso previsto é túnel SSH (`ssh -L 8080:127.0.0.1:8080`),
- * não exposição na internet.
+ * ## Acesso
  *
- * Isto é defesa em profundidade: mesmo que alguém erre o mapeamento de porta no compose, o
- * processo não escuta fora do loopback a menos que `HOST` seja trocado explicitamente.
+ * O estudo contém os tetos de lance do operador: outro licitante do mesmo leilão que visse a
+ * página saberia até onde empurrá-lo antes de ele parar. E a tela de precificação **grava** em
+ * `precos.json`. Então há exatamente dois modos de acesso, e nenhum terceiro:
  *
- * A página não precisa de CORS deste servidor — ela busca a API do Superbid, e é o Superbid
- * que responde `Access-Control-Allow-Origin: *`.
+ * | `HOST` | `SENHA` | Resultado |
+ * |---|---|---|
+ * | `127.0.0.1` (padrão) | — | só pelo túnel SSH |
+ * | `0.0.0.0` | definida | aberto na rede, atrás de Basic auth |
+ * | `0.0.0.0` | **ausente** | **o processo se recusa a subir** |
+ *
+ * A última linha é o ponto: publicar sem senha não é uma opção que o programa ofereça, nem
+ * por descuido de configuração. Ele para com mensagem explicando, em vez de servir os tetos —
+ * e uma tela de escrita — para a internet inteira.
  */
 
 import { createReadStream } from 'node:fs';
-import { stat } from 'node:fs/promises';
-import { createServer } from 'node:http';
+import { stat, writeFile, rename } from 'node:fs/promises';
+import { timingSafeEqual } from 'node:crypto';
+import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { extname, join, resolve, sep } from 'node:path';
+import { CONFIG_PADRAO } from './config.ts';
+import { detectar } from './analise/categoria.ts';
+import { aplicar, chave as chaveDe, priorizar } from './analise/valor.ts';
+import { avaliar } from './analise/teto.ts';
+import { gerarPagina } from './estudo/pagina.ts';
+import { configDoSnapshot, montarLinha, montarLinhas } from './estudo/montar.ts';
+import { lerSnapshot, manifestoDo, NOME_SNAPSHOT, type Snapshot } from './estudo/snapshot.ts';
+import { gravarPrecos, lerPrecos, mesclar, type EntradaPreco } from './precos/arquivo.ts';
+import { reconciliar } from './analise/quantidade.ts';
 
 const RAIZ = resolve(process.env.DIR_SAIDA ?? 'saida');
+const ARQUIVO_PRECOS = resolve(process.env.ARQUIVO_PRECOS ?? 'precos.json');
 const PORTA = Number(process.env.PORT ?? 8080);
 const HOST = process.env.HOST ?? '127.0.0.1';
+const USUARIO = process.env.USUARIO ?? 'leilao';
+const SENHA = process.env.SENHA ?? '';
+const LOOPBACK = HOST === '127.0.0.1' || HOST === 'localhost' || HOST === '::1';
 
 const TIPOS: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -49,8 +68,285 @@ function caminhoSeguro(url: string): string | null {
   return alvo === RAIZ || alvo.startsWith(RAIZ + sep) ? alvo : null;
 }
 
+/** Comparação em tempo constante, para a senha não vazar pelo tempo de resposta. */
+function iguais(a: string, b: string): boolean {
+  const x = Buffer.from(a);
+  const y = Buffer.from(b);
+  return x.length === y.length && timingSafeEqual(x, y);
+}
+
+function autorizado(req: IncomingMessage): boolean {
+  if (!SENHA) return true; // modo loopback: o túnel SSH já é a autenticação
+  const h = req.headers.authorization ?? '';
+  if (!h.startsWith('Basic ')) return false;
+  const [u, ...resto] = Buffer.from(h.slice(6), 'base64').toString('utf8').split(':');
+  return iguais(u ?? '', USUARIO) && iguais(resto.join(':'), SENHA);
+}
+
+function json(res: ServerResponse, status: number, corpo: unknown): void {
+  const txt = JSON.stringify(corpo);
+  res.writeHead(status, {
+    'content-type': 'application/json; charset=utf-8',
+    'content-length': Buffer.byteLength(txt),
+    'cache-control': 'no-store',
+  });
+  res.end(txt);
+}
+
+/** Corpo JSON do POST, com limite — sem limite, um POST grande derruba o processo. */
+async function corpoJson(req: IncomingMessage): Promise<Record<string, unknown>> {
+  const LIMITE = 4 * 1024 * 1024;
+  let total = 0;
+  const pedacos: Buffer[] = [];
+  for await (const p of req) {
+    total += (p as Buffer).length;
+    if (total > LIMITE) throw new Error('corpo grande demais');
+    pedacos.push(p as Buffer);
+  }
+  if (total === 0) return {};
+  return JSON.parse(Buffer.concat(pedacos).toString('utf8')) as Record<string, unknown>;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Estado: snapshot em disco (escrito pelo `gerar`) + preços (mutáveis pela tela)
+// ─────────────────────────────────────────────────────────────────────────────
+
+let cacheSnapshot: { snapshot: Snapshot; mtime: number } | null = null;
+
+/** Relê o snapshot só quando o arquivo mudou — o `gerar` do cron reescreve por baixo. */
+async function snapshot(): Promise<Snapshot> {
+  const caminho = join(RAIZ, NOME_SNAPSHOT);
+  const st = await stat(caminho).catch(() => null);
+  if (!st) {
+    throw new Error(
+      `${caminho} não existe. Rode o \`gerar\` uma vez: docker compose run --rm gerar`,
+    );
+  }
+  if (!cacheSnapshot || cacheSnapshot.mtime !== st.mtimeMs) {
+    cacheSnapshot = { snapshot: await lerSnapshot(caminho), mtime: st.mtimeMs };
+  }
+  return cacheSnapshot.snapshot;
+}
+
+/** Em quantos lotes cada descrição aparece — é o que mostra a reutilização na tela. */
+function alcancePorChave(s: Snapshot): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const [, manifesto] of Object.entries(s.manifestos)) {
+    const vistas = new Set(manifesto.itens.map((i) => chaveDe(i.descricao)));
+    for (const k of vistas) m.set(k, (m.get(k) ?? 0) + 1);
+  }
+  return m;
+}
+
+const cfgBase = CONFIG_PADRAO;
+
+/** Resumo de todos os lotes, sem os itens — é o que a lista da esquerda consome. */
+async function apiLotes(): Promise<unknown> {
+  const s = await snapshot();
+  const { arquivo: precos, aviso } = await lerPrecos(ARQUIVO_PRECOS);
+  const cfg = configDoSnapshot(s, cfgBase);
+  const linhas = montarLinhas(s, cfg, precos);
+
+  const lotes = linhas.map((l) => {
+    const m = manifestoDo(s, l.lote.numero);
+    return {
+      numero: l.lote.numero,
+      titulo: l.lote.titulo,
+      semaforo: l.av.semaforo,
+      itens: m?.itens.length ?? 0,
+      pendentes: m ? l.av.unidadesSemPreco : 0,
+      cobertura: l.av.cobertura,
+      custoPorUnidadeEfetiva: l.av.custoPorUnidadeEfetiva,
+      lance: l.lote.lance,
+      encerrado: l.lote.encerrado,
+    };
+  });
+
+  // Ordem recomendada: primeiro onde vale gastar o esforço. Custo por unidade efetiva é a
+  // métrica que funciona SEM preço nenhum, então serve justamente quando nada está precificado.
+  const peso = (x: (typeof lotes)[number]) =>
+    x.encerrado || x.semaforo === 'ignorado' ? 2 : x.itens === 0 ? 1 : 0;
+  lotes.sort(
+    (a, b) =>
+      peso(a) - peso(b) ||
+      (a.custoPorUnidadeEfetiva ?? Infinity) - (b.custoPorUnidadeEfetiva ?? Infinity) ||
+      a.numero - b.numero,
+  );
+
+  const precificados = Object.values(precos.itens).filter((i) => i.preco != null).length;
+  return {
+    auctionId: s.evento.auctionId,
+    geradoEm: s.geradoEm.replace('T', ' ').slice(0, 16),
+    precificados,
+    avisoPrecos: aviso,
+    lotes,
+  };
+}
+
+/**
+ * Um lote com seus itens, **agrupados por descrição**.
+ *
+ * Agrupar importa: o mesmo item aparece em várias linhas do manifesto, e o preço é gravado
+ * por descrição. Mostrar cinco campos que gravam na mesma chave faria o operador digitar
+ * cinco vezes e ver quatro sumirem.
+ */
+async function apiLote(numero: number, pendentes: Record<string, EntradaPreco> = {}): Promise<unknown> {
+  const s = await snapshot();
+  const lote = s.evento.lotes.find((l) => l.numero === numero);
+  if (!lote) throw new Error(`lote ${numero} não existe neste evento`);
+  const manifesto = manifestoDo(s, numero);
+
+  const { arquivo: precos } = await lerPrecos(ARQUIVO_PRECOS);
+  // Preços ainda não salvos entram por cima, para o teto na tela responder ao que ele digitou.
+  const comPendentes = mesclar(precos, pendentes).arquivo;
+
+  const cfg = configDoSnapshot(s, cfgBase);
+  const linha = montarLinha(lote, manifesto, cfg, comPendentes);
+  const categoria = detectar(lote.titulo);
+
+  const alcance = alcancePorChave(s);
+  const avaliados = manifesto ? aplicar(manifesto.itens, comPendentes.itens, cfg.termosIgnorados, cfg.excecoesIgnorados) : [];
+  const semTermo = manifesto ? aplicar(manifesto.itens, comPendentes.itens, []) : [];
+
+  // Ordem de impacto: o operador precifica de cima para baixo e para quando quiser.
+  const ordem = new Map(
+    priorizar(new Map([[numero, manifesto?.itens ?? []]])).map((l, i) => [l.chave, i]),
+  );
+
+  const porChave = new Map<
+    string,
+    { chave: string; descricao: string; quantidade: number; faixa: string; preco: number | null;
+      herdado: boolean; ignorado: boolean; lotes: number; subtotal: number | null }
+  >();
+  // Subtotal é a contribuição REAL ao valor do lote, então já vem com o peso da faixa B
+  // aplicado. Mostrar o bruto faria a coluna somar mais que o "valor online" do rodapé, e o
+  // operador não teria como saber qual dos dois números é o que entra no teto.
+  const peso = (f: string) => (f === 'B' ? cfg.fatorB : 1);
+  avaliados.forEach((it, k) => {
+    const key = chaveDe(it.descricao);
+    if (!key) return;
+    const jaTem = porChave.get(key);
+    if (jaTem) {
+      jaTem.quantidade += it.quantidade;
+      jaTem.subtotal =
+        it.precoOnline != null ? jaTem.quantidade * it.precoOnline * peso(it.faixa) : null;
+      return;
+    }
+    porChave.set(key, {
+      chave: key,
+      descricao: it.descricao,
+      quantidade: it.quantidade,
+      faixa: it.faixa,
+      preco: it.precoOnline ?? comPendentes.itens[key]?.preco ?? null,
+      herdado: it.precoOnline != null,
+      // Termo ignorado é o item que caiu em C por causa da lista de termos, não da heurística:
+      // a tela precisa dizer POR QUE o campo está travado.
+      ignorado: it.faixa === 'C' && semTermo[k]!.faixa !== 'C',
+      lotes: alcance.get(key) ?? 1,
+      subtotal: it.precoOnline != null ? it.quantidade * it.precoOnline * peso(it.faixa) : null,
+    });
+  });
+
+  const itens = [...porChave.values()].sort(
+    (a, b) => (ordem.get(a.chave) ?? 1e9) - (ordem.get(b.chave) ?? 1e9),
+  );
+
+  return {
+    numero,
+    titulo: lote.titulo,
+    lance: lote.lance,
+    incremento: lote.incremento,
+    encerrado: lote.encerrado,
+    categoria: cfg.categorias[categoria].rotulo,
+    multiplo: cfg.categorias[categoria].multiplo,
+    perda: cfg.categorias[categoria].perda,
+    ignorado: cfg.categoriasIgnoradas.includes(categoria),
+    unidadesDeclaradas: reconciliar(lote.titulo, manifesto?.somaQuantidades ?? null).valor,
+    itens,
+    av: linha.av,
+  };
+}
+
+/** Recalcula o teto com os preços digitados, SEM gravar. */
+async function apiSimular(corpo: Record<string, unknown>): Promise<unknown> {
+  const numero = Number(corpo.lote);
+  const itens = (corpo.itens ?? {}) as Record<string, EntradaPreco>;
+  const r = (await apiLote(numero, itens)) as { av: unknown; itens: unknown };
+  return { av: r.av, itens: r.itens };
+}
+
+async function apiGravarPrecos(corpo: Record<string, unknown>): Promise<unknown> {
+  const entrada = (corpo.itens ?? {}) as Record<string, EntradaPreco>;
+  const { arquivo } = await lerPrecos(ARQUIVO_PRECOS);
+  const { arquivo: novo, gravados, rejeitados } = mesclar(arquivo, entrada);
+  await gravarPrecos(ARQUIVO_PRECOS, novo);
+  return { gravados, rejeitados, arquivo: ARQUIVO_PRECOS };
+}
+
+/**
+ * Regenera `estudo.html` a partir do snapshot + preços atuais.
+ *
+ * Fecha o ciclo: precificar na tela e ver o estudo mudar, sem SSH e sem esperar o cron. Não
+ * toca em PDF nem na rede — os lances continuam vindo do `gerar`, e o `--refresh` da própria
+ * página busca os atuais no navegador.
+ */
+async function apiRegerarEstudo(): Promise<unknown> {
+  const s = await snapshot();
+  const { arquivo: precos } = await lerPrecos(ARQUIVO_PRECOS);
+  const cfg = configDoSnapshot(s, cfgBase);
+  const linhas = montarLinhas(s, cfg, precos);
+  const html = gerarPagina(s.evento, linhas, cfg, s.refresh, precos.exemplo ?? false);
+
+  const alvo = join(RAIZ, s.arquivoEstudo ?? 'estudo.html');
+  const tmp = `${alvo}.tmp`;
+  await writeFile(tmp, html, 'utf8');
+  await rename(tmp, alvo);
+
+  const conta = (x: string) => linhas.filter((l) => l.av.semaforo === x).length;
+  return {
+    arquivo: alvo,
+    comTeto: conta('verde') + conta('amarelo') + conta('vermelho'),
+    semCobertura: conta('sem-cobertura'),
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 const servidor = createServer(async (req, res) => {
-  if (req.method !== 'GET' && req.method !== 'HEAD') {
+  if (!autorizado(req)) {
+    res
+      .writeHead(401, { 'www-authenticate': 'Basic realm="leilao", charset="UTF-8"' })
+      .end('autenticação necessária\n');
+    return;
+  }
+
+  const rota = (req.url ?? '/').split('?')[0] ?? '/';
+  const metodo = req.method ?? 'GET';
+
+  if (rota.startsWith('/api/')) {
+    try {
+      if (metodo === 'GET' && rota === '/api/lotes') return json(res, 200, await apiLotes());
+      if (metodo === 'GET' && rota === '/api/lote') {
+        const n = Number(new URL(req.url ?? '', 'http://x').searchParams.get('n'));
+        return json(res, 200, await apiLote(n));
+      }
+      if (metodo === 'POST' && rota === '/api/simular') {
+        return json(res, 200, await apiSimular(await corpoJson(req)));
+      }
+      if (metodo === 'POST' && rota === '/api/precos') {
+        return json(res, 200, await apiGravarPrecos(await corpoJson(req)));
+      }
+      if (metodo === 'POST' && rota === '/api/estudo') {
+        return json(res, 200, await apiRegerarEstudo());
+      }
+      return json(res, 404, { erro: `rota ${metodo} ${rota} não existe` });
+    } catch (e) {
+      // Mensagem de verdade para o operador: "rode o gerar" resolve; "500" não diz nada.
+      return json(res, 400, { erro: (e as Error).message });
+    }
+  }
+
+  if (metodo !== 'GET' && metodo !== 'HEAD') {
     res.writeHead(405, { allow: 'GET, HEAD' }).end('método não permitido\n');
     return;
   }
@@ -84,12 +380,23 @@ const servidor = createServer(async (req, res) => {
   }
 });
 
+// Publicar sem senha não é opção de configuração: o processo para aqui.
+if (!LOOPBACK && !SENHA) {
+  console.error(
+    `\nRECUSANDO SUBIR: HOST=${HOST} publica o painel na rede, e a variável SENHA está vazia.\n` +
+      `O painel mostra seus tetos de lance e GRAVA em precos.json — sem senha, qualquer um do\n` +
+      `mesmo leilão poderia ler e editar.\n\n` +
+      `  Escolha um dos dois:\n` +
+      `    SENHA=umasenhaboa       no .env, e o painel sobe com login (usuário: ${USUARIO})\n` +
+      `    HOST=127.0.0.1         e acesse por túnel: ssh -L 8080:127.0.0.1:8080 root@servidor\n`,
+  );
+  process.exit(1);
+}
+
 servidor.listen(PORTA, HOST, () => {
   console.log(`painel servindo ${RAIZ} em http://${HOST}:${PORTA}`);
-  if (HOST !== '127.0.0.1' && HOST !== 'localhost') {
-    console.warn(
-      `ATENÇÃO: HOST=${HOST} — o estudo contém seus tetos de lance. Só faça isso atrás de ` +
-        'autenticação; o padrão previsto é túnel SSH.',
-    );
-  }
+  console.log(`  estudo:     http://${HOST}:${PORTA}/estudo.html`);
+  console.log(`  precificar: http://${HOST}:${PORTA}/precificar.html`);
+  console.log(`  preços em:  ${ARQUIVO_PRECOS}`);
+  console.log(SENHA ? `  login: usuário "${USUARIO}", senha definida em SENHA` : '  sem senha (loopback)');
 });

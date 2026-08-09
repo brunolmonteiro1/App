@@ -135,3 +135,51 @@ describe('os 61 lotes reais com o filtro do operador', () => {
     }
   });
 });
+
+/**
+ * O filtro de termos casa por substring, e substring não distingue o RECIPIENTE do conteúdo.
+ * "TAÇA PARA VINHO EM CRISTAL BOHEMIA XTRA 560ML" batia em `vinho` e ia para a faixa C,
+ * valendo zero — e cristal Bohemia é exatamente o que gira bem no bazar dele. Mesma família do
+ * falso positivo de "COPOS PARA WHISKY WOLFF", que já tinha custado o lote 22 inteiro.
+ *
+ * O erro é caro na direção errada: subestimar o lote faz perder o lote, e o operador nem sabe
+ * por quê, porque a tela só mostra "irrisório".
+ */
+describe('exceções: o recipiente não é a bebida', () => {
+  const item = (descricao: string, quantidade = 1) => ({ descricao, quantidade, ref: 'SB1' });
+  const aplicado = (descricao: string) =>
+    aplicar([item(descricao)], {}, cfg.termosIgnorados, cfg.excecoesIgnorados)[0]!;
+
+  const naoIgnorar = [
+    'TAÇA PARA VINHO EM CRISTAL BOHEMIA XTRA 560ML',
+    'COPOS PARA WHISKY WOLFF 320ML',
+    'Jogo 6 Taças p/Champanhe em Cristal Elizabeth Vermelha 200ml',
+    'BALDE DE GELO PARA CERVEJA INOX',
+    'ABRIDOR DE VINHO SACA ROLHA ELETRICO',
+    'SABONEITEIRA DE VIDRO',
+    'SABONETEIRA DE VIDRO COM TAMPA',
+  ];
+  for (const d of naoIgnorar) {
+    it(`não joga em C por termo: ${d.slice(0, 44)}`, () => {
+      expect(aplicado(d).faixa).not.toBe('C');
+    });
+  }
+
+  const aindaIgnorar = [
+    'CERVEJA HEINEKEN LONG NECK 330ML',
+    'VINHO TINTO SECO CABERNET 750ML',
+    'SHAMPOO ELSEVE RECONSTRUCAO 400ML',
+    'DETERGENTE LIMPADOR MULTIUSO 500ML',
+  ];
+  for (const d of aindaIgnorar) {
+    it(`continua em C, porque é o produto mesmo: ${d.slice(0, 40)}`, () => {
+      expect(aplicado(d).faixa).toBe('C');
+    });
+  }
+
+  it('a exceção não é um cheque em branco: sem recipiente, o termo vale', () => {
+    // Se a lista de exceções passasse a casar frouxo, o filtro inteiro viraria decorativo.
+    expect(aplicado('WHISKY RED LABEL 1L').faixa).toBe('C');
+    expect(aplicado('VODKA SMIRNOFF 998ML').faixa).toBe('C');
+  });
+});

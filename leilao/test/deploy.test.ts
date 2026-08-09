@@ -14,23 +14,31 @@ const pkg = JSON.parse(ler('package.json'));
  * Não substituem `docker build` (que não roda no CI), mas travam a classe de erro que o build
  * não pegaria de jeito nenhum: um build bem-sucedido com a porta exposta passa liso.
  */
-describe('compose — nenhuma porta publicada fora do loopback', () => {
-  const mapeamentos = [...compose.matchAll(/^\s*-\s*"([\d.]*:?\d+:\d+)"/gm)].map((m) => m[1]!);
+describe('compose — o padrão é loopback, e publicar exige senha', () => {
+  const mapeamentos = [...compose.matchAll(/^\s*-\s*"([^"]*:\d+)"/gm)].map((m) => m[1]!);
 
   it('existe pelo menos um mapeamento, senão o teste não está vendo nada', () => {
     expect(mapeamentos.length).toBeGreaterThan(0);
   });
 
   for (const m of mapeamentos) {
-    it(`"${m}" está preso a 127.0.0.1`, () => {
-      expect(m.startsWith('127.0.0.1:')).toBe(true);
+    it(`"${m}" tem 127.0.0.1 como padrão`, () => {
+      // O operador pode abrir na rede (BIND=0.0.0.0), mas tem de ser escolha explícita no
+      // .env. Quem não configurar nada fica no loopback.
+      expect(m).toMatch(/^\$\{BIND:-127\.0\.0\.1\}:/);
     });
   }
 
-  it('não há mapeamento em 0.0.0.0 nem porta nua', () => {
+  it('não há mapeamento com 0.0.0.0 fixo nem porta nua', () => {
+    // Porta nua tipo "8080:8080" liga em todas as interfaces sem passar pelo .env.
     expect(compose).not.toMatch(/^\s*-\s*"0\.0\.0\.0:/m);
-    // Porta nua tipo "8080:8080" liga em todas as interfaces.
     expect(compose).not.toMatch(/^\s*-\s*"\d+:\d+"/m);
+  });
+
+  it('SENHA é obrigatória: o compose falha sem ela', () => {
+    // `${SENHA:?mensagem}` faz o `docker compose up` abortar quando a variável está vazia.
+    // É o que impede subir o painel publicado e sem autenticação por descuido de .env.
+    expect(compose).toMatch(/SENHA:\?/);
   });
 
   it('o comentário que explica o porquê continua no arquivo', () => {
@@ -38,35 +46,58 @@ describe('compose — nenhuma porta publicada fora do loopback', () => {
     expect(compose).toContain('TETOS DE LANCE');
     expect(compose).toContain('UFW');
   });
-
-  it('os preços do operador são montados somente leitura', () => {
-    expect(compose).toMatch(/precos\.json:.*:ro/);
-  });
 });
 
 describe('volumes — named, não bind mount', () => {
-  it('cache e saida são named volumes declarados', () => {
+  it('cache, saida e dados são named volumes declarados', () => {
     // A imagem roda como uid 1001. Bind mount sobrepõe o dono da imagem pelo dono da pasta
     // no host: numa VPS operada como root, `./cache` nasce root:root e o container falha ao
     // escrever no primeiro `gerar`. Named volume o Docker inicializa com o dono da imagem.
     expect(compose).toMatch(/^volumes:$/m);
-    expect(compose).toMatch(/^\s+cache:$/m);
-    expect(compose).toMatch(/^\s+saida:$/m);
+    for (const v of ['cache', 'saida', 'dados']) {
+      expect(compose).toMatch(new RegExp(`^\\s+${v}:$`, 'm'));
+    }
   });
 
-  it('nenhum bind mount de cache ou saida sobrou', () => {
-    expect(compose).not.toMatch(/-\s*\.\/cache:/);
-    expect(compose).not.toMatch(/-\s*\.\/saida:/);
-  });
-
-  it('o único bind mount é o arquivo de preços, e é read-only', () => {
+  it('NENHUM bind mount sobrou no compose', () => {
+    // O `./precos.json` era o último, e era duas armadilhas ao mesmo tempo: arquivo ausente
+    // no host virava DIRETÓRIO (EISDIR), e arquivo criado por root era ilegível para escrita
+    // pelo uid 1001 — quebrando justamente o salvar da tela de precificação.
     const binds = [...compose.matchAll(/-\s*(\.\/[^\s:]+):/g)].map((m) => m[1]!);
-    expect(binds).toEqual(['./precos.json']);
+    expect(binds).toEqual([]);
+  });
+
+  it('o volume de preços é montado read-only no job e gravável no painel', () => {
+    // Quem grava preço é a tela; o job só calcula com o que já existe.
+    expect(compose).toMatch(/-\s*dados:\/app\/dados:ro/);
+    expect(compose).toMatch(/-\s*dados:\/app\/dados$/m);
+  });
+
+  it('o diretório de dados existe na imagem com o dono certo', () => {
+    // Named volume cujo ponto de montagem não existe na imagem nasce root:root, e aí a tela
+    // de precificação não consegue gravar.
+    expect(dockerfile).toMatch(/mkdir -p .*dados/);
+    expect(dockerfile).toMatch(/chown -R leilao:leilao .*dados/);
   });
 
   it('o comentário que explica o porquê continua no arquivo', () => {
     expect(compose).toContain('NAMED VOLUMES');
     expect(compose).toContain('uid 1001');
+  });
+});
+
+describe('.env.exemplo — o operador tem o que precisa para subir', () => {
+  const env = ler('.env.exemplo');
+
+  it('traz SENHA, BIND e a porta do host', () => {
+    for (const k of ['SENHA=', 'BIND=', 'PORTA_HOST=', 'EVENTO=', 'FRETE=']) {
+      expect(env).toContain(k);
+    }
+  });
+
+  it('a senha de exemplo é obviamente um placeholder', () => {
+    // Se parecesse uma senha de verdade, alguém a usaria em produção.
+    expect(env).toMatch(/SENHA=troque/);
   });
 });
 
