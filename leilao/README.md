@@ -23,7 +23,7 @@ npm run cli -- baixar --fixture
 npm run cli -- shortlist --fixture --frete 150
 
 # Itens de UM lote, para precificar até o fim (é isso que produz teto)
-npm run cli -- precos --lote 4 --fixture
+npm run cli -- precos --lote 56 --fixture
 
 # Estudo dos 61 lotes, offline, a partir do evento capturado
 npm run cli -- estudo --fixture --frete 150 --refresh 15 \
@@ -36,7 +36,7 @@ npm run cli -- estudo --url https://www.superbid.net/evento/logistica-reversa-79
 # Esqueleto de preços para preencher (sem números inventados)
 npm run cli -- precos --saida precos.json
 
-npm test          # 119 testes
+npm test          # 129 testes
 npm run typecheck
 ```
 
@@ -55,6 +55,7 @@ npm run typecheck
 | Download dos 57 PDFs de anexo | ✅ 57/57, com cache e throttle |
 | Shortlist por custo/un efetiva (sem preço) | ✅ |
 | Gate de cobertura: não exibe teto que engana | ✅ |
+| Filtro de categorias que o operador não trabalha | ✅ cosmético, limpeza, bebida |
 | Extração do Edital | ❌ ver "tarefa zero" abaixo |
 
 ## Documentos
@@ -94,13 +95,13 @@ O fluxo certo tem três passos:
 
 ```bash
 npm run cli -- shortlist --fixture --frete 150   # 1. escolhe candidatos (grátis)
-npm run cli -- precos --lote 4 --fixture         # 2. precifica UM lote até o fim
+npm run cli -- precos --lote 56 --fixture        # 2. precifica UM lote até o fim
 npm run cli -- estudo --fixture --precos p.json  # 3. aquele lote ganha teto real
 ```
 
 O passo 1 usa **custo / unidade efetiva**, que funciona com zero preços e já separa lote
-honesto de lote inchado. No evento de referência ele aponta o lote 4 (R$ 13/un efetiva, infla
-só 10%, **25 itens** a precificar) e o lote 56 (R$ 14/un, infla 1%, 60 itens).
+honesto de lote inchado. No evento de referência, com cosmético/limpeza/bebida fora, ele aponta o lote 56
+(R$ 15/un efetiva, infla 6%, 58 itens) e o lote 12 (R$ 17/un, 32 itens).
 
 ### O gate de cobertura existe para a tela não mentir
 
@@ -134,6 +135,32 @@ ordenava por quantidade e enchia o topo de copo descartável, papel sulfite e ve
 martelete fora das 15 primeiras. Corrigido, o topo é ferramenta elétrica e eletrodoméstico.
 
 O `√(nº de lotes)` entra porque precificar uma linha que aparece em 6 lotes destrava 6 tetos.
+
+## Categorias fora do escopo
+
+O operador não trabalha com **cosmético, limpeza nem bebida**. Isso vale em dois níveis, e o
+segundo é o que evita inflar teto:
+
+- **Lote inteiro** dessas categorias vira `IGNORADO` — 7 dos 61 neste evento (1, 2, 4, 5, 16,
+  24, 26). Fica visível na lista, apagado, porque durante o pregão o leiloeiro chama o lote e a
+  ausência dele na tela pareceria falha da ferramenta.
+- **Item dessas categorias dentro de lote misto** é forçado para faixa C, valendo zero — e isso
+  **ganha até de preço posto à mão**. Sem essa regra, um lote de "utensílios, vestuário e
+  cosméticos" contaria o shampoo no valor e produziria um teto que autoriza pagar por mercadoria
+  que ele não revende. O lote 56 caiu de 288 para 274 unidades efetivas por causa disso.
+
+### O falso positivo que quase custou um lote bom
+
+A detecção de categoria usava o primeiro termo que casasse, e classificou o **lote 22** como
+*bebidas*:
+
+```
+FRIGIDEIRA REDSILVER, FOGÃO COOKTOP PORTÁTIL, TAÇAS DIAMOND, COPOS PARA WHISKY WOLFF
+```
+
+O termo era "copos para **whisky**" — é o copo, não a bebida. Com bebidas ignoradas, o lote
+seria descartado sendo utensílio de cozinha. Agora a detecção **conta** termos por categoria:
+bebidas=1 contra utensílios=2, e utensílios ganha. Travado em teste.
 
 ## Os encargos são tabelados — e é isso que engana
 

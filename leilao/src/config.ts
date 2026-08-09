@@ -93,6 +93,18 @@ export interface Config {
    * porque cobertura só por unidade deixa passar lote onde o item caro está sem preço.
    */
   coberturaMinimaLinhas: number;
+  /**
+   * Categorias com que o operador não trabalha. O lote inteiro é marcado como ignorado —
+   * não entra na shortlist nem recebe teto — mas continua visível no estudo, porque durante
+   * o pregão o leiloeiro chama o lote e a ausência dele na tela pareceria falha.
+   */
+  categoriasIgnoradas: Categoria[];
+  /**
+   * Itens dessas categorias dentro de lotes MISTOS. Sem isso, um lote de "utensílios,
+   * vestuário e cosméticos" contaria o shampoo no valor e inflaria o teto com mercadoria
+   * que o operador não revende.
+   */
+  termosIgnorados: string[];
   categorias: Record<Categoria, ConfigCategoria>;
   /** Custo de retirada por lote. Retirada é em Embu das Artes-SP. */
   freteporLote: number;
@@ -128,6 +140,26 @@ export const CONFIG_PADRAO: Config = {
   fatorB: 0.6,
   coberturaMinima: 0.6,
   coberturaMinimaLinhas: 0.5,
+  // Operador: "ignorar lotes de cosméticos e de bebidas e ignorar também produtos de
+  // limpeza, não trabalho com isso".
+  categoriasIgnoradas: ['cosmeticos', 'bebidas'],
+  termosIgnorados: [
+    // cosmético e higiene pessoal
+    'shampoo', 'xampu', 'condicionador', 'hidratante', 'creme de', 'mascara capilar',
+    'tintura', 'coloracao', 'esmalte', 'batom', 'perfume', 'desodorante', 'sabonete',
+    'protetor solar', 'oleo capilar', 'finalizador', 'leave in', 'progressiva', 'alisante',
+    'gel fixador', 'pomada modeladora', 'antisséptico', 'antisseptico',
+    // limpeza
+    'detergente', 'desinfetante', 'agua sanitaria', 'água sanitária', 'alvejante',
+    'amaciante', 'sabao', 'sabão', 'lava roupas', 'lava louca', 'lava louça',
+    'limpador', 'multiuso limpeza', 'cera para piso', 'tira manchas', 'removedor',
+    // bebida
+    'cerveja', 'heineken', 'amstel', 'budweiser', 'corona', 'brahma', 'skol', 'baden',
+    'vinho', 'espumante', 'whisky', 'whiskey', 'vodka', 'smirnoff', 'gin', 'campari',
+    'martini', 'licor', 'cachaca', 'cachaça', 'tequila', 'rum', 'johnnie walker',
+    'energetico', 'energético', 'monster', 'red bull', 'refrigerante', 'coca cola',
+    'pepsi', 'guarana', 'guaraná', 'xeque mate', 'drink beats',
+  ],
   freteporLote: 0,
   freteInformado: false,
   categorias: {

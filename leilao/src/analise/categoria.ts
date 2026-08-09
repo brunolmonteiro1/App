@@ -21,15 +21,36 @@ const REGRAS: { cat: Categoria; termos: string[] }[] = [
 ];
 
 function normalizar(s: string): string {
-  return s.toLowerCase().replace(/\s+/g, ' ');
+  return s
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ');
 }
 
+/**
+ * Detecção por CONTAGEM de termos, não pelo primeiro que casa.
+ *
+ * Primeiro-que-casa produzia falso positivo grave: o lote 22 —
+ * "FRIGIDEIRA REDSILVER, FOGÃO COOKTOP PORTÁTIL, TAÇAS DIAMOND, COPOS PARA WHISKY WOLFF" —
+ * era classificado como *bebidas* por causa de "copos para WHISKY". É o copo, não o whisky.
+ * Com o operador ignorando bebidas, isso o faria pular um lote de utensílios.
+ *
+ * Contando, o mesmo título dá bebidas=1 (whisky) contra utensilios=2 (taça, copos), e
+ * utensílios ganha. Empate cai na ordem de REGRAS, que vai do mais específico ao mais geral.
+ */
 export function detectar(titulo: string): Categoria {
   const t = normalizar(titulo);
+  let melhor: Categoria = 'outros';
+  let maior = 0;
   for (const { cat, termos } of REGRAS) {
-    if (termos.some((x) => t.includes(x))) return cat;
+    const n = termos.filter((x) => t.includes(normalizar(x))).length;
+    if (n > maior) {
+      maior = n;
+      melhor = cat;
+    }
   }
-  return 'outros';
+  return melhor;
 }
 
 /**
@@ -39,6 +60,8 @@ export function detectar(titulo: string): Categoria {
  */
 export function detectarTodas(titulo: string): Categoria[] {
   const t = normalizar(titulo);
-  const achadas = REGRAS.filter((r) => r.termos.some((x) => t.includes(x))).map((r) => r.cat);
+  const achadas = REGRAS.filter((r) => r.termos.some((x) => t.includes(normalizar(x)))).map(
+    (r) => r.cat,
+  );
   return achadas.length ? [...new Set(achadas)] : ['outros'];
 }

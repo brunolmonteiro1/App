@@ -53,10 +53,18 @@ export async function carregarPrecos(caminho: string): Promise<ArquivoPrecos> {
 }
 
 /** Aplica faixa (heurística ou override) e preço aos itens do manifesto. */
-export function aplicar(itens: ItemManifesto[], tabela: TabelaPrecos = {}): ItemAvaliado[] {
+export function aplicar(
+  itens: ItemManifesto[],
+  tabela: TabelaPrecos = {},
+  termosIgnorados: string[] = [],
+): ItemAvaliado[] {
   return itens.map((i) => {
     const reg = tabela[chave(i.descricao)];
-    const faixa: Faixa = reg?.faixa ?? classificar(i);
+    const d = chave(i.descricao);
+    // Termo ignorado ganha até de override manual: se o operador não trabalha com a
+    // categoria, o item vale zero mesmo que alguém tenha posto preço e faixa A nele.
+    const ignorado = termosIgnorados.some((t) => d.includes(chave(t)));
+    const faixa: Faixa = ignorado ? 'C' : (reg?.faixa ?? classificar(i));
     // Item da faixa C vale zero no teto por decisão do operador, mesmo que tenha preço.
     const preco = faixa === 'C' ? null : (reg?.preco ?? null);
     return {

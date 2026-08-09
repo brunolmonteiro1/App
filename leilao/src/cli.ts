@@ -50,14 +50,17 @@ function montarLinha(
   cfg: Config,
   precos: ArquivoPrecos | null,
 ): LinhaEstudo {
-  const itens = manifesto ? aplicar(manifesto.itens, precos?.itens ?? {}) : [];
+  const itens = manifesto ? aplicar(manifesto.itens, precos?.itens ?? {}, cfg.termosIgnorados) : [];
   const unidades = reconciliar(lote.titulo, manifesto?.somaQuantidades ?? null);
   const declaradas = reconciliar(lote.titulo, null).valor;
 
+  const categoria = detectar(lote.titulo);
+  const ignorado = cfg.categoriasIgnoradas.includes(categoria);
   const av = avaliar(
     {
       itens,
-      categoria: detectar(lote.titulo),
+      ignorado,
+      categoria,
       lanceAtual: lote.lance,
       incremento: lote.incremento,
       temLances: lote.temLances,
@@ -67,10 +70,14 @@ function montarLinha(
     cfg,
   );
 
-  const alertas = manifesto ? conferir(manifesto, refDoTitulo(lote.titulo), declaradas) : [];
-  if (!manifesto && lote.anexos.length === 0) alertas.push('lote sem PDF de anexo');
-  if (!manifesto && lote.anexos.length > 0) alertas.push('manifesto ainda não processado');
-  if (manifesto) {
+  const alertas = ignorado
+    ? [`categoria "${cfg.categorias[categoria].rotulo}" — você não trabalha com isso`]
+    : manifesto
+      ? conferir(manifesto, refDoTitulo(lote.titulo), declaradas)
+      : [];
+  if (!ignorado && !manifesto && lote.anexos.length === 0) alertas.push('lote sem PDF de anexo');
+  if (!ignorado && !manifesto && lote.anexos.length > 0) alertas.push('manifesto ainda não processado');
+  if (manifesto && !ignorado) {
     const cob = cobertura(itens);
     if (cob.pendentes > 0) {
       alertas.push(
@@ -203,7 +210,7 @@ async function comandoEstudo(): Promise<void> {
   if (utilizavel === 0) {
     console.log('\n  nenhum teto utilizável ainda. Rode `shortlist` e precifique UM lote inteiro:');
     console.log('    npm run cli -- shortlist --fixture --frete 150');
-    console.log('    npm run cli -- precos --lote 4 --fixture');
+    console.log('    npm run cli -- precos --lote <n do topo da shortlist> --fixture');
   }
   if (!cfg.freteInformado) console.log('  custo marcado INCOMPLETO: passe --frete <valor> para fechar');
   if (refresh) console.log(`  refresh ligado: a página busca lances a cada ${refresh}s`);
@@ -228,6 +235,7 @@ function comandoCusto(): void {
 }
 
 async function comandoEsqueleto(): Promise<void> {
+  const cfg0 = CONFIG_PADRAO;
   const numLote = arg('lote');
   if (numLote !== undefined) {
     // Precificar UM lote até o fim é o que produz teto. A lista global espalha esforço por
@@ -239,7 +247,19 @@ async function comandoEsqueleto(): Promise<void> {
       console.error(`lote ${numLote} sem manifesto em cache — rode \`baixar\` primeiro`);
       process.exit(2);
     }
-    const linhas = priorizar(new Map([[Number(numLote), m.itens]]));
+    const catLote = detectar(
+      evento.lotes.find((l) => l.numero === Number(numLote))?.titulo ?? '',
+    );
+    if (cfg0.categoriasIgnoradas.includes(catLote)) {
+      console.error(
+        `lote ${numLote} é da categoria "${catLote}", que está na lista de ignoradas — não vale precificar`,
+      );
+      process.exit(2);
+    }
+    // Itens de categoria ignorada saem do bloco: não faz sentido pedir preço deles.
+    const avaliados = aplicar(m.itens, {}, cfg0.termosIgnorados);
+    const semIgnorados = m.itens.filter((_, k) => avaliados[k]!.faixa !== 'C');
+    const linhas = priorizar(new Map([[Number(numLote), semIgnorados]]));
     const relevantes = linhas.filter((l) => l.faixa !== 'C');
     const saida = resolve(arg('saida') ?? `precos-lote${numLote}.json`);
     await writeFile(saida, JSON.stringify(esqueletoPriorizado(linhas), null, 2), 'utf8');
@@ -312,7 +332,9 @@ async function comandoShortlist(): Promise<void> {
   for (const lote of evento.lotes) {
     const m = porLote.get(lote.numero);
     if (!m || lote.encerrado) continue;
-    const itens = aplicar(m.itens, precos?.itens ?? {});
+    const cat = detectar(lote.titulo);
+    if (cfg.categoriasIgnoradas.includes(cat)) continue;
+    const itens = aplicar(m.itens, precos?.itens ?? {}, cfg.termosIgnorados);
     const relevantes = itens.filter((i) => i.faixa !== 'C');
     const efetivas = relevantes.reduce((s, i) => s + i.quantidade, 0);
     if (efetivas === 0) continue;
@@ -326,13 +348,14 @@ async function comandoShortlist(): Promise<void> {
       declaradas,
       custo,
       aPrecificar: cob.pendentes,
-      cat: detectar(lote.titulo),
+      cat,
     });
   }
   rows.sort((a, b) => a.cpu - b.cpu);
   const n = Number(arg('top') ?? 12);
 
-  console.log(`\ncandidatos por custo/unidade efetiva — nenhum preço necessário para este ranking\n`);
+  console.log(`\ncandidatos por custo/unidade efetiva — nenhum preço necessário para este ranking`);
+  console.log(`  categorias ignoradas: ${cfg.categoriasIgnoradas.join(', ')}\n`);
   console.log('  lote   custo/un   efetivas/declaradas        custo   a precificar  categoria');
   for (const r of rows.slice(0, n)) {
     const infla = r.declaradas > 0 ? `${((1 - r.efetivas / r.declaradas) * 100).toFixed(0)}%` : '—';

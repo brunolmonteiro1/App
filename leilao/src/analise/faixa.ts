@@ -67,9 +67,11 @@ function normalizar(s: string): string {
  * superestimar valor infla o teto e faz pagar caro — o erro caro. Subestimar só faz
  * perder um lote, o erro barato.
  */
-export function classificar(item: ItemManifesto): Faixa {
+export function classificar(item: ItemManifesto, termosIgnorados: string[] = []): Faixa {
   const d = normalizar(item.descricao);
   if (!d || d.length < 3) return 'C';
+  // Categoria com que o operador não trabalha: vale zero no teto, mesmo com preço.
+  if (termosIgnorados.some((t) => d.includes(t))) return 'C';
   if (MARCADORES_C.some((m) => d.includes(m))) return 'C';
   if (MARCADORES_B.some((m) => d.includes(m))) return 'B';
   // Quantidade alta com descrição curta e sem marca é sinal de volume barato.

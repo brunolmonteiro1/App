@@ -23,6 +23,7 @@ export type Semaforo =
   | 'vermelho'
   | 'sem-teto'
   | 'sem-cobertura'
+  | 'ignorado'
   | 'encerrado';
 
 export interface Avaliacao {
@@ -80,6 +81,8 @@ export interface EntradaAvaliacao {
   temLances: boolean;
   encerrado: boolean;
   unidadesDeclaradas: number | null;
+  /** Lote de categoria que o operador não trabalha. */
+  ignorado?: boolean;
 }
 
 export function avaliar(e: EntradaAvaliacao, cfg: Config = CONFIG_PADRAO): Avaliacao {
@@ -136,7 +139,7 @@ export function avaliar(e: EntradaAvaliacao, cfg: Config = CONFIG_PADRAO): Avali
   const custoAtual = calcularCusto(e.lanceAtual, cfg);
 
   // Sem cobertura suficiente o teto existe internamente mas NÃO é oferecido como decisão.
-  const temTeto = valorOnline > 0 && coberturaOk;
+  const temTeto = valorOnline > 0 && coberturaOk && !e.ignorado;
   const lanceSugerido = temTeto && !e.encerrado
     ? ultimoLanceValido(e.lanceAtual, e.incremento, tetoSeguro, e.temLances)
     : null;
@@ -176,6 +179,8 @@ function semaforoDe(
   coberturaOk: boolean,
 ): Semaforo {
   if (e.encerrado) return 'encerrado';
+  // Categoria que o operador não trabalha: decisão dele, não falta de dado.
+  if (e.ignorado) return 'ignorado';
   if (!temValor) return 'sem-teto';
   if (!coberturaOk) return 'sem-cobertura';
   // O que decide é o próximo lance que ele teria de dar, não o lance atual: cobrir

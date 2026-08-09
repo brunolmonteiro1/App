@@ -66,6 +66,7 @@ export function gerarPagina(
   const incompleto = !cfg.freteInformado;
   const semTeto = linhas.filter((l) => l.av.semaforo === 'sem-teto').length;
   const semCobertura = linhas.filter((l) => l.av.semaforo === 'sem-cobertura').length;
+  const ignorados = linhas.filter((l) => l.av.semaforo === 'ignorado').length;
   const comTeto = linhas.filter(
     (l) => l.av.semaforo === 'verde' || l.av.semaforo === 'amarelo' || l.av.semaforo === 'vermelho',
   ).length;
@@ -107,6 +108,9 @@ export function gerarPagina(
   .lote[data-cor=amarelo]{border-left-color:var(--amarelo)}
   .lote[data-cor=vermelho]{border-left-color:var(--vermelho)}
   .lote[data-cor=sem-teto],.lote[data-cor=encerrado]{border-left-color:var(--cinza);opacity:.62}
+  /* Ignorado é decisão do operador, não falta de dado: apaga bem e não pede ação. */
+  .lote[data-cor=ignorado]{border-left-color:var(--cinza);opacity:.4}
+  .ignorado .val{font-size:15px;color:var(--fraco)}
   /* Azul, nunca vermelho: "não sei" e "lote caro" são coisas opostas. */
   .lote[data-cor=sem-cobertura]{border-left-color:#4a7ab8}
   .sem-cobertura .val{font-size:19px;color:#8ab4f8}
@@ -153,11 +157,12 @@ export function gerarPagina(
       : ''
   }
   ${
-    incompleto || semTeto || semCobertura
+    incompleto || semTeto || semCobertura || ignorados
       ? `<div class="aviso">
       ${incompleto ? '<b>Custo incompleto:</b> frete de retirada não informado, então o teto está mais alto do que deveria. ' : ''}
       ${semTeto ? `<b>${semTeto} lote(s) sem preço nenhum.</b> ` : ''}
       ${semCobertura ? `<b>${semCobertura} lote(s) com cobertura abaixo de ${pct(cfg.coberturaMinima)}:</b> o teto deles NÃO é exibido de propósito — teto calculado sobre poucos itens sairia baixo e pareceria "lote caro", quando na verdade é "ainda não sei". Precifique um lote inteiro para ele virar verde/amarelo/vermelho de verdade.` : ''}
+      ${ignorados ? `<b>${ignorados} lote(s) ignorado(s)</b> por categoria (${cfg.categoriasIgnoradas.join(', ')}) — ficam na lista para você reconhecê-los quando o leiloeiro chamar, mas sem teto. ` : ''}
       ${comTeto ? `<b>${comTeto} lote(s) com teto utilizável.</b>` : ''}
     </div>`
       : ''
@@ -215,6 +220,8 @@ function linhaHtml(l: LinhaEstudo, fuso: FusoPayload): string {
       ? 'encerrado'
       : cor === 'sem-teto'
         ? 'sem preço ainda'
+        : cor === 'ignorado'
+        ? 'fora do escopo'
         : cor === 'sem-cobertura'
           ? `cobertura ${pct(av.cobertura)}`
           : av.lanceSugerido === null
@@ -224,7 +231,9 @@ function linhaHtml(l: LinhaEstudo, fuso: FusoPayload): string {
   const valor =
     cor === 'encerrado' || cor === 'sem-teto'
       ? '—'
-      : cor === 'sem-cobertura'
+      : cor === 'ignorado'
+        ? 'IGNORADO'
+        : cor === 'sem-cobertura'
         ? 'PRECIFIQUE'
         : av.lanceSugerido === null
           ? 'PARE'
@@ -247,7 +256,9 @@ function linhaHtml(l: LinhaEstudo, fuso: FusoPayload): string {
       <div><b>Custo se levar</b> ${brl(av.custoAtual.total)}
         <small>+${pct(av.custoAtual.overhead)}</small></div>
       ${
-        cor === 'sem-cobertura' || cor === 'sem-teto'
+        cor === 'ignorado'
+          ? ''
+          : cor === 'sem-cobertura' || cor === 'sem-teto'
           ? `<div><b>Falta precificar</b> ${av.unidadesSemPreco} un efetivas</div>`
           : `<div><b>Teto seguro</b> ${brl(av.tetoSeguro)}</div>
       <div><b>Teto máximo</b> ${brl(av.tetoMaximo)}</div>`
