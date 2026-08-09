@@ -36,7 +36,7 @@ npm run cli -- estudo --url https://www.superbid.net/evento/logistica-reversa-79
 # Esqueleto de preços para preencher (sem números inventados)
 npm run cli -- precos --saida precos.json
 
-npm test          # 135 testes
+npm test          # 155 testes
 npm run typecheck
 ```
 
@@ -58,6 +58,7 @@ npm run typecheck
 | Filtro de categorias que o operador não trabalha | ✅ cosmético, limpeza, bebida |
 | CI (typecheck + testes + estudo end-to-end) | ✅ `.github/workflows/leilao.yml` |
 | Refresh validado em navegador real | ✅ ver abaixo |
+| Deploy em VPS (Docker + túnel SSH) | ✅ `docs/03-deploy-vps.md` |
 | Extração do Edital | ❌ ver "tarefa zero" abaixo |
 
 ## Documentos
@@ -66,6 +67,7 @@ npm run typecheck
 |---|---|
 | [`docs/01-reconhecimento.md`](docs/01-reconhecimento.md) | O que foi verificado no site real e as evidências. Leia primeiro. |
 | [`docs/02-plano-implementacao.md`](docs/02-plano-implementacao.md) | Arquitetura, modelo de dados, fases e verificação. |
+| [`docs/03-deploy-vps.md`](docs/03-deploy-vps.md) | Passo a passo do deploy em VPS com Docker. |
 
 ## O que os 57 manifestos revelaram
 
@@ -137,6 +139,22 @@ ordenava por quantidade e enchia o topo de copo descartável, papel sulfite e ve
 martelete fora das 15 primeiras. Corrigido, o topo é ferramenta elétrica e eletrodoméstico.
 
 O `√(nº de lotes)` entra porque precificar uma linha que aparece em 6 lotes destrava 6 tetos.
+
+## Deploy: nada publicado, e o motivo é concreto
+
+`docker compose up -d painel` sobe o estudo em **`127.0.0.1:8080`** e o acesso é
+`ssh -L 8080:127.0.0.1:8080`. Não é preciosismo:
+
+**O estudo contém os tetos de lance do operador.** Outro licitante do mesmo leilão que visse
+aquela página saberia exatamente até onde empurrá-lo antes de ele parar.
+
+E `ports: "8080:8080"` liga em todas as interfaces **passando por cima do UFW** — o Docker
+escreve direto na cadeia `DOCKER-USER` do iptables, então `ufw deny 8080` daria falsa segurança.
+`test/deploy.test.ts` falha o CI se alguém trocar o mapeamento, e trava também usuário não-root,
+`tsx` em `dependencies` (sem isso a imagem sobe sem o CLI) e os preços montados read-only.
+
+Passo a passo completo em [`docs/03-deploy-vps.md`](docs/03-deploy-vps.md). O `docker build` não
+foi executado no ambiente de desenvolvimento — sem acesso ao daemon — e isso está dito no doc.
 
 ## O refresh foi validado em navegador de verdade
 

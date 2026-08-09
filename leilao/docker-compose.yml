@@ -1,0 +1,59 @@
+services:
+  # Painel: serve o estudo já gerado. Fica de pé; é o que o operador abre pelo túnel.
+  painel:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: leilao:local
+    container_name: leilao-painel
+    restart: unless-stopped
+    environment:
+      TZ: America/Sao_Paulo
+      PORT: "8080"
+      # Dentro do container tem de ser 0.0.0.0, senão o Docker não alcança o processo.
+      # O isolamento real está no mapeamento de porta abaixo, não aqui.
+      HOST: "0.0.0.0"
+    ports:
+      # ┌──────────────────────────────────────────────────────────────────────────────┐
+      # │ NÃO TROQUE por "8080:8080".                                                  │
+      # │                                                                              │
+      # │ O estudo contém os TETOS DE LANCE do operador. Outro licitante do mesmo      │
+      # │ leilão que visse esta página saberia exatamente até onde empurrá-lo antes    │
+      # │ de ele parar.                                                                │
+      # │                                                                              │
+      # │ E o Docker não respeita UFW: ele escreve direto na cadeia DOCKER-USER do     │
+      # │ iptables. Um `ufw deny 8080` daria falsa segurança — a porta continuaria     │
+      # │ aberta na internet.                                                          │
+      # │                                                                              │
+      # │ Acesso previsto:  ssh -L 8080:127.0.0.1:8080 usuario@vps                     │
+      # └──────────────────────────────────────────────────────────────────────────────┘
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./saida:/app/saida:ro
+
+  # Job one-shot: baixa os manifestos que faltam e regenera o estudo.
+  # Não sobe com `up` (profile), roda sob demanda ou por cron do host:
+  #   docker compose run --rm gerar
+  gerar:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: leilao:local
+    profiles: ["jobs"]
+    environment:
+      TZ: America/Sao_Paulo
+    volumes:
+      # Os 57 PDFs persistem aqui. Sem este volume, cada execução rebaixaria tudo e
+      # martelaria o site do Superbid a cada rodada do cron.
+      - ./cache:/app/cache
+      - ./saida:/app/saida
+      # Preços do operador, somente leitura: o container não tem por que alterá-los.
+      - ./precos.json:/app/precos.json:ro
+    # Ajuste --url para o evento da semana, e --frete quando souber o custo de retirada.
+    command: >
+      sh -c "npx tsx src/cli.ts baixar --url $${EVENTO} &&
+             npx tsx src/cli.ts estudo --url $${EVENTO}
+               --precos precos.json --frete $${FRETE} --refresh 15
+               --saida saida/estudo.html"
+    env_file:
+      - .env

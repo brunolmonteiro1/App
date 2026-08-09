@@ -1,0 +1,12 @@
+node_modules
+cache
+saida
+.git
+.gitignore
+Dockerfile
+docker-compose.yml
+.env
+test
+docs
+recon/extrai_manifesto.py
+npm-debug.log*

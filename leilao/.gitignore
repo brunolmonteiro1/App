@@ -3,3 +3,6 @@ saida/
 cache/
 *.db
 precos-lote3.json
+.env
+precos.json
+precos-lote*.json
